@@ -1,0 +1,68 @@
+# Dev-kit bring-up (Phase 8, step 1)
+
+Goal: run the **same portable firmware** on real silicon with off-the-shelf breakouts, before any custom PCB. That answers the P0 hardware questions (pin map, wake lines, I2C behavior, sleep current, OTA fit) with measurements instead of guesses. See ADR 0016.
+
+## 1. Wire the rig (`hardware/bom/devkit_rig_v0.csv`)
+- I2C SDA/SCL to the pins in `firmware/esp_idf/main/board_proto_a.h` (`kI2cSda`, `kI2cScl`). **These are placeholders**: pick free, non-strapping ESP32-H2 pins from the current Espressif datasheet and update the header.
+- A TCA9546A at 0x70. Branch *i* goes to slot *i*.
+- On each used branch, an EEPROM at 0x50 programmed with `[code_hi, code_lo, revision]`:
+
+  | Module | Code |
+  |---|---|
+  | PIR | `0x0101` |
+  | Reed contact | `0x0102` |
+  | LIS2DW12 | `0x0201` |
+  | SHT40 | `0x0301` |
+  | Camera | `0x0401` |
+
+- Slot wake lines (PIR output, reed, LIS2DW12 INT1) go to the GPIOs in `proto_a()`.
+
+## 2. Flash and watch the serial log
+
+```bash
+cd firmware/esp_idf && idf.py set-target esp32h2 build flash monitor
+```
+
+Expected:
+
+```
+talos boot epoch=1 version=1
+talos slot 0 module=0x0101 enabled=1 fault=0
+talos slot 1 module=0x0201 enabled=1 fault=0
+talos slot 2 module=0x0000 enabled=0 fault=0
+talos slot 3 module=0x0301 enabled=1 fault=0
+talos alive queued=3 mode=0
+```
+
+`queued` grows because the Thread link is still a stub. That is expected until step 4.
+
+## 3. Run the HIL tests
+On a machine with the kit attached (or the self-hosted runner in `.github/workflows/hil.yml`):
+
+```bash
+pip install -r tests/hil/requirements.txt
+```
+
+```bash
+pytest tests/hil -c tests/hil/pytest.ini --embedded-services esp,idf --target esp32h2 --app-path firmware/esp_idf --port /dev/ttyUSB0
+```
+
+Set `TALOS_RIG=1` to include the wired-rig discovery test.
+
+## 4. Measure and record (feeds the manifests and twin)
+
+| Question (spec §38) | Measure | Update |
+|---|---|---|
+| Sleep current with 4 slots | PPK2, idle with PIR + IMU armed | battery budget in board manifest |
+| Wake latency per slot | scope: wake line → first log line | twin PIR/contact timing |
+| Contact bounce on real reed | scope on the line | `ContactDriver::kDebounceMs` |
+| LIS2DW12 threshold vs. glass strikes | strike tests on a real window | default `impact_threshold_mg` |
+| OTA image size | `idf.py size` | partition table / 4 MB decision |
+| I2C mux branch isolation | short one branch | already covered in sim; confirm on silicon |
+
+Record results in `docs/decisions/open-decisions.md`, then remove `provisional` only for numbers you actually measured.
+
+## 5. Remaining firmware work for real nodes
+- The **Thread link:** OpenThread CoAP client implementing `IDatagram` → `CoapLink` (already tested over UDP), plus OTBR on the hub host.
+- **Sleep:** GPIO wake interrupts and light/deep sleep driven by `next_wake_ms()`.
+- **Hardware glue:** battery ADC, `esp_ota_*` binding for `IFlash`, and Secure Boot / flash-encryption staging with owner keys. Do **not** burn eFuses until key management is decided.

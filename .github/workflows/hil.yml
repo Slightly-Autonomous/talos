@@ -1,0 +1,45 @@
+# Hardware-in-the-loop (ADR 0016). Manual trigger only, on a trusted
+# self-hosted runner labeled talos-hil with an ESP32-H2 dev kit attached.
+# Never runs for pull requests, so fork code cannot reach lab hardware.
+# No signing keys or secrets are used here.
+name: hil
+
+on:
+  workflow_dispatch:
+    inputs:
+      rig:
+        description: "Run bench-rig tests (sensor rig wired)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  esp32h2:
+    if: github.repository == 'Slightly-Autonomous/talos'
+    runs-on: [self-hosted, talos-hil]
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build firmware
+        shell: bash
+        run: |
+          . "$IDF_PATH/export.sh"
+          cd firmware/esp_idf
+          idf.py set-target esp32h2
+          idf.py build
+      - name: Flash and test
+        shell: bash
+        env:
+          TALOS_RIG: ${{ inputs.rig && '1' || '0' }}
+        run: |
+          . "$IDF_PATH/export.sh"
+          python -m pip install -r tests/hil/requirements.txt
+          pytest tests/hil -c tests/hil/pytest.ini --embedded-services esp,idf --target esp32h2 \
+            --app-path firmware/esp_idf --port "${TALOS_HIL_PORT:-/dev/ttyUSB0}" --junitxml=hil.xml
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: hil-results
+          path: hil.xml

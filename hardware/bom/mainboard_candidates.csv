@@ -1,0 +1,9 @@
+# PROVISIONAL mainboard candidates (spec §34, §55). Nothing selected. Each needs datasheet, quote and bench validation.
+block,candidate,status,open question
+MCU/radio,ESP32-H2-MINI-1-N4,candidate,4 MB flash enough for A/B images? deep-sleep wake on 4 slots?
+Charger/power path,TI BQ25186,candidate,USB + PV source selection and thermal limits
+Battery,protected 1S Li-ion (18650),candidate,NTC + cold/hot charge block; transport rules
+I2C mux,TI TCA9546A,candidate,needed only if duplicate addresses across slots
+IO expander,TI TCA9535,optional,only if wake/fault lines exceed free GPIOs
+Slot connector,18-20 contact side-entry / card-edge,open,series selection; mating cycles; ESD; FDM retention
+5 V switched rail,load switch + current limit,open,camera slot startup peak unmeasured

@@ -1,0 +1,5 @@
+# Hardware-in-the-loop runner dependencies (trusted self-hosted runner only).
+pytest==8.4.2
+pytest-embedded==1.17.1
+pytest-embedded-serial-esp==1.17.1
+pytest-embedded-idf==1.17.1

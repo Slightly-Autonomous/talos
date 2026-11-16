@@ -1,0 +1,12 @@
+# PROVISIONAL dev-kit bring-up rig (no custom PCB). Verify availability, revision and datasheet before buying.
+ref,qty,part,role,interface,notes
+U1,1,ESP32-H2-DevKitM-1,node MCU + 802.15.4 radio,USB-serial,target for firmware/esp_idf
+U2,1,TCA9546A breakout,I2C mux (one branch per slot),I2C 0x70,matches BoardSupport.mux_address
+U3,4,AT24C02-class EEPROM breakout,module ID EEPROM per slot,I2C 0x50,program 2-byte module code + revision
+U4,1,LIS2DW12 breakout,vibration/impact module (slot 1),I2C 0x19 + INT1,WHO_AM_I 0x44
+U5,1,SHT40 breakout,environment module (slot 3),I2C 0x44,CRC-8 checked by driver
+U6,1,Panasonic EKMB-class PIR module,motion module (slot 0),digital out,low-current PIR candidate
+U7,1,Reed switch + magnet,contact module (alternative slot 0),digital,pull-down per firmware GPIO config
+U8,1,ESP32-H2 or nRF52840 dongle as RCP,Thread radio co-processor,USB,for OpenThread Border Router
+U9,1,Raspberry Pi 4/5 or mini PC,hub + border router host,Ethernet,runs talos_hub + OTBR
+J1,1,USB power meter / Nordic PPK2,sleep and active current measurement,USB,needed for battery-life truth

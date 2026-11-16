@@ -22,7 +22,7 @@ requirements:
   - id: REQ-004
     statement: Firmware can be factory flashed, OTA updated and recovered
     subsystem: firmware.ota
-    test: //firmware/sim:node_test (Ota.*, incl. power cut at every store write); hil/update_rollback_sequence pending
+    test: //firmware/sim:node_test (Ota.*, incl. power cut at every store write); tests/hil (boot/epoch) pending hardware
     severity: critical
     status: verified_sim
   - id: REQ-005

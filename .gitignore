@@ -33,3 +33,7 @@ firmware/esp_idf/build/
 firmware/esp_idf/sdkconfig
 firmware/esp_idf/sdkconfig.old
 firmware/esp_idf/managed_components/
+
+# Python
+__pycache__/
+*.pyc
