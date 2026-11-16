@@ -1,0 +1,51 @@
+# Requirements traceability (spec §56). Status values:
+# requested | implemented | verified_sim | verified_hil | released
+requirements:
+  - id: REQ-001
+    statement: Local intrusion processing does not require cloud connectivity
+    subsystem: core
+    test: //core:phase1_slice_test
+    severity: critical
+    status: implemented
+  - id: REQ-002
+    statement: Four sensor module ports are validated against wake, bus, rail and active power-source budgets
+    subsystem: core.manifest
+    test: //core/manifest:manifest_test, //codec:yaml_loader_test
+    severity: critical
+    status: implemented
+  - id: REQ-003
+    statement: No duplicate physical action from one retried command or redelivered event
+    subsystem: core.execution
+    test: //core/execution:ledger_test, //core:phase1_slice_test
+    severity: high
+    status: implemented
+  - id: REQ-004
+    statement: Firmware can be factory flashed, OTA updated and recovered
+    subsystem: firmware.ota
+    test: hil/update_rollback_sequence
+    severity: critical
+    status: requested
+  - id: REQ-005
+    statement: Replay from the journal reproduces state exactly; snapshot plus tail equals full replay
+    subsystem: core.state
+    test: //core/state:state_test
+    severity: critical
+    status: implemented
+  - id: REQ-006
+    statement: Cross-device ordering comes only from hub journal_seq; device clocks never order events
+    subsystem: core.journal
+    test: //core/state:state_test (DeviceClockDoesNotAffectOrdering, metamorphic)
+    severity: critical
+    status: implemented
+  - id: REQ-007
+    statement: Expired commands are never dispatched; late evidence is recorded faithfully
+    subsystem: core.execution
+    test: //core/execution:ledger_test
+    severity: critical
+    status: implemented
+  - id: REQ-008
+    statement: Only verified commands are reported as successful
+    subsystem: core.execution, web
+    test: //core/execution:ledger_test, web/src/contracts.test.ts
+    severity: critical
+    status: implemented
