@@ -1,0 +1,24 @@
+load("@rules_cc//cc:defs.bzl", "cc_library")
+load("//bazel:copts.bzl", "TALOS_PROTO_COPTS")
+
+cc_library(
+    name = "twin",
+    srcs = [
+        "devices.cc",
+        "transport.cc",
+        "world.cc",
+    ],
+    hdrs = [
+        "devices.h",
+        "transport.h",
+        "world.h",
+    ],
+    copts = TALOS_PROTO_COPTS,
+    visibility = ["//simulation:__subpackages__"],
+    deps = [
+        "//contracts/proto/talos/sim/v1:sim_cc_proto",
+        "//core/events",
+        "//core/execution",
+        "//simulation/base",
+    ],
+)

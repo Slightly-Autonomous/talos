@@ -1,0 +1,21 @@
+name: front_door_open_close
+description: >-
+  The front door opens and closes. The closing slam (300 mg) stays under the 600 mg impact threshold.
+site: sites/suburban_home.yaml
+seed: 42
+start_unix_ms: 1794736800000
+duration_ms: 30000
+principals:
+  - {id: owner, kind: PRINCIPAL_KIND_HUMAN, max_risk: RISK_CLASS_SECURITY_CRITICAL}
+stimuli:
+  - {at_ms: 2000, portal_set: {portal_id: front_door, open: true}}
+  - {at_ms: 6000, portal_set: {portal_id: front_door, open: false}}
+expect:
+  - name: opened once
+    observation: {event_type: contact.opened, device_id: node_front, min_count: 1, max_count: 1}
+  - name: closed reported at boot and after closing
+    observation: {event_type: contact.closed, device_id: node_front, min_count: 2, max_count: 2}
+  - name: slam is not an impact
+    observation: {event_type: impact.detected, device_id: node_front, min_count: 0, max_count: 0}
+  - name: belief is closed
+    capability_state: {ref: {device_id: node_front, slot: 0, capability_id: contact.open_state}, payload: {contact: {open: false}}}

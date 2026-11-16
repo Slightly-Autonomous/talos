@@ -1,0 +1,18 @@
+name: window_impact_no_opening
+description: >-
+  A hard strike on the kitchen window is detected as an impact, but the window never opens.
+site: sites/suburban_home.yaml
+seed: 42
+start_unix_ms: 1794736800000
+duration_ms: 30000
+principals:
+  - {id: owner, kind: PRINCIPAL_KIND_HUMAN, max_risk: RISK_CLASS_SECURITY_CRITICAL}
+stimuli:
+  - {at_ms: 3000, impact: {portal_id: kitchen_window, magnitude_mg: 900}}
+expect:
+  - name: impact detected
+    observation: {event_type: impact.detected, device_id: node_window, min_count: 1, max_count: 1}
+  - name: window never opened
+    observation: {event_type: contact.opened, device_id: node_window, min_count: 0, max_count: 0}
+  - name: window believed closed
+    capability_state: {ref: {device_id: node_window, slot: 0, capability_id: contact.open_state}, payload: {contact: {open: false}}}

@@ -1,0 +1,225 @@
+syntax = "proto3";
+
+package talos.sim.v1;
+
+import "talos/sim/v1/site.proto";
+import "talos/v1/command.proto";
+import "talos/v1/common.proto";
+import "talos/v1/observation.proto";
+import "talos/v1/rule.proto";
+
+// Deterministic scenario fixture (spec §42).
+
+enum ActorKind {
+  ACTOR_KIND_UNSPECIFIED = 0;
+  ACTOR_KIND_PERSON = 1;
+  ACTOR_KIND_PET = 2;
+}
+
+enum ActuatorFault {
+  ACTUATOR_FAULT_UNSPECIFIED = 0;
+  ACTUATOR_FAULT_NONE = 1;
+  // Acknowledges commands but never performs them.
+  ACTUATOR_FAULT_SILENT_ACK = 2;
+  // Ignores commands entirely.
+  ACTUATOR_FAULT_NO_RESPONSE = 3;
+  // Mechanism jams: ACK, then reports its unchanged state.
+  ACTUATOR_FAULT_JAM = 4;
+}
+
+enum PrincipalKind {
+  PRINCIPAL_KIND_UNSPECIFIED = 0;
+  PRINCIPAL_KIND_HUMAN = 1;
+  PRINCIPAL_KIND_AGENT = 2;
+  PRINCIPAL_KIND_RULE = 3;
+}
+
+enum Freshness {
+  FRESHNESS_UNSPECIFIED = 0;
+  FRESHNESS_UNKNOWN = 1;
+  FRESHNESS_FRESH = 2;
+  FRESHNESS_STALE = 3;
+}
+
+message ActorEnter {
+  string actor = 1;
+  ActorKind kind = 2;
+  Point position = 3;
+  double speed_mps = 4;
+}
+
+// Walk the path at the actor's speed, starting from its current position.
+message ActorMove {
+  string actor = 1;
+  repeated Point path = 2;
+}
+
+message ActorLeave {
+  string actor = 1;
+}
+
+message PortalSet {
+  string portal_id = 1;
+  bool open = 2;
+}
+
+message Impact {
+  string portal_id = 1;
+  uint32 magnitude_mg = 2;
+}
+
+message LinkSet {
+  string device_id = 1;
+  bool connected = 2;
+}
+
+message DeviceReboot {
+  string device_id = 1;
+}
+
+message DeviceClockSkew {
+  string device_id = 1;
+  int64 skew_ms = 2;
+}
+
+message TemperatureSet {
+  string zone_id = 1;
+  int32 milli_c = 2;
+}
+
+message ArmModeSet {
+  string principal_id = 1;
+  talos.v1.ArmMode mode = 2;
+}
+
+message UserCommand {
+  string command_id = 1;
+  string principal_id = 2;
+  string operation = 3;
+  talos.v1.CapabilityRef target = 4;
+  talos.v1.CommandArgs args = 5;
+  uint32 ttl_ms = 6;
+  uint32 verification_window_ms = 7;
+  optional talos.v1.ExpectedObservation expect = 8;
+}
+
+message HubRestart {}
+
+message ActuatorFaultSet {
+  string device_id = 1;
+  ActuatorFault fault = 2;
+}
+
+message Stimulus {
+  uint32 at_ms = 1;
+  oneof kind {
+    ActorEnter actor_enter = 2;
+    ActorMove actor_move = 3;
+    ActorLeave actor_leave = 4;
+    PortalSet portal_set = 5;
+    Impact impact = 6;
+    LinkSet link_set = 7;
+    DeviceReboot device_reboot = 8;
+    DeviceClockSkew device_clock_skew = 9;
+    TemperatureSet temperature_set = 10;
+    ArmModeSet arm_mode_set = 11;
+    UserCommand user_command = 12;
+    HubRestart hub_restart = 13;
+    ActuatorFaultSet actuator_fault = 14;
+  }
+}
+
+// Link behavior between a device and the hub. Empty device_id = default.
+message LinkProfile {
+  string device_id = 1;
+  uint32 latency_ms = 2;
+  uint32 jitter_ms = 3;
+  double loss_probability = 4;
+  double duplicate_probability = 5;
+}
+
+message ScenarioPrincipal {
+  string id = 1;
+  PrincipalKind kind = 2;
+  talos.v1.RiskClass max_risk = 3;
+}
+
+message ExpectObservation {
+  string event_type = 1;
+  string device_id = 2;
+  uint32 from_ms = 3;
+  uint32 to_ms = 4;
+  // Defaults to 1 when unset; set 0 together with max_count 0 to assert absence.
+  optional uint32 min_count = 5;
+  optional uint32 max_count = 6;
+}
+
+message ExpectCommand {
+  string operation = 1;
+  string target_device_id = 2;
+  repeated talos.v1.CommandStatus final_status_in = 3;
+  // Exact number of matching commands; unset means at least one.
+  optional uint32 count = 4;
+}
+
+message ExpectNoCommand {
+  string operation = 1;
+}
+
+// Evaluated at the end of the scenario.
+message ExpectFreshness {
+  talos.v1.CapabilityRef ref = 1;
+  Freshness state = 2;
+}
+
+message ExpectPhysicalEffects {
+  string device_id = 1;
+  uint32 count = 2;
+}
+
+// Final belief: the hub's current value for a capability.
+message ExpectCapabilityState {
+  talos.v1.CapabilityRef ref = 1;
+  talos.v1.ObservationPayload payload = 2;
+}
+
+// Final ground truth for a portal.
+message ExpectPortal {
+  string portal_id = 1;
+  optional bool open = 2;
+  optional bool locked = 3;
+}
+
+message ExpectArmMode {
+  talos.v1.ArmMode mode = 1;
+}
+
+message Expectation {
+  string name = 1;
+  oneof kind {
+    ExpectObservation observation = 2;
+    ExpectCommand command = 3;
+    ExpectNoCommand no_command = 4;
+    ExpectFreshness freshness = 5;
+    ExpectPhysicalEffects physical_effects = 6;
+    ExpectCapabilityState capability_state = 7;
+    ExpectPortal portal = 8;
+    ExpectArmMode arm_mode = 9;
+  }
+}
+
+message Scenario {
+  string name = 1;
+  string description = 2;
+  // Site file path relative to the scenario corpus root.
+  string site = 3;
+  uint64 seed = 4;
+  int64 start_unix_ms = 5;
+  uint32 duration_ms = 6;
+  uint32 freshness_max_age_ms = 7;
+  repeated ScenarioPrincipal principals = 8;
+  repeated talos.v1.Rule rules = 9;
+  repeated LinkProfile links = 10;
+  repeated Stimulus stimuli = 11;
+  repeated Expectation expect = 12;
+}

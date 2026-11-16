@@ -1,0 +1,39 @@
+load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library", "cc_test")
+load("//bazel:copts.bzl", "TALOS_PROTO_COPTS")
+
+cc_library(
+    name = "runner",
+    srcs = ["runner.cc"],
+    hdrs = ["runner.h"],
+    copts = TALOS_PROTO_COPTS,
+    visibility = ["//visibility:public"],
+    deps = [
+        "//codec",
+        "//codec:yaml_loader",
+        "//contracts/proto/talos/sim/v1:sim_cc_proto",
+        "//core/engine",
+        "//simulation/twin",
+        "@protobuf//:json_util",
+    ],
+)
+
+cc_binary(
+    name = "talos_sim",
+    srcs = ["main.cc"],
+    copts = TALOS_PROTO_COPTS,
+    data = ["//simulation/scenarios"],
+    deps = [":runner"],
+)
+
+cc_test(
+    name = "scenario_test",
+    size = "medium",
+    srcs = ["scenario_test.cc"],
+    copts = TALOS_PROTO_COPTS,
+    data = ["//simulation/scenarios"],
+    deps = [
+        ":runner",
+        "//codec:yaml_loader",
+        "@googletest//:gtest_main",
+    ],
+)

@@ -1,0 +1,126 @@
+syntax = "proto3";
+
+package talos.sim.v1;
+
+import "talos/v1/property.proto";
+
+// A simulated site: geometry plus device placements (spec §40). Coordinates
+// are meters on a single 2D level. The production Property is derived from
+// this; geometry stays in the twin until the Phase 4 property editor.
+
+message Point {
+  double x = 1;
+  double y = 2;
+}
+
+message SiteZone {
+  string id = 1;
+  string name = 2;
+  talos.v1.ZoneKind kind = 3;
+  repeated Point polygon = 4;
+}
+
+// Blocks line of sight. Actors follow scripted paths and are not blocked.
+message Wall {
+  Point a = 1;
+  Point b = 2;
+}
+
+message SitePortal {
+  string id = 1;
+  // "portal.door" or "portal.window".
+  string type = 2;
+  string zone_id = 3;
+  Point a = 4;
+  Point b = 5;
+  bool initially_open = 6;
+  bool initially_locked = 7;
+}
+
+message PirSpec {
+  double heading_deg = 1;
+  double half_angle_deg = 2;
+  double range_m = 3;
+  uint32 hold_ms = 4;
+  double miss_probability = 5;
+  // Probability that a given pet is ever detected by this sensor.
+  double pet_sensitivity = 6;
+  double false_triggers_per_hour = 7;
+  uint32 warmup_ms = 8;
+}
+
+message ContactSpec {
+  string portal_id = 1;
+}
+
+message ImpactSpec {
+  string portal_id = 1;
+  uint32 threshold_mg = 2;
+  // Fraction of the impact magnitude reaching the sensor.
+  double coupling = 3;
+}
+
+message EnvironmentSpec {
+  uint32 report_interval_ms = 1;
+  int32 bias_milli_c = 2;
+  uint32 noise_milli_c = 3;
+}
+
+message CameraSpec {
+  double heading_deg = 1;
+  double half_angle_deg = 2;
+  double range_m = 3;
+  uint32 min_interval_ms = 4;
+  uint32 confidence_permille = 5;
+}
+
+message SensorSpec {
+  uint32 slot = 1;
+  string module_id = 2;
+  oneof kind {
+    PirSpec pir = 3;
+    ContactSpec contact = 4;
+    ImpactSpec impact = 5;
+    EnvironmentSpec environment = 6;
+    CameraSpec camera = 7;
+  }
+}
+
+message SpeakerSpec {
+  uint32 latency_ms = 1;
+}
+
+message LockSpec {
+  string portal_id = 1;
+  uint32 travel_ms = 2;
+}
+
+// Notification bridge: acknowledges `notify` commands (ack-only; there is no
+// independent observation that a person read a notification).
+message NotifierSpec {
+  uint32 latency_ms = 1;
+}
+
+message SiteDevice {
+  string id = 1;
+  Point position = 2;
+  optional string board_id = 3;
+  repeated SensorSpec sensors = 4;
+  optional SpeakerSpec speaker = 5;
+  optional LockSpec lock = 6;
+  // 0 disables heartbeats.
+  uint32 heartbeat_interval_ms = 7;
+  uint32 battery_mv = 8;
+  optional NotifierSpec notifier = 9;
+}
+
+message Site {
+  string property_id = 1;
+  string timezone = 2;
+  // Fixed offset used by the twin for local time (no DST in v1 sites).
+  int32 utc_offset_minutes = 3;
+  repeated SiteZone zones = 4;
+  repeated Wall walls = 5;
+  repeated SitePortal portals = 6;
+  repeated SiteDevice devices = 7;
+}

@@ -1,0 +1,37 @@
+name: lossy_network_never_fabricates_success
+description: >-
+  30% loss on every link. Some events and replies are lost; whatever happens, no command is reported verified without a real playback (always-on invariant).
+site: sites/suburban_home.yaml
+seed: 1234
+start_unix_ms: 1794736800000
+duration_ms: 45000
+links:
+  - {latency_ms: 60, jitter_ms: 40, loss_probability: 0.3}
+principals:
+  - {id: owner, kind: PRINCIPAL_KIND_HUMAN, max_risk: RISK_CLASS_SECURITY_CRITICAL}
+rules:
+  - id: backyard_motion_warning
+    revision: 1
+    property_id: house-01
+    principal_id: "rule:backyard_motion_warning"
+    enabled: true
+    trigger_event_type: motion.detected
+    trigger_zone_id: backyard
+    armed_modes: [ARM_MODE_ARMED_AWAY]
+    schedule: {start_minute: 1320, end_minute: 360}
+    actions:
+      - operation: audio.speak
+        target: {device_id: patio_speaker, capability_id: audio.speak}
+        args: {audio_speak: {text: "This property is monitored.", volume_percent: 65}}
+        ttl_ms: 5000
+        verification_window_ms: 3000
+        expect: {source: {device_id: patio_speaker, capability_id: audio.speak}, payload: {audio_playback: {playing: true}}}
+stimuli:
+  - {at_ms: 0, arm_mode_set: {principal_id: owner, mode: ARM_MODE_ARMED_AWAY}}
+  - {at_ms: 1000, actor_enter: {actor: intruder, kind: ACTOR_KIND_PERSON, position: {x: 6, y: 24}, speed_mps: 1.4}}
+  - {at_ms: 1000, actor_move: {actor: intruder, path: [{x: 6, y: 16}, {x: 6, y: 11.5}]}}
+  - {at_ms: 15000, actor_enter: {actor: second, kind: ACTOR_KIND_PERSON, position: {x: 3, y: 24}, speed_mps: 1.2}}
+  - {at_ms: 15000, actor_move: {actor: second, path: [{x: 3, y: 14}]}}
+expect:
+  - name: commands end in a defined state
+    command: {operation: audio.speak, final_status_in: [COMMAND_STATUS_VERIFIED, COMMAND_STATUS_UNKNOWN_RESULT, COMMAND_STATUS_COMPLETED_UNVERIFIED]}

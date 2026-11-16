@@ -1,0 +1,17 @@
+name: studio_environment_reports
+description: >-
+  Five minutes of periodic temperature/humidity readings; the environment capability stays fresh.
+site: sites/studio_apartment.yaml
+seed: 42
+start_unix_ms: 1794736800000
+duration_ms: 300000
+freshness_max_age_ms: 120000
+principals:
+  - {id: owner, kind: PRINCIPAL_KIND_HUMAN, max_risk: RISK_CLASS_SECURITY_CRITICAL}
+stimuli:
+  - {at_ms: 100000, temperature_set: {zone_id: studio, milli_c: 24000}}
+expect:
+  - name: periodic readings
+    observation: {event_type: environment.reading, device_id: node_studio, min_count: 5}
+  - name: environment fresh
+    freshness: {ref: {device_id: node_studio, slot: 2, capability_id: environment.temperature_humidity}, state: FRESHNESS_FRESH}

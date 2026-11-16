@@ -1,3 +1,10 @@
 # simulation
 
-Deterministic digital twin (spec §39-42). **Phase 2.** World geometry, actors, virtual sensors and the scenario runner will live here. It depends on `core`; `core` never depends on it.
+L1 deterministic digital twin (ADR 0009, spec §39-42).
+
+- `base/`: portable PRNG and 2D geometry
+- `twin/`: ground-truth world, virtual sensors and actuators, virtual transport
+- `runner/`: scenario runner, oracle, `talos_sim` CLI, corpus test
+- `scenarios/`: sites and scenarios (see its README)
+
+The twin drives the production `core/engine/HubEngine`, never a copy of it.

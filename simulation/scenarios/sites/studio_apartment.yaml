@@ -1,0 +1,35 @@
+# One-room studio with an entry door and a window.
+property_id: studio-01
+timezone: America/New_York
+utc_offset_minutes: -300
+zones:
+  - {id: corridor, name: Building corridor, kind: ZONE_KIND_INDOOR, polygon: [{x: 0, y: -3}, {x: 6, y: -3}, {x: 6, y: 0}, {x: 0, y: 0}]}
+  - {id: studio, name: Studio, kind: ZONE_KIND_INDOOR, polygon: [{x: 0, y: 0}, {x: 6, y: 0}, {x: 6, y: 8}, {x: 0, y: 8}]}
+walls:
+  - {a: {x: 0, y: 0}, b: {x: 2, y: 0}}
+  - {a: {x: 3.5, y: 0}, b: {x: 6, y: 0}}
+  - {a: {x: 0, y: 0}, b: {x: 0, y: 8}}
+  - {a: {x: 0, y: 8}, b: {x: 6, y: 8}}
+  - {a: {x: 6, y: 0}, b: {x: 6, y: 3}}
+  - {a: {x: 6, y: 5}, b: {x: 6, y: 8}}
+portals:
+  - {id: entry_door, type: portal.door, zone_id: studio, a: {x: 2, y: 0}, b: {x: 3.5, y: 0}}
+  - {id: studio_window, type: portal.window, zone_id: studio, a: {x: 6, y: 3}, b: {x: 6, y: 5}}
+devices:
+  - id: node_studio
+    position: {x: 5.8, y: 7.8}
+    board_id: universal_controller_v1
+    heartbeat_interval_ms: 60000
+    battery_mv: 3900
+    sensors:
+      - {slot: 0, module_id: pir_ekmb_v1, pir: {heading_deg: -125, half_angle_deg: 50, range_m: 10, hold_ms: 4000, pet_sensitivity: 0.0}}
+      - {slot: 1, module_id: reed_contact_v1, contact: {portal_id: entry_door}}
+      - {slot: 2, module_id: environment_sht40_v1, environment: {report_interval_ms: 60000, bias_milli_c: 150, noise_milli_c: 100}}
+  - id: studio_speaker
+    position: {x: 0.2, y: 7.8}
+    heartbeat_interval_ms: 60000
+    speaker: {latency_ms: 250}
+  - id: entry_lock
+    position: {x: 2.7, y: 0.2}
+    heartbeat_interval_ms: 60000
+    lock: {portal_id: entry_door, travel_ms: 1200}

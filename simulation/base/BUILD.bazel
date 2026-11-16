@@ -1,0 +1,24 @@
+load("@rules_cc//cc:defs.bzl", "cc_library", "cc_test")
+load("//bazel:copts.bzl", "TALOS_COPTS")
+
+cc_library(
+    name = "base",
+    srcs = ["geometry.cc"],
+    hdrs = [
+        "geometry.h",
+        "rng.h",
+    ],
+    copts = TALOS_COPTS,
+    visibility = ["//simulation:__subpackages__"],
+)
+
+cc_test(
+    name = "base_test",
+    size = "small",
+    srcs = ["base_test.cc"],
+    copts = TALOS_COPTS,
+    deps = [
+        ":base",
+        "@googletest//:gtest_main",
+    ],
+)

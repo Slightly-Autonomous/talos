@@ -1,0 +1,73 @@
+# Single-story home with backyard, patio and front yard. Meters; +y is toward the backyard.
+property_id: house-01
+timezone: America/Los_Angeles
+utc_offset_minutes: -480
+zones:
+  - {id: front_yard, name: Front yard, kind: ZONE_KIND_OUTDOOR, polygon: [{x: 0, y: -6}, {x: 12, y: -6}, {x: 12, y: 0}, {x: 0, y: 0}]}
+  - {id: hallway, name: Hallway, kind: ZONE_KIND_INDOOR, polygon: [{x: 0, y: 0}, {x: 4, y: 0}, {x: 4, y: 10}, {x: 0, y: 10}]}
+  - {id: living, name: Living room, kind: ZONE_KIND_INDOOR, polygon: [{x: 4, y: 0}, {x: 12, y: 0}, {x: 12, y: 10}, {x: 4, y: 10}]}
+  - {id: patio, name: Patio, kind: ZONE_KIND_OUTDOOR, polygon: [{x: 0, y: 10}, {x: 12, y: 10}, {x: 12, y: 13}, {x: 0, y: 13}]}
+  - {id: backyard, name: Backyard, kind: ZONE_KIND_OUTDOOR, polygon: [{x: 0, y: 13}, {x: 12, y: 13}, {x: 12, y: 25}, {x: 0, y: 25}]}
+walls:
+  - {a: {x: 0, y: 0}, b: {x: 5, y: 0}}
+  - {a: {x: 7, y: 0}, b: {x: 12, y: 0}}
+  - {a: {x: 0, y: 10}, b: {x: 5, y: 10}}
+  - {a: {x: 7, y: 10}, b: {x: 9, y: 10}}
+  - {a: {x: 11, y: 10}, b: {x: 12, y: 10}}
+  - {a: {x: 0, y: 0}, b: {x: 0, y: 10}}
+  - {a: {x: 12, y: 0}, b: {x: 12, y: 10}}
+  - {a: {x: 4, y: 0}, b: {x: 4, y: 4}}
+  - {a: {x: 4, y: 6}, b: {x: 4, y: 10}}
+portals:
+  - {id: front_door, type: portal.door, zone_id: living, a: {x: 5, y: 0}, b: {x: 7, y: 0}}
+  - {id: back_door, type: portal.door, zone_id: living, a: {x: 5, y: 10}, b: {x: 7, y: 10}}
+  - {id: kitchen_window, type: portal.window, zone_id: living, a: {x: 9, y: 10}, b: {x: 11, y: 10}}
+devices:
+  - id: node_backyard
+    position: {x: 6, y: 21.5}
+    board_id: universal_controller_v1
+    heartbeat_interval_ms: 60000
+    battery_mv: 3900
+    sensors:
+      - {slot: 0, module_id: pir_ekmb_v1, pir: {heading_deg: -90, half_angle_deg: 45, range_m: 12, hold_ms: 5000, warmup_ms: 0, pet_sensitivity: 0.0}}
+      - {slot: 2, module_id: smart_camera_s3_v1, camera: {heading_deg: -90, half_angle_deg: 40, range_m: 15, min_interval_ms: 2000, confidence_permille: 870}}
+      - {slot: 3, module_id: environment_sht40_v1, environment: {report_interval_ms: 300000, bias_milli_c: 0, noise_milli_c: 200}}
+  - id: camera_backyard
+    position: {x: 0.5, y: 24.5}
+    heartbeat_interval_ms: 30000
+    sensors:
+      - {slot: 0, module_id: smart_camera_s3_v1, camera: {heading_deg: -45, half_angle_deg: 35, range_m: 18, min_interval_ms: 2000, confidence_permille: 910}}
+  - id: node_window
+    position: {x: 10, y: 9.8}
+    board_id: universal_controller_v1
+    heartbeat_interval_ms: 60000
+    battery_mv: 3800
+    sensors:
+      - {slot: 0, module_id: reed_contact_v1, contact: {portal_id: kitchen_window}}
+      - {slot: 1, module_id: vibration_lis2dw12_v1, impact: {portal_id: kitchen_window, threshold_mg: 600, coupling: 0.9}}
+  - id: node_front
+    position: {x: 6, y: 0.3}
+    board_id: universal_controller_v1
+    heartbeat_interval_ms: 60000
+    battery_mv: 3850
+    sensors:
+      - {slot: 0, module_id: reed_contact_v1, contact: {portal_id: front_door}}
+      - {slot: 1, module_id: vibration_lis2dw12_v1, impact: {portal_id: front_door, threshold_mg: 600, coupling: 1.0}}
+  - id: node_interior
+    position: {x: 11.5, y: 5}
+    board_id: universal_controller_v1
+    heartbeat_interval_ms: 60000
+    battery_mv: 3900
+    sensors:
+      - {slot: 0, module_id: pir_ekmb_v1, pir: {heading_deg: 180, half_angle_deg: 45, range_m: 8, hold_ms: 5000, pet_sensitivity: 1.0}}
+  - id: patio_speaker
+    position: {x: 6, y: 10.5}
+    heartbeat_interval_ms: 60000
+    speaker: {latency_ms: 300}
+  - id: front_lock
+    position: {x: 6.2, y: 0.2}
+    heartbeat_interval_ms: 60000
+    lock: {portal_id: front_door, travel_ms: 1500}
+  - id: notifier
+    position: {x: 2, y: 5}
+    notifier: {latency_ms: 200}

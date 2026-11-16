@@ -1,0 +1,26 @@
+name: stale_lock_state_blocks_command
+description: >-
+  The lock last reported 20 s ago with a 10 s freshness limit. Security-critical commands need fresh target state, so the request is denied.
+site: sites/suburban_home.yaml
+seed: 42
+start_unix_ms: 1794736800000
+duration_ms: 30000
+freshness_max_age_ms: 10000
+principals:
+  - {id: owner, kind: PRINCIPAL_KIND_HUMAN, max_risk: RISK_CLASS_SECURITY_CRITICAL}
+stimuli:
+  - at_ms: 20000
+    user_command:
+      command_id: lock-1
+      principal_id: owner
+      operation: access.set_locked
+      target: {device_id: front_lock, capability_id: access.lock}
+      args: {set_locked: {locked: true}}
+      ttl_ms: 5000
+      verification_window_ms: 4000
+      expect: {source: {device_id: front_lock, capability_id: access.lock}, payload: {lock: {locked: true}}}
+expect:
+  - name: denied for stale state
+    command: {operation: access.set_locked, final_status_in: [COMMAND_STATUS_DENIED], count: 1}
+  - name: door not locked
+    portal: {portal_id: front_door, locked: false}
