@@ -5,6 +5,38 @@ import { FloorPlan } from "../components/FloorPlan";
 import { useHub } from "../hub/HubProvider";
 import { CommandList } from "../components/CommandList";
 import { armLabel, describeEntry, deviceHealth } from "../model/view";
+import type { Health } from "@talos/contracts/talos/v1/health_pb";
+import { HealthStatus } from "@talos/contracts/talos/v1/health_pb";
+
+const HEALTH_LABEL: Record<number, [string, "fresh" | "stale" | "unknown"]> = {
+  [HealthStatus.HEALTHY]: ["healthy", "fresh"],
+  [HealthStatus.DEGRADED]: ["degraded", "stale"],
+  [HealthStatus.OFFLINE]: ["offline", "unknown"],
+  [HealthStatus.LOW_POWER]: ["low power", "stale"],
+  [HealthStatus.FAULTED]: ["faulted", "stale"],
+  [HealthStatus.MAINTENANCE]: ["updating", "stale"],
+};
+
+// Hub health projection (ADR 0014), refreshed periodically.
+function useDeviceHealth(): Map<string, Health> {
+  const { client } = useHub();
+  const [health, setHealth] = useState<Map<string, Health>>(new Map());
+  useEffect(() => {
+    let stop = false;
+    const load = () =>
+      client
+        .deviceHealth()
+        .then((r) => !stop && setHealth(new Map(r.devices.map((h) => [h.deviceId, h]))))
+        .catch(() => {});
+    void load();
+    const t = setInterval(load, 5000);
+    return () => {
+      stop = true;
+      clearInterval(t);
+    };
+  }, [client]);
+  return health;
+}
 
 export function useNow(intervalMs = 1000): number {
   const [now, setNow] = useState(() => Date.now());
@@ -19,6 +51,7 @@ export function Live() {
   const { client, property, state, entries } = useHub();
   const now = useNow();
   const [armError, setArmError] = useState<string>();
+  const health = useDeviceHealth();
 
   async function arm(mode: ArmMode) {
     setArmError(undefined);
@@ -65,14 +98,27 @@ export function Live() {
           <h3>Devices</h3>
           <ul className="devices">
             {property.devices.map((d) => {
-              const h = deviceHealth(state, d.id);
+              const projected = health.get(d.id);
+              const fallback = deviceHealth(state, d.id);
+              const [label, tone] = projected
+                ? (HEALTH_LABEL[projected.status] ?? ["unknown", "unknown"])
+                : [
+                    fallback === "fresh"
+                      ? "reporting"
+                      : fallback === "stale"
+                        ? "stale"
+                        : "no reports",
+                    fallback,
+                  ];
               return (
-                <li key={d.id}>
-                  <span className={`dot dot-${h}`} aria-hidden /> {d.id}
-                  <span className="muted">
-                    {" "}
-                    · {h === "fresh" ? "reporting" : h === "stale" ? "stale" : "no reports"}
-                  </span>
+                <li key={d.id} data-testid={`health-${d.id}`}>
+                  <span className={`dot dot-${tone}`} aria-hidden /> {d.id}
+                  <span className="muted"> · {label}</span>
+                  {projected?.recommendedAction && (
+                    <div className="muted small">
+                      {projected.evidence.join("; ")} · {projected.recommendedAction}
+                    </div>
+                  )}
                 </li>
               );
             })}

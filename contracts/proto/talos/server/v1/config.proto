@@ -100,6 +100,37 @@ message HubConfig {
   // listen on a non-loopback address in dev mode unless
   // TALOS_ALLOW_DEV_ON_NETWORK=1 (set by the local Compose file only).
   bool dev_mode = 15;
+  CoapConfig coap = 16;
+  // Ed25519 public keys trusted to sign firmware releases (ADR 0014).
+  repeated SigningKey firmware_signing_keys = 17;
+}
+
+// CoAP/UDP device ingress (ADR 0014). Thread border routers route node
+// traffic to this port; payloads carry HMAC tags keyed per device.
+message CoapConfig {
+  bool enabled = 1;
+  string listen_host = 2;
+  uint32 port = 3;
+  // YAML file of DeviceKeys (secrets: keep out of git, mode 0600).
+  string device_keys_file = 4;
+  uint32 rate_per_second = 5;
+  uint32 burst = 6;
+}
+
+message DeviceKey {
+  string device_id = 1;
+  // Hex-encoded shared secret provisioned at claim time.
+  string key_hex = 2;
+}
+
+message DeviceKeys {
+  repeated DeviceKey keys = 1;
+}
+
+message SigningKey {
+  string key_id = 1;
+  // Hex-encoded 32-byte Ed25519 public key.
+  string public_key_hex = 2;
 }
 
 // The editable, versioned part of the configuration (ADR 0012): layout and

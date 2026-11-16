@@ -1,0 +1,16 @@
+load("@rules_cc//cc:defs.bzl", "cc_library")
+load("//bazel:copts.bzl", "TALOS_COPTS")
+
+# Maps firmware DeviceEvents to hub ObservationEnvelopes. Used by the hub's
+# CoAP ingress and the L2 twin tests.
+cc_library(
+    name = "hub_bridge",
+    srcs = ["hub_bridge.cc"],
+    hdrs = ["hub_bridge.h"],
+    copts = TALOS_COPTS,
+    visibility = ["//visibility:public"],
+    deps = [
+        "//core/events",
+        "//firmware/portable",
+    ],
+)

@@ -5,6 +5,8 @@ package talos.api.v1;
 import "talos/server/v1/config.proto";
 import "talos/v1/command.proto";
 import "talos/v1/common.proto";
+import "talos/v1/firmware.proto";
+import "talos/v1/health.proto";
 import "talos/v1/journal.proto";
 import "talos/v1/observation.proto";
 import "talos/v1/rule.proto";
@@ -148,4 +150,47 @@ message RulePreviewMatch {
 message RulePreviewResponse {
   repeated RulePreviewMatch matches = 1;
   uint32 evaluated_observations = 2;
+}
+
+message HealthListResponse {
+  repeated talos.v1.Health devices = 1;
+}
+
+message DiagnosticsResponse {
+  repeated talos.v1.Diagnostic diagnostics = 1;
+}
+
+// Desired runtime configuration for a node (delivered on its next contact).
+message DeviceConfigRequest {
+  uint32 heartbeat_interval_ms = 1;
+  uint32 environment_interval_ms = 2;
+  uint32 impact_threshold_mg = 3;
+}
+
+message DeviceConfigResponse {
+  string device_id = 1;
+  uint32 desired_revision = 2;
+  uint32 applied_revision = 3;
+}
+
+// image is base64 in the JSON mapping.
+message FirmwareImportRequest {
+  talos.v1.FirmwareRelease manifest = 1;
+  bytes image = 2;
+}
+
+message FirmwareReleaseList {
+  repeated talos.v1.FirmwareRelease releases = 1;
+}
+
+message CampaignRequest {
+  string device_id = 1;
+  uint32 version = 2;
+}
+
+message CampaignResponse {
+  string device_id = 1;
+  uint32 version = 2;
+  // "scheduled", "offered", "downloading", "pending_verify", "done", "failed", "rolled_back"
+  string state = 3;
 }

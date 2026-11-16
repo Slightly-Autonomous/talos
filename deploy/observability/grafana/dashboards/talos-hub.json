@@ -1,0 +1,18 @@
+{
+  "title": "Talos hub",
+  "uid": "talos-hub",
+  "schemaVersion": 39,
+  "time": {"from": "now-6h", "to": "now"},
+  "panels": [
+    {"type": "timeseries", "title": "Device observations by outcome", "gridPos": {"x": 0, "y": 0, "w": 12, "h": 8},
+     "targets": [{"expr": "sum by (outcome) (rate(talos_ingest_total[5m]))", "legendFormat": "{{outcome}}"}]},
+    {"type": "timeseries", "title": "CoAP frames by outcome", "gridPos": {"x": 12, "y": 0, "w": 12, "h": 8},
+     "targets": [{"expr": "sum by (outcome) (rate(talos_coap_frames_total[5m]))", "legendFormat": "{{outcome}}"}]},
+    {"type": "stat", "title": "Journal entries", "gridPos": {"x": 0, "y": 8, "w": 6, "h": 4},
+     "targets": [{"expr": "talos_journal_seq"}]},
+    {"type": "stat", "title": "OTA chunks sent (1h)", "gridPos": {"x": 6, "y": 8, "w": 6, "h": 4},
+     "targets": [{"expr": "increase(talos_ota_chunks_sent_total[1h])"}]},
+    {"type": "timeseries", "title": "HTTP requests", "gridPos": {"x": 12, "y": 8, "w": 12, "h": 4},
+     "targets": [{"expr": "rate(talos_http_requests_total[5m])"}]}
+  ]
+}

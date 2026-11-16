@@ -55,6 +55,7 @@ class NodeRuntime final : public IEventSink {
   void admit_power();
   PowerMode compute_mode();
   void handle(const Downlink& d);
+  void emit_ota_status(Priority priority);
   void persist_pending_critical();
   void restore_pending_critical();
   std::uint32_t sustained_budget_mw();
@@ -70,6 +71,7 @@ class NodeRuntime final : public IEventSink {
   TimeMs next_heartbeat_ = 0;
   bool awake_ = true;
   bool reboot_requested_ = false;
+  bool ota_progress_ = false;
 };
 
 }  // namespace talos::fw

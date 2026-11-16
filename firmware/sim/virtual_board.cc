@@ -178,9 +178,12 @@ BoardSupport default_board() {
   return b;
 }
 
-Node::Node(BoardSupport b, std::uint32_t flash_capacity)
-    : i2c(b.mux_address), flash(flash_capacity), board(b), platform_{clock, gpio,  i2c,  power,
-                                                                     store, flash, link, board} {}
+Node::Node(BoardSupport b, std::uint32_t flash_capacity, ILink* link_override)
+    : i2c(b.mux_address),
+      flash(flash_capacity),
+      board(b),
+      platform_{clock, gpio, i2c, power, store, flash, link_override ? *link_override : link,
+                board} {}
 
 void Node::insert(std::uint8_t slot, ModuleCode code) {
   const std::uint8_t branch = board.slots[slot].i2c_branch;
@@ -212,7 +215,7 @@ void Node::run_for(TimeMs ms) {
       last_lines_[l] = v;
     }
     if (edge) runtime_->on_interrupt();
-    if (edge || clock.now_ms() >= runtime_->next_wake_ms() || !link.downlink.empty()) {
+    if (edge || clock.now_ms() >= runtime_->next_wake_ms() || !link.downlink.empty() || poll_link) {
       runtime_->step();
     }
     if (runtime_->reboot_requested()) {

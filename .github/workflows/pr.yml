@@ -146,6 +146,7 @@ jobs:
         run: |
           docker compose -f deploy/docker-compose.yml config --quiet
           docker compose -f deploy/docker-compose.yml --profile supabase-sync config --quiet
+          docker compose -f deploy/docker-compose.yml --profile observability config --quiet
       - name: Build images
         if: github.event_name == 'push'
         run: |

@@ -53,6 +53,30 @@ Create two services from this repository and set each service's config-as-code p
 
 Running the hub in the cloud makes the cloud the authority for that property ("cloud-hosted hub"). That suits demos and simulation. A real home should run the hub locally and use Railway/Supabase only for the copy and, later, the remote relay (`HUB_ROLE_RELAY`).
 
+## Device network and firmware releases (ADR 0014)
+
+The dev config enables CoAP/UDP device ingress on port 5683, with insecure dev keys in `deploy/config/dev-device-keys.yaml`. In production, provision a random key per device and keep the keys file out of git (mode 0600).
+
+Sign and publish a firmware release with your own key:
+
+```bash
+bazel run //server:talos_hub -- keygen
+```
+
+```bash
+bazel run //server:talos_hub -- sign-release seed.hex owner-2026 universal_controller_v1 proto-a 2 $PWD/firmware.bin $PWD/release.json
+```
+
+Put the printed public key in `firmware_signing_keys`. Then POST `release.json` to `/v1/firmware/releases` and start a campaign with `POST /v1/firmware/campaigns {"deviceId":"node-12","version":2}`.
+
+## Observability profile
+
+```bash
+docker compose -f deploy/docker-compose.yml --profile observability up --build
+```
+
+Prometheus (`127.0.0.1:9090`) scrapes `/metrics` with the dev metrics token. Grafana (`127.0.0.1:3000`, anonymous viewer) shows the provisioned "Talos hub" dashboard. Both are read-only engineering tools, never in the alarm path.
+
 ## Making tokens
 
 ```bash

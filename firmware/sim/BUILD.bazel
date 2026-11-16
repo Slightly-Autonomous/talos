@@ -10,6 +10,15 @@ cc_library(
     deps = ["//firmware/portable"],
 )
 
+cc_library(
+    name = "udp_datagram",
+    srcs = ["udp_datagram.cc"],
+    hdrs = ["udp_datagram.h"],
+    copts = TALOS_COPTS,
+    visibility = ["//visibility:public"],
+    deps = ["//firmware/portable"],
+)
+
 cc_test(
     name = "node_test",
     size = "small",
@@ -22,25 +31,13 @@ cc_test(
     ],
 )
 
-cc_library(
-    name = "hub_bridge",
-    srcs = ["hub_bridge.cc"],
-    hdrs = ["hub_bridge.h"],
-    copts = TALOS_COPTS,
-    visibility = ["//visibility:public"],
-    deps = [
-        "//core/events",
-        "//firmware/portable",
-    ],
-)
-
 cc_test(
     name = "node_hub_test",
     size = "small",
     srcs = ["node_hub_test.cc"],
     copts = TALOS_COPTS,
     deps = [
-        ":hub_bridge",
+        "//firmware/bridge:hub_bridge",
         ":sim",
         "//core/engine",
         "//core/testing:fixtures",

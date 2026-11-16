@@ -2,6 +2,8 @@
 
 #include "codec/codec.h"
 #include "core/engine/preview.h"
+#include "firmware/bridge/hub_bridge.h"
+#include "server/release_signing.h"
 
 namespace talos::server {
 
@@ -92,11 +94,13 @@ api::IngestResponse ingest_response(const IngestResult& r) {
 }  // namespace
 
 HubService::HubService(LoadedConfig config, std::unique_ptr<IJournal> journal, const IClock& clock,
-                       std::unique_ptr<SqliteConfigStore> config_store)
+                       std::unique_ptr<SqliteConfigStore> config_store,
+                       std::unique_ptr<SqliteFirmwareStore> firmware_store)
     : config_(std::move(config)),
       journal_(std::move(journal)),
       clock_(clock),
-      store_(std::move(config_store)) {
+      store_(std::move(config_store)),
+      firmware_(std::move(firmware_store)) {
   EngineConfig ec = config_.engine;
   if (store_) {
     current_ = store_->latest();
@@ -342,6 +346,9 @@ Result<api::IngestResponse> HubService::ingest_observation(
   std::lock_guard lock(mu_);
   IngestResult r = engine_->on_observation(env.value());
   after_mutation_locked();
+  (r.status == IngestStatus::kAccepted    ? metrics_.ingest_accepted
+   : r.status == IngestStatus::kDuplicate ? metrics_.ingest_duplicate
+                                          : metrics_.ingest_rejected)++;
   return ingest_response(r);
 }
 
@@ -390,6 +397,209 @@ void HubService::shutdown() {
   std::lock_guard lock(mu_);
   shutting_down_ = true;
   cv_.notify_all();
+}
+
+// --- Device network plane ---------------------------------------------------------------
+
+namespace {
+constexpr std::size_t kAckBytes = 9, kConfigBytes = 17, kOfferBytes = 41, kChunkHeader = 7;
+std::uint32_t version_number(const std::string& v) {
+  std::uint32_t out = 0;
+  for (char ch : v) {
+    if (ch < '0' || ch > '9') return 0;
+    out = out * 10 + static_cast<std::uint32_t>(ch - '0');
+  }
+  return out;
+}
+}  // namespace
+
+std::vector<fw::Downlink> HubService::device_exchange(const DeviceId& device,
+                                                      const std::vector<fw::DeviceEvent>& events,
+                                                      std::size_t budget) {
+  std::lock_guard lock(mu_);
+  const Timestamp now = clock_.now();
+  std::vector<fw::Downlink> out;
+  auto fits = [&](std::size_t n) {
+    if (n > budget) return false;
+    budget -= n;
+    return true;
+  };
+  for (const auto& e : events) {
+    registry_.observe(device, e, now);
+    if (auto env = fw::to_envelope(e, device, config_.engine.property.id)) {
+      const IngestResult r = engine_->on_observation(*env);
+      (r.status == IngestStatus::kAccepted    ? metrics_.ingest_accepted
+       : r.status == IngestStatus::kDuplicate ? metrics_.ingest_duplicate
+                                              : metrics_.ingest_rejected)++;
+    }
+    // ACK every authenticated event, even ones ingest rejected: a frame that
+    // can never be accepted must not be retried forever.
+    if (fits(kAckBytes)) out.push_back(fw::Ack{e.boot_epoch, e.seq});
+  }
+  after_mutation_locked();
+
+  const DeviceTelemetry* t = registry_.find(device);
+  if (auto it = desired_config_.find(device);
+      it != desired_config_.end() && (!t || t->applied_config_revision < it->second.revision) &&
+      fits(kConfigBytes)) {
+    out.push_back(it->second);
+  }
+
+  auto camp = campaigns_.find(device);
+  if (camp == campaigns_.end() || !firmware_ || !t) return out;
+  Campaign& c = camp->second;
+  if (c.state == "done" || c.state == "failed" || c.state == "rolled_back") return out;
+  const auto ota = t->ota_state.value_or(0);
+  if (ota == 0 && t->running_version >= c.version) {
+    c.state = "done";
+  } else if (ota == 5 && c.state != "scheduled") {
+    c.state = "rolled_back";
+  } else if (ota == 4) {
+    c.state = "failed";
+  } else if (ota == 3) {
+    c.state = "pending_verify";
+  } else if (auto rel = firmware_->get(c.version)) {
+    if (ota == 1) {
+      c.state = "downloading";
+      for (std::uint32_t off = t->ota_received; off < rel->image.size();) {
+        fw::OtaChunk ch;
+        ch.offset = off;
+        ch.length = static_cast<std::uint16_t>(
+            std::min<std::size_t>(fw::kOtaChunkMax, rel->image.size() - off));
+        if (!fits(kChunkHeader + ch.length)) break;
+        std::copy_n(rel->image.data() + off, ch.length, ch.data.begin());
+        out.push_back(ch);
+        off += ch.length;
+        ++metrics_.ota_chunks_sent;
+      }
+    } else if ((!c.last_offer || now - *c.last_offer > Millis{5'000}) && fits(kOfferBytes)) {
+      fw::OtaOffer offer;
+      offer.version = c.version;
+      offer.size = static_cast<std::uint32_t>(rel->image.size());
+      std::copy_n(rel->manifest.image_sha256().data(), 32, offer.sha256.begin());
+      out.push_back(offer);
+      c.last_offer = now;
+      c.state = "offered";
+    }
+  }
+  return out;
+}
+
+Status HubService::authorize_owner(const PrincipalId& who) const {
+  for (const auto& p : engine_->config().principals) {
+    if (p.id != who) continue;
+    auto a = authorize_config_change(p, config_.engine.property.id);
+    if (!a.allowed) return Error{"denied", a.reason};
+    return Status::Ok();
+  }
+  return Error{"unknown_principal", who.str()};
+}
+
+Result<api::DeviceConfigResponse> HubService::set_device_config(
+    const PrincipalId& who, const DeviceId& device, const api::DeviceConfigRequest& req) {
+  std::lock_guard lock(mu_);
+  if (Status s = authorize_owner(who); !s) return s.error();  // can weaken detection
+  if (!config_.engine.property.find_device(device)) return Error{"not_found", device.str()};
+  fw::ConfigUpdate u;
+  // Revision = hub seconds: monotonic across hub restarts.
+  u.revision = static_cast<std::uint32_t>(clock_.now().unix_ms / 1000);
+  if (auto it = desired_config_.find(device);
+      it != desired_config_.end() && u.revision <= it->second.revision) {
+    u.revision = it->second.revision + 1;
+  }
+  u.heartbeat_interval_ms = req.heartbeat_interval_ms();
+  u.environment_interval_ms = req.environment_interval_ms();
+  u.impact_threshold_mg = req.impact_threshold_mg();
+  desired_config_[device] = u;
+  api::DeviceConfigResponse r;
+  r.set_device_id(device.str());
+  r.set_desired_revision(u.revision);
+  const auto* t = registry_.find(device);
+  r.set_applied_revision(t ? t->applied_config_revision : 0);
+  return r;
+}
+
+api::HealthListResponse HubService::device_health() const {
+  std::lock_guard lock(mu_);
+  api::HealthListResponse out;
+  const Timestamp now = clock_.now();
+  for (const auto& d : config_.engine.property.devices) {
+    const CapabilityRef health_ref{d.id, std::nullopt, CapabilityId("device.health")};
+    const auto& caps = engine_->state().capabilities;
+    std::optional<Timestamp> seen;
+    if (auto it = caps.find(health_ref); it != caps.end()) seen = it->second.received_at;
+    *out.add_devices() =
+        project_health(d.id, registry_.find(d.id), engine_->freshness_of(health_ref), seen, now,
+                       engine_->config().freshness_max_age);
+  }
+  return out;
+}
+
+api::DiagnosticsResponse HubService::diagnostics(const DeviceId& device) const {
+  std::lock_guard lock(mu_);
+  api::DiagnosticsResponse out;
+  for (auto& d : registry_.diagnostics(device)) *out.add_diagnostics() = d;
+  return out;
+}
+
+Status HubService::import_firmware(const PrincipalId& who, const talos::v1::FirmwareRelease& m,
+                                   const std::string& image) {
+  std::lock_guard lock(mu_);
+  if (Status s = authorize_owner(who); !s) return s;
+  if (!firmware_) return Error{"not_found", "firmware store not configured"};
+  if (version_number(m.version()) == 0)
+    return Error{"invalid_release", "version must be a build number > 0"};
+  if (Status s = verify_release(m, image, config_.hub.firmware_signing_keys()); !s) return s;
+  return firmware_->put(m, image);
+}
+
+api::FirmwareReleaseList HubService::firmware_releases() const {
+  std::lock_guard lock(mu_);
+  api::FirmwareReleaseList out;
+  if (firmware_) {
+    for (auto& m : firmware_->list()) {
+      auto* r = out.add_releases();
+      *r = m;
+      r->clear_signature();  // listings never need it
+    }
+  }
+  return out;
+}
+
+Result<api::CampaignResponse> HubService::start_campaign(const PrincipalId& who,
+                                                         const api::CampaignRequest& req) {
+  std::lock_guard lock(mu_);
+  if (Status s = authorize_owner(who); !s) return s.error();
+  const DeviceId device(req.device_id());
+  if (!config_.engine.property.find_device(device)) return Error{"not_found", req.device_id()};
+  if (!firmware_ || !firmware_->get(req.version())) {
+    return Error{"not_found", "release " + std::to_string(req.version())};
+  }
+  campaigns_[device] = Campaign{req.version(), "scheduled", std::nullopt};
+  api::CampaignResponse r;
+  r.set_device_id(req.device_id());
+  r.set_version(req.version());
+  r.set_state("scheduled");
+  return r;
+}
+
+Result<api::CampaignResponse> HubService::campaign(const DeviceId& device) const {
+  std::lock_guard lock(mu_);
+  auto it = campaigns_.find(device);
+  if (it == campaigns_.end()) return Error{"not_found", "no campaign for " + device.str()};
+  api::CampaignResponse r;
+  r.set_device_id(device.str());
+  r.set_version(it->second.version);
+  r.set_state(it->second.state);
+  return r;
+}
+
+std::string HubService::metrics_text() {
+  {
+    std::lock_guard lock(mu_);
+    metrics_.journal_seq = journal_->last_seq();
+  }
+  return metrics_.prometheus();
 }
 
 }  // namespace talos::server

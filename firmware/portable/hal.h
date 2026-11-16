@@ -74,6 +74,16 @@ class ILink {
   virtual std::optional<Downlink> receive() = 0;
 };
 
+// Unreliable datagrams to/from the hub (UDP over Thread/IPv6 on the node;
+// a UDP socket in host tests). Non-blocking receive.
+class IDatagram {
+ public:
+  virtual ~IDatagram() = default;
+  virtual bool send(const std::uint8_t* data, std::size_t n) = 0;
+  // Returns bytes received into buf, or 0 if nothing is pending.
+  virtual std::size_t receive(std::uint8_t* buf, std::size_t cap) = 0;
+};
+
 struct SlotWiring {
   bool present = false;            // connector populated on this board revision
   std::uint8_t wake_line = 0xFF;   // GPIO index, 0xFF = none

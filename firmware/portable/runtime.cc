@@ -79,13 +79,19 @@ void NodeRuntime::boot() {
   discover();
   admit_power();
 
-  if (d.rolled_back) {
-    emit(kNoSlot, EventKind::kOtaStatus, Priority::kP1State, false,
-         static_cast<std::int32_t>(OtaState::kRolledBack), 0);
-  }
+  // Boot status tells the hub the running version (and any rollback).
+  (void)d;
+  emit_ota_status(Priority::kP1State);
   emit(kNoSlot, EventKind::kHeartbeat, Priority::kP2Health, false,
        static_cast<std::int32_t>(p_.power.battery_mv()), static_cast<std::uint32_t>(mode_));
   next_heartbeat_ = p_.clock.now_ms() + config_.heartbeat_interval_ms;
+}
+
+void NodeRuntime::emit_ota_status(Priority priority) {
+  const OtaRecord& r = ota_.record();
+  // b: next wanted byte while downloading, otherwise the running version.
+  const std::uint32_t b = r.state == OtaState::kDownloading ? r.received : ota_.running_version();
+  emit(kNoSlot, EventKind::kOtaStatus, priority, false, static_cast<std::int32_t>(r.state), b);
 }
 
 void NodeRuntime::discover() {
@@ -200,8 +206,7 @@ void NodeRuntime::handle(const Downlink& d) {
     if (was_critical_pending) persist_pending_critical();
     // Reaching the hub proves the trial image works end to end.
     if (ota_.record().state == OtaState::kPendingVerify && ota_.confirm()) {
-      emit(kNoSlot, EventKind::kOtaStatus, Priority::kP1State, false,
-           static_cast<std::int32_t>(OtaState::kIdle), ota_.running_version());
+      emit_ota_status(Priority::kP1State);
     }
   } else if (const auto* cfg = std::get_if<ConfigUpdate>(&d)) {
     if (cfg->revision <= config_.revision) return;  // stale or duplicate
@@ -228,15 +233,11 @@ void NodeRuntime::handle(const Downlink& d) {
     const bool power_ok =
         p_.power.source() == PowerSource::kUsb || p_.power.battery_mv() >= kOtaMinMv;
     ota_.offer(*offer, power_ok);
-    emit(kNoSlot, EventKind::kOtaStatus, Priority::kP2Health, false,
-         static_cast<std::int32_t>(ota_.record().state), ota_.record().received);
+    emit_ota_status(Priority::kP2Health);
   } else if (const auto* chunk = std::get_if<OtaChunk>(&d)) {
-    ota_.chunk(*chunk);
-    const auto& r = ota_.record();
-    if (r.state != OtaState::kDownloading || r.received % 1024 == 0) {
-      emit(kNoSlot, EventKind::kOtaStatus, Priority::kP2Health, false,
-           static_cast<std::int32_t>(r.state), r.received);
-    }
+    const OtaState before = ota_.record().state;
+    if (ota_.chunk(*chunk)) ota_progress_ = true;
+    if (ota_.record().state != before) emit_ota_status(Priority::kP2Health);
     if (ota_.reboot_wanted()) reboot_requested_ = true;
   } else if (std::holds_alternative<RebootRequest>(d)) {
     reboot_requested_ = true;
@@ -246,6 +247,12 @@ void NodeRuntime::handle(const Downlink& d) {
 void NodeRuntime::step() {
   const TimeMs now = p_.clock.now_ms();
   while (auto d = p_.link.receive()) handle(*d);
+  // One progress report per batch of chunks: the hub streams the next ones
+  // in its reply (device-initiated exchange, sleepy-node friendly).
+  if (ota_progress_ && ota_.record().state == OtaState::kDownloading) {
+    emit_ota_status(Priority::kP2Health);
+  }
+  ota_progress_ = false;
 
   const std::uint32_t env_interval =
       config_.environment_interval_ms * (mode_ == PowerMode::kNormal ? 1u : 4u);

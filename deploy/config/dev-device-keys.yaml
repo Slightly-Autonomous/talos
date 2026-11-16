@@ -1,0 +1,6 @@
+# DEVELOPMENT device keys for CoAP ingress (ADR 0014). Real deployments
+# provision a unique random key per device at claim time and keep this file
+# out of git (mode 0600). These keys are public and insecure on purpose.
+keys:
+  - {device_id: node-07, key_hex: 000102030405060708090a0b0c0d0e0f}
+  - {device_id: node-12, key_hex: 101112131415161718191a1b1c1d1e1f}

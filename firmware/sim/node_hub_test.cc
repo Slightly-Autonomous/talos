@@ -3,7 +3,7 @@
 
 #include "core/engine/engine.h"
 #include "core/testing/fixtures.h"
-#include "firmware/sim/hub_bridge.h"
+#include "firmware/bridge/hub_bridge.h"
 #include "firmware/sim/virtual_board.h"
 
 namespace talos::fw::sim {
@@ -28,8 +28,7 @@ class NodeAndHub : public ::testing::Test {
       while (!node.link.uplink.empty()) {
         const DeviceEvent e = node.link.uplink.front();
         node.link.uplink.pop_front();
-        if (auto env =
-                to_envelope(e, node.runtime(), DeviceId("node-12"), PropertyId("house-01"))) {
+        if (auto env = to_envelope(e, DeviceId("node-12"), PropertyId("house-01"))) {
           auto r = engine->on_observation(*env);
           ASSERT_NE(r.status, IngestStatus::kRejected) << r.error->message;
           if (r.status == IngestStatus::kDuplicate) ++duplicates;

@@ -1,11 +1,11 @@
-#include "firmware/sim/hub_bridge.h"
+#include "firmware/bridge/hub_bridge.h"
 
 #include <string>
 
-namespace talos::fw::sim {
+namespace talos::fw {
 
-std::optional<ObservationEnvelope> to_envelope(const DeviceEvent& e, const NodeRuntime&,
-                                               const DeviceId& device, const PropertyId& property) {
+std::optional<ObservationEnvelope> to_envelope(const DeviceEvent& e, const DeviceId& device,
+                                               const PropertyId& property) {
   ObservationEnvelope env;
   env.property = property;
   env.source.device = device;
@@ -46,4 +46,4 @@ std::optional<ObservationEnvelope> to_envelope(const DeviceEvent& e, const NodeR
   return env;
 }
 
-}  // namespace talos::fw::sim
+}  // namespace talos::fw

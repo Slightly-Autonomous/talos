@@ -6,6 +6,8 @@ import {
   CommandRequestSchema,
   CommandResponseSchema,
   ConfigResponseSchema,
+  DiagnosticsResponseSchema,
+  HealthListResponseSchema,
   PutConfigRequestSchema,
   RulePreviewRequestSchema,
   RulePreviewResponseSchema,
@@ -98,12 +100,17 @@ export class HubClient {
   }
   // Current config, or the revision in force at `atUnixMs` (ADR 0012).
   config(atUnixMs?: number) {
-    return this.call(ConfigResponseSchema, atUnixMs === undefined ? "/v1/config" : `/v1/config?at=${atUnixMs}`);
+    return this.call(
+      ConfigResponseSchema,
+      atUnixMs === undefined ? "/v1/config" : `/v1/config?at=${atUnixMs}`,
+    );
   }
   putConfig(baseRevision: number, document: ConfigDocument) {
     return this.call(ConfigResponseSchema, "/v1/config", {
       method: "PUT",
-      body: JSON.stringify(toJson(PutConfigRequestSchema, create(PutConfigRequestSchema, { baseRevision, document }))),
+      body: JSON.stringify(
+        toJson(PutConfigRequestSchema, create(PutConfigRequestSchema, { baseRevision, document })),
+      ),
     });
   }
   previewRule(rule: Rule, fromUnixMs: number, toUnixMs = 0) {
@@ -112,10 +119,23 @@ export class HubClient {
       body: JSON.stringify(
         toJson(
           RulePreviewRequestSchema,
-          create(RulePreviewRequestSchema, { rule, fromUnixMs: BigInt(fromUnixMs), toUnixMs: BigInt(toUnixMs) }),
+          create(RulePreviewRequestSchema, {
+            rule,
+            fromUnixMs: BigInt(fromUnixMs),
+            toUnixMs: BigInt(toUnixMs),
+          }),
         ),
       ),
     });
+  }
+  deviceHealth() {
+    return this.call(HealthListResponseSchema, "/v1/health/devices");
+  }
+  diagnostics(deviceId: string) {
+    return this.call(
+      DiagnosticsResponseSchema,
+      `/v1/diagnostics?device_id=${encodeURIComponent(deviceId)}`,
+    );
   }
   command(id: string) {
     return this.call(CommandViewSchema, `/v1/commands/${encodeURIComponent(id)}`);

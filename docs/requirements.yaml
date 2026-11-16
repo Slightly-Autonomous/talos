@@ -127,3 +127,21 @@ requirements:
     test: //firmware/sim:node_test (Discovery.CameraDisabledOnBattery..., Power.*)
     severity: critical
     status: verified_sim
+  - id: REQ-022
+    statement: Device frames are authenticated per device; forged, unknown or replayed traffic causes no journal effect
+    subsystem: server.coap, firmware.portable.wire
+    test: //server:coap_test (ForgedUnknownBadPathDuplicateAndRateLimited), //firmware/portable:wire_test
+    severity: critical
+    status: verified_sim
+  - id: REQ-023
+    statement: Only Ed25519-signed releases from configured owner keys are offered; campaigns update nodes end to end with rollback safety
+    subsystem: server, firmware.ota
+    test: //server:coap_test (SignedOtaCampaignUpdatesTheNodeEndToEnd)
+    severity: critical
+    status: verified_sim
+  - id: REQ-024
+    statement: Device health is projected from telemetry; never-reporting or silent devices are offline, never healthy
+    subsystem: server.device_registry
+    test: //server:coap_test (DebouncedDoorReachesTheJournalOnce...)
+    severity: high
+    status: verified_sim

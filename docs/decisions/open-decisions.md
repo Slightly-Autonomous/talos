@@ -17,6 +17,8 @@ A living register (spec §55). Nothing here is decided until an ADR, a test, a b
 | P1 | Sensor specifics | Hall vs reed, accelerometer thresholds, PIR model | Prototype BOM, measured false alarms and power |
 | P1 | Power budget | Real sleepy-node average, charger quiescent, pack life, panel size | Profiler measurements + weather scenarios |
 | P1 | Four-slot modules | Per-slot ID EEPROM, duplicate I²C, multi-wake modules, UART conflicts | Electrical prototype + manifest tests |
+| P0 | Device provisioning | Claim/commissioning flow that generates per-device CoAP keys (today a YAML file, ADR 0014) | Spec §37 design + HIL |
+| P1 | Thread validation | OTNS/OpenThread POSIX harness for partitions, parent switching, sleepy polling | Linux CI job with OTNS |
 | P1 | Dedup window | Is 1024 sequences per (device, boot) enough given device-side queue depth? (ADR 0008) | Firmware queue design, Phase 5/6 |
 | P1 | NVR | Frigate vs custom adapter, RTSP/ONVIF profiles | Integration proof of concept |
 | P1 | Hub hardware | Pi model vs mini-PC; MQTT placement; RCP firmware | Measured load |

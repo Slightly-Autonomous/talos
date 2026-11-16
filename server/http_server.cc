@@ -15,6 +15,7 @@ namespace api = ::talos::api::v1;
 namespace {
 
 constexpr std::size_t kMaxBodyBytes = 64 * 1024;
+constexpr std::size_t kMaxFirmwareBodyBytes = 4 * 1024 * 1024;
 
 std::string to_json(const google::protobuf::Message& m) {
   google::protobuf::util::JsonPrintOptions opts;
@@ -42,6 +43,7 @@ int status_for(const Error& e) {
   if (e.code == "not_found") return 404;
   if (e.code == "unknown_principal") return 403;
   if (e.code == "conflict") return 409;
+  if (e.code == "invalid_release") return 400;
   return 400;
 }
 
@@ -51,6 +53,11 @@ void send_error(httplib::Response& res, const Error& e) {
 
 bool parse_body(const httplib::Request& req, httplib::Response& res,
                 google::protobuf::Message& out) {
+  const bool firmware = req.path.rfind("/v1/firmware/releases", 0) == 0;
+  if (req.body.size() > (firmware ? kMaxFirmwareBodyBytes : kMaxBodyBytes)) {
+    send_error(res, 413, "payload_too_large", "request body too large");
+    return false;
+  }
   google::protobuf::util::JsonParseOptions opts;
   opts.ignore_unknown_fields = false;
   auto st = google::protobuf::util::JsonStringToMessage(req.body, &out, opts);
@@ -77,7 +84,7 @@ HttpServer::HttpServer(HubService& hub, const Authenticator& auth,
       auth_(auth),
       cors_origins_(std::move(cors_origins)),
       server_(std::make_unique<httplib::Server>()) {
-  server_->set_payload_max_length(kMaxBodyBytes);
+  server_->set_payload_max_length(kMaxFirmwareBodyBytes);
   routes();
 }
 
@@ -116,6 +123,7 @@ void HttpServer::routes() {
       res.set_header("Access-Control-Allow-Headers", "Authorization, Content-Type");
       res.set_header("Access-Control-Allow-Methods", "GET, POST, PUT, OPTIONS");
     }
+    ++hub_.metrics().http_requests;
     if (req.method == "OPTIONS") {
       res.status = 204;
       return httplib::Server::HandlerResponse::Handled;
@@ -222,6 +230,68 @@ void HttpServer::routes() {
            if (!r) return send_error(res, r.error());
            send(res, 200, r.value());
          }));
+
+  s.Get("/v1/health/devices",
+        principal([this](const PrincipalId&, const httplib::Request&, httplib::Response& res) {
+          send(res, 200, hub_.device_health());
+        }));
+
+  s.Get("/v1/diagnostics",
+        principal([this](const PrincipalId&, const httplib::Request& req, httplib::Response& res) {
+          if (!req.has_param("device_id")) {
+            return send_error(res, 400, "invalid_request", "device_id is required");
+          }
+          send(res, 200, hub_.diagnostics(DeviceId(req.get_param_value("device_id"))));
+        }));
+
+  s.Post(R"(/v1/devices/([A-Za-z0-9_\-]+)/config)",
+         principal(
+             [this](const PrincipalId& who, const httplib::Request& req, httplib::Response& res) {
+               api::DeviceConfigRequest body;
+               if (!parse_body(req, res, body)) return;
+               auto r = hub_.set_device_config(who, DeviceId(req.matches[1]), body);
+               if (!r) return send_error(res, r.error());
+               send(res, 200, r.value());
+             }));
+
+  s.Post("/v1/firmware/releases",
+         principal(
+             [this](const PrincipalId& who, const httplib::Request& req, httplib::Response& res) {
+               api::FirmwareImportRequest body;
+               if (!parse_body(req, res, body)) return;
+               if (Status st = hub_.import_firmware(who, body.manifest(), body.image()); !st) {
+                 return send_error(res, st.error());
+               }
+               send(res, 201, hub_.firmware_releases());
+             }));
+
+  s.Get("/v1/firmware/releases",
+        principal([this](const PrincipalId&, const httplib::Request&, httplib::Response& res) {
+          send(res, 200, hub_.firmware_releases());
+        }));
+
+  s.Post("/v1/firmware/campaigns",
+         principal(
+             [this](const PrincipalId& who, const httplib::Request& req, httplib::Response& res) {
+               api::CampaignRequest body;
+               if (!parse_body(req, res, body)) return;
+               auto r = hub_.start_campaign(who, body);
+               if (!r) return send_error(res, r.error());
+               send(res, 202, r.value());
+             }));
+
+  s.Get(R"(/v1/firmware/campaigns/([A-Za-z0-9_\-]+))",
+        principal([this](const PrincipalId&, const httplib::Request& req, httplib::Response& res) {
+          auto r = hub_.campaign(DeviceId(req.matches[1]));
+          if (!r) return send_error(res, r.error());
+          send(res, 200, r.value());
+        }));
+
+  // Prometheus scrape (bearer token: configure bearer_token in Prometheus).
+  s.Get("/metrics",
+        principal([this](const PrincipalId&, const httplib::Request&, httplib::Response& res) {
+          res.set_content(hub_.metrics_text(), "text/plain; version=0.0.4");
+        }));
 
   s.Post("/v1/arm", principal([this](const PrincipalId& who, const httplib::Request& req,
                                      httplib::Response& res) {

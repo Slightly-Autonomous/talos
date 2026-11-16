@@ -17,8 +17,16 @@ freshness_max_age_ms: 900000
 utc_offset_minutes: -480
 tick_interval_ms: 250
 cors_origins: ["http://localhost:5173", "http://localhost:4173"]
+# CoAP/UDP device ingress for Thread nodes (ADR 0014). Dev keys only.
+coap:
+  enabled: true
+  port: 5683
+  device_keys_file: dev-device-keys.yaml
+  rate_per_second: 20
+  burst: 40
 principals:
   - {id: owner, kind: PRINCIPAL_KIND_HUMAN, max_risk: RISK_CLASS_SECURITY_CRITICAL, token_sha256: 8ac4afa44f3f01da2d47daaee53270af09cdf9b0482481377b750332904ddd94}
+  - {id: metrics, kind: PRINCIPAL_KIND_SYSTEM, max_risk: RISK_CLASS_INFORMATIONAL, token_sha256: a069201469e8a354bbd72208f9377a2f6c78d76b83a8fde56e763072dc7f42d8}
   - {id: sync-worker, kind: PRINCIPAL_KIND_SYSTEM, max_risk: RISK_CLASS_INFORMATIONAL, token_sha256: a5272572495630914856ca946d2c9868fb9cfce8fc1a674e411989cdd4c5a1bc}
 devices:
   - {device_id: node-07, token_sha256: 3a0c053a94f5d03270628729fd2f84ba52065698f1b95719409e93042df778a3}

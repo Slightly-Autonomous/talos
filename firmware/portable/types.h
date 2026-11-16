@@ -27,7 +27,7 @@ enum class EventKind : std::uint8_t {
   kModuleFault,    // a = ModuleFault code
   kModulePresent,  // a = module code (discovery report)
   kConfigApplied,  // a = applied config revision
-  kOtaStatus,      // a = OtaState, b = next byte offset wanted
+  kOtaStatus,      // a = OtaState, b = next byte wanted (downloading), else running version
   kPowerMode,      // a = PowerMode
 };
 

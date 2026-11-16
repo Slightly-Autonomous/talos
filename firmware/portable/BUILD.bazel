@@ -6,12 +6,14 @@ load("//bazel:copts.bzl", "TALOS_COPTS")
 cc_library(
     name = "portable",
     srcs = [
+        "coap_link.cc",
         "modules.cc",
         "ota.cc",
         "runtime.cc",
         "wire.cc",
     ],
     hdrs = [
+        "coap_link.h",
         "event_queue.h",
         "hal.h",
         "modules.h",
@@ -22,7 +24,10 @@ cc_library(
     ],
     copts = TALOS_COPTS,
     visibility = ["//visibility:public"],
-    deps = ["//common/sha256"],
+    deps = [
+        "//common/coap",
+        "//common/sha256",
+    ],
 )
 
 cc_test(

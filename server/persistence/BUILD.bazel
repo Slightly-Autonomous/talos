@@ -5,10 +5,12 @@ cc_library(
     name = "persistence",
     srcs = [
         "config_store.cc",
+        "firmware_store.cc",
         "sqlite_journal.cc",
     ],
     hdrs = [
         "config_store.h",
+        "firmware_store.h",
         "sqlite_journal.h",
     ],
     copts = TALOS_PROTO_COPTS,
@@ -17,6 +19,7 @@ cc_library(
         "//codec",
         "//core/base",
         "//contracts/proto/talos/server/v1:server_cc_proto",
+        "//contracts/proto/talos/v1:talos_cc_proto",
         "//core/journal",
         "//common/sha256",
         "@sqlite3",

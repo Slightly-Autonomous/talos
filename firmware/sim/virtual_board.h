@@ -170,7 +170,9 @@ class Link final : public ILink {
 // A whole node: hardware models + BoardSupport + the real NodeRuntime.
 class Node {
  public:
-  explicit Node(BoardSupport board, std::uint32_t flash_capacity = 64 * 1024);
+  // `link_override` replaces the in-memory Link (e.g. a CoapLink over UDP).
+  explicit Node(BoardSupport board, std::uint32_t flash_capacity = 64 * 1024,
+                ILink* link_override = nullptr);
 
   // Plug a module into a slot (ID EEPROM + its devices on the slot branch).
   void insert(std::uint8_t slot, ModuleCode code);
@@ -186,6 +188,8 @@ class Node {
   std::vector<DeviceEvent> drain_and_ack();
 
   NodeRuntime& runtime() { return *runtime_; }
+  // Step every tick so an external link's replies are picked up promptly.
+  bool poll_link = false;
   std::uint32_t reboots() const { return reboots_; }
 
   Clock clock;

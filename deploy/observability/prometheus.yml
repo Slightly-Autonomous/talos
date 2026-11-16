@@ -1,0 +1,12 @@
+# Scrapes the hub's /metrics (read-only engineering observability, never in
+# the alarm path). Dev token; use a real metrics principal in production.
+global:
+  scrape_interval: 15s
+scrape_configs:
+  - job_name: talos_hub
+    metrics_path: /metrics
+    authorization:
+      type: Bearer
+      credentials: dev-metrics-token
+    static_configs:
+      - targets: ["hub:8080"]
