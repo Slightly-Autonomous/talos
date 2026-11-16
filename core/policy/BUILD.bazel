@@ -1,0 +1,26 @@
+load("@rules_cc//cc:defs.bzl", "cc_library", "cc_test")
+load("//bazel:copts.bzl", "TALOS_COPTS")
+
+cc_library(
+    name = "policy",
+    srcs = ["policy.cc"],
+    hdrs = ["policy.h"],
+    copts = TALOS_COPTS,
+    visibility = ["//visibility:public"],
+    deps = [
+        "//core/domain",
+        "//core/execution",
+        "//core/time",
+    ],
+)
+
+cc_test(
+    name = "policy_test",
+    size = "small",
+    srcs = ["policy_test.cc"],
+    copts = TALOS_COPTS,
+    deps = [
+        ":policy",
+        "@googletest//:gtest_main",
+    ],
+)

@@ -1,0 +1,22 @@
+load("@rules_cc//cc:defs.bzl", "cc_test")
+load("//bazel:copts.bzl", "TALOS_COPTS")
+
+# Cross-package acceptance test for the Phase 1 exit criteria: observations ->
+# correct state/replay; duplicates -> no duplicate effects; expired commands ->
+# no execution. Uses only real core code (no fakes).
+cc_test(
+    name = "phase1_slice_test",
+    size = "small",
+    srcs = ["phase1_slice_test.cc"],
+    copts = TALOS_COPTS,
+    deps = [
+        "//core/execution",
+        "//core/ingest",
+        "//core/journal",
+        "//core/policy",
+        "//core/rules",
+        "//core/state",
+        "//core/testing:fixtures",
+        "@googletest//:gtest_main",
+    ],
+)

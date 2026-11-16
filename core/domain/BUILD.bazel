@@ -1,0 +1,26 @@
+load("@rules_cc//cc:defs.bzl", "cc_library", "cc_test")
+load("//bazel:copts.bzl", "TALOS_COPTS")
+
+cc_library(
+    name = "domain",
+    srcs = ["property.cc"],
+    hdrs = [
+        "capability.h",
+        "ids.h",
+        "property.h",
+    ],
+    copts = TALOS_COPTS,
+    visibility = ["//visibility:public"],
+    deps = ["//core/base"],
+)
+
+cc_test(
+    name = "property_test",
+    size = "small",
+    srcs = ["property_test.cc"],
+    copts = TALOS_COPTS,
+    deps = [
+        ":domain",
+        "@googletest//:gtest_main",
+    ],
+)

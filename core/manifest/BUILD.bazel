@@ -1,0 +1,22 @@
+load("@rules_cc//cc:defs.bzl", "cc_library", "cc_test")
+load("//bazel:copts.bzl", "TALOS_COPTS")
+
+cc_library(
+    name = "manifest",
+    srcs = ["manifest.cc"],
+    hdrs = ["manifest.h"],
+    copts = TALOS_COPTS,
+    visibility = ["//visibility:public"],
+    deps = ["//core/domain"],
+)
+
+cc_test(
+    name = "manifest_test",
+    size = "small",
+    srcs = ["manifest_test.cc"],
+    copts = TALOS_COPTS,
+    deps = [
+        ":manifest",
+        "@googletest//:gtest_main",
+    ],
+)

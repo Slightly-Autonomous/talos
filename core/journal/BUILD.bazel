@@ -1,0 +1,27 @@
+load("@rules_cc//cc:defs.bzl", "cc_library", "cc_test")
+load("//bazel:copts.bzl", "TALOS_COPTS")
+
+cc_library(
+    name = "journal",
+    srcs = ["journal.cc"],
+    hdrs = ["journal.h"],
+    copts = TALOS_COPTS,
+    visibility = ["//visibility:public"],
+    deps = [
+        "//core/base",
+        "//core/events",
+        "//core/execution",
+        "//core/time",
+    ],
+)
+
+cc_test(
+    name = "journal_test",
+    size = "small",
+    srcs = ["journal_test.cc"],
+    copts = TALOS_COPTS,
+    deps = [
+        ":journal",
+        "@googletest//:gtest_main",
+    ],
+)

@@ -1,0 +1,34 @@
+load("@rules_cc//cc:defs.bzl", "cc_library", "cc_test")
+load("//bazel:copts.bzl", "TALOS_COPTS")
+
+cc_library(
+    name = "ingest",
+    srcs = [
+        "ingestor.cc",
+        "source_tracker.cc",
+    ],
+    hdrs = [
+        "ingestor.h",
+        "source_tracker.h",
+    ],
+    copts = TALOS_COPTS,
+    visibility = ["//visibility:public"],
+    deps = [
+        "//core/base",
+        "//core/domain",
+        "//core/events",
+        "//core/journal",
+    ],
+)
+
+cc_test(
+    name = "ingest_test",
+    size = "small",
+    srcs = ["ingest_test.cc"],
+    copts = TALOS_COPTS,
+    deps = [
+        ":ingest",
+        "//core/testing:fixtures",
+        "@googletest//:gtest_main",
+    ],
+)

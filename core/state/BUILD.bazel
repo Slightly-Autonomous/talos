@@ -1,0 +1,30 @@
+load("@rules_cc//cc:defs.bzl", "cc_library", "cc_test")
+load("//bazel:copts.bzl", "TALOS_COPTS")
+
+cc_library(
+    name = "state",
+    srcs = ["state.cc"],
+    hdrs = ["state.h"],
+    copts = TALOS_COPTS,
+    visibility = ["//visibility:public"],
+    deps = [
+        "//core/domain",
+        "//core/events",
+        "//core/execution",
+        "//core/journal",
+        "//core/time",
+    ],
+)
+
+cc_test(
+    name = "state_test",
+    size = "small",
+    srcs = ["state_test.cc"],
+    copts = TALOS_COPTS,
+    deps = [
+        ":state",
+        "//core/ingest",
+        "//core/testing:fixtures",
+        "@googletest//:gtest_main",
+    ],
+)

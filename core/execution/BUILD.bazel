@@ -1,0 +1,33 @@
+load("@rules_cc//cc:defs.bzl", "cc_library", "cc_test")
+load("//bazel:copts.bzl", "TALOS_COPTS")
+
+cc_library(
+    name = "execution",
+    srcs = [
+        "command.cc",
+        "ledger.cc",
+    ],
+    hdrs = [
+        "command.h",
+        "ledger.h",
+    ],
+    copts = TALOS_COPTS,
+    visibility = ["//visibility:public"],
+    deps = [
+        "//core/base",
+        "//core/domain",
+        "//core/events",
+        "//core/time",
+    ],
+)
+
+cc_test(
+    name = "ledger_test",
+    size = "small",
+    srcs = ["ledger_test.cc"],
+    copts = TALOS_COPTS,
+    deps = [
+        ":execution",
+        "@googletest//:gtest_main",
+    ],
+)

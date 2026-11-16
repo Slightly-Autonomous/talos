@@ -1,0 +1,26 @@
+load("@rules_cc//cc:defs.bzl", "cc_library", "cc_test")
+load("//bazel:copts.bzl", "TALOS_COPTS")
+
+cc_library(
+    name = "events",
+    srcs = ["observation.cc"],
+    hdrs = ["observation.h"],
+    copts = TALOS_COPTS,
+    visibility = ["//visibility:public"],
+    deps = [
+        "//core/base",
+        "//core/domain",
+        "//core/time",
+    ],
+)
+
+cc_test(
+    name = "observation_test",
+    size = "small",
+    srcs = ["observation_test.cc"],
+    copts = TALOS_COPTS,
+    deps = [
+        ":events",
+        "@googletest//:gtest_main",
+    ],
+)

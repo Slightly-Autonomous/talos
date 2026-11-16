@@ -1,0 +1,15 @@
+load("@rules_cc//cc:defs.bzl", "cc_library")
+load("//bazel:copts.bzl", "TALOS_COPTS")
+
+cc_library(
+    name = "fixtures",
+    testonly = True,
+    srcs = ["fixtures.cc"],
+    hdrs = ["fixtures.h"],
+    copts = TALOS_COPTS,
+    visibility = ["//:__subpackages__"],
+    deps = [
+        "//core/domain",
+        "//core/events",
+    ],
+)
