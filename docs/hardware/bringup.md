@@ -3,7 +3,7 @@
 Goal: run the **same portable firmware** on real silicon with off-the-shelf breakouts, before any custom PCB. That answers the P0 hardware questions (pin map, wake lines, I2C behavior, sleep current, OTA fit) with measurements instead of guesses. See ADR 0016.
 
 ## 1. Wire the rig (`hardware/bom/devkit_rig_v0.csv`)
-- I2C SDA/SCL to the pins in `firmware/esp_idf/main/board_proto_a.h` (`kI2cSda`, `kI2cScl`). **These are placeholders**: pick free, non-strapping ESP32-H2 pins from the current Espressif datasheet and update the header.
+- I2C SDA/SCL to GPIO2/GPIO3 and slot wakes to GPIO10–13, per `firmware/esp_idf/main/board_tl_sn_001.h`. These follow the sourced pad ledger `hardware/pins/esp32h2_mini1_pin_ledger.csv`. On a DevKitM-1, check those GPIOs are broken out and free before wiring. **First bench task: HD-004**, deep-sleep wake on GPIO10–13 with mixed levels.
 - A TCA9546A at 0x70. Branch *i* goes to slot *i*.
 - On each used branch, an EEPROM at 0x50 programmed with `[code_hi, code_lo, revision]`:
 

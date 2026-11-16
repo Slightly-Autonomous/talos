@@ -1,0 +1,13 @@
+# PROVISIONAL. TL-TEST-001 slot test cartridge: TCA9535 at 0x27 + ID EEPROM + switched-rail load.
+id: tl_test_001
+revision: a
+provisional: true
+connector_standard: sensor_edge_v1
+needs_wake: true
+needs_spi: true
+needs_uart: true
+i2c_addresses: [39, 80]    # 0x27 expander, 0x50 EEPROM
+loads: [{rail: v3v3_aon, active_ma: 1}, {rail: v3v3_sw, active_ma: 10}]
+average_uw: 7
+peak_mw: 40
+capabilities: [diagnostic.slot_test]

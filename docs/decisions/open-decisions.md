@@ -1,6 +1,6 @@
 # Open decisions and risk register
 
-A living register (spec §55). Nothing here is decided until an ADR, a test, a benchmark or a hardware experiment settles it. **Hardware numbers in `contracts/manifests/` are placeholders until measured.**
+A living register (spec §55). Nothing here is decided until an ADR, a test, a benchmark or a hardware experiment settles it. **Hardware numbers in `contracts/manifests/` are placeholders until measured.** The detailed hardware register (HD-001..HD-019, with evidence and next actions) is [`hardware/requirements/design-risks.md`](../../hardware/requirements/design-risks.md).
 
 | Pri | Topic | Open question / risk | How it gets decided |
 |---|---|---|---|
@@ -8,7 +8,7 @@ A living register (spec §55). Nothing here is decided until an ADR, a test, a b
 | P0 | GPIO/pin map | Exact ESP32-H2 module and pin mux, boot/flash/USB, deep-sleep wake on four slots | Datasheet + board validator + bench tests |
 | P0 | Mainboard power | USB/PV ORing, charger (BQ25186 is a candidate only), 1S pack/NTC, rails, per-slot protection | Schematic, lab stress and thermal tests |
 | P0 | Security trust | Owner-controlled signing, provisioning, eFuse flow, recovery, unique identities | Threat model + ESP-IDF reference + HIL |
-| P0 | Camera performance | Snapshot cartridge vs IP camera; night/IR; pre-trigger buffering; real power | Camera benchmark against use cases |
+| P0 | Camera performance | Decided: separate Vision Node, no camera cartridge (HW-0001). Open: compute/codec, night/IR, pre-trigger buffering, real power | H5 camera benchmark |
 | P0 | OTA resources | Is 4 MB flash enough? Partition sizes; update over Thread | Real images + HIL |
 | P0 | Actuation safety | Strong authorization, local fail-safe, no policy bypass paths | Security invariants + hardware interlocks |
 | P1 | Postgres driver | libpq via Bazel for `STORAGE_DRIVER_POSTGRES` (cloud-hosted hub on Supabase/Postgres) | Implement behind `IJournal` + conformance suite |

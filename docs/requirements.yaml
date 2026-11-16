@@ -157,3 +157,15 @@ requirements:
     test: connectors/mcp_server/src/server.test.ts, //core/policy:policy_test
     severity: critical
     status: implemented
+  - id: REQ-027
+    statement: Sensor-node card configurations are rejected when they need a missing wake line, a different connector revision, a reserved root I2C address, more UARTs than the board has, or more power than the active source provides
+    subsystem: core.manifest
+    test: //codec:yaml_loader_test (SensorNodeRevA.HW_MF_001..009, RootAddressConflictRejected)
+    severity: high
+    status: verified_sim
+  - id: REQ-028
+    statement: Sensor Node and card schematics open in KiCad, pass ERC with zero errors, and their exported netlists match the generator's intended connectivity
+    subsystem: hardware.kicad
+    test: hardware/scripts/check_kicad.sh -> hardware/results/
+    severity: high
+    status: implemented

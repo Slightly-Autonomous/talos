@@ -16,6 +16,9 @@ message PowerSourceBudget {
   PowerSource source = 1;
   uint32 sustained_mw = 2;
   uint32 peak_mw = 3;
+  // Finer-grained sustained budget for sleepy nodes. When non-zero it is used
+  // instead of sustained_mw.
+  uint32 sustained_uw = 4;
 }
 
 message RailSpec {
@@ -44,6 +47,16 @@ message BoardManifest {
   repeated PowerSourceBudget power_sources = 6;
   // Free-form notes on what is unverified.
   repeated string notes = 7;
+  // Slot connector standard, e.g. "sensor_edge_v1". Empty = not declared.
+  string connector_standard = 8;
+  // Number of card UARTs usable at the same time. 0 = not declared (no check).
+  uint32 uart_channels = 9;
+  // 7-bit root-bus addresses taken by the board; mux branches join the root
+  // bus when enabled, so cards must not reuse them.
+  repeated uint32 reserved_i2c_addresses = 10;
+  // Board family (e.g. "TL-SN-001") and node transport ("thread", "ip").
+  string board_family = 11;
+  string transport = 12;
 }
 
 message RailLoad {
@@ -66,4 +79,8 @@ message ModuleManifest {
   uint32 peak_mw = 11;
   repeated string capabilities = 12;
   repeated string notes = 13;
+  // Connector standard the card is built for. Empty = not declared.
+  string connector_standard = 14;
+  // Finer-grained average draw; used instead of average_mw when non-zero.
+  uint32 average_uw = 15;
 }

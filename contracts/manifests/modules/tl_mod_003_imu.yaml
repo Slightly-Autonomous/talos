@@ -1,0 +1,11 @@
+# PROVISIONAL. TL-MOD-003: ST LIS2DW12 (0x19, SA0 high) + ID EEPROM.
+id: tl_mod_003_imu
+revision: a
+provisional: true
+connector_standard: sensor_edge_v1
+needs_wake: true
+i2c_addresses: [25, 80]    # 0x19 LIS2DW12, 0x50 EEPROM
+loads: [{rail: v3v3_aon, active_ma: 1}]
+average_uw: 7              # low-power mode 1 at low ODR (est), sourced figures in datasheet DS11811
+peak_mw: 1                 # high-performance 90 uA
+capabilities: [vibration.detect]

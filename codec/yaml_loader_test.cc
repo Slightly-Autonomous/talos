@@ -67,5 +67,146 @@ TEST(YamlLoader, MissingFile) {
   EXPECT_EQ(load_board_manifest("does/not/exist.yaml").error().code, "file_not_found");
 }
 
+// ---- TL-SN-001 Rev A manifests (hardware handoff §38, HW-MF-*) ---------------------
+
+ModuleCatalog load_rev_a_catalog() {
+  ModuleCatalog c;
+  for (const char* name : {"tl_mod_001_magnetic", "tl_mod_002_pir", "tl_mod_003_imu",
+                           "tl_mod_004_environment", "tl_test_001", "pir_ekmb_v1"}) {
+    auto m = load_module_manifest(kDir + "modules/" + name + ".yaml");
+    EXPECT_TRUE(m.ok()) << name << ": " << m.error().message;
+    if (m.ok()) c.emplace(m.value().id, m.value());
+  }
+  return c;
+}
+
+BoardManifest sensor_node() {
+  auto b = load_board_manifest(kDir + "boards/sensor_node_proto_a.yaml");
+  EXPECT_TRUE(b.ok()) << b.error().message;
+  return b.value();
+}
+
+TEST(SensorNodeRevA, ManifestsLoadProvisionalWithFamilyAndConnector) {
+  auto b = sensor_node();
+  EXPECT_TRUE(b.provisional);
+  EXPECT_EQ(b.board_family, "TL-SN-001");
+  EXPECT_EQ(b.transport, "thread");
+  EXPECT_EQ(b.connector_standard, "sensor_edge_v1");
+  EXPECT_EQ(b.uart_channels, 1u);
+  EXPECT_EQ(b.reserved_i2c_addresses, (std::vector<std::uint8_t>{0x20, 0x21, 0x6A, 0x70}));
+  for (const auto& [id, m] : load_rev_a_catalog()) EXPECT_TRUE(m.provisional) << id.str();
+}
+
+// HW-MF-001: four reference cards fit on battery, USB and PV.
+TEST(SensorNodeRevA, HW_MF_001_FourReferenceCardsFitEverySource) {
+  std::vector<SlotAssignment> a{{0, ModuleId("tl_mod_002_pir")},
+                                {1, ModuleId("tl_mod_003_imu")},
+                                {2, ModuleId("tl_mod_001_magnetic")},
+                                {3, ModuleId("tl_mod_004_environment")}};
+  auto catalog = load_rev_a_catalog();
+  for (auto src : {PowerSource::kBatteryOnly, PowerSource::kUsb, PowerSource::kSolarBattery}) {
+    auto r = validate_configuration(sensor_node(), catalog, a, src);
+    EXPECT_TRUE(r.ok()) << to_string(src) << ": "
+                        << (r.issues.empty() ? "" : r.issues.front().message);
+  }
+}
+
+// HW-MF-002: every card has an ID EEPROM at 0x50; isolated branches make that legal.
+TEST(SensorNodeRevA, HW_MF_002_SameEepromAddressOnEveryBranchIsFine) {
+  std::vector<SlotAssignment> a;
+  for (SlotIndex i = 0; i < 4; ++i) a.push_back({i, ModuleId("tl_mod_004_environment")});
+  EXPECT_TRUE(
+      validate_configuration(sensor_node(), load_rev_a_catalog(), a, PowerSource::kUsb).ok());
+}
+
+// HW-MF-003: unisolated (shared) branch with the same address is rejected.
+TEST(SensorNodeRevA, HW_MF_003_SharedBranchConflictRejected) {
+  auto b = sensor_node();
+  b.slots[1].i2c_branch = 0;  // pretend slots 0 and 1 share a branch
+  std::vector<SlotAssignment> a{{0, ModuleId("tl_mod_003_imu")}, {1, ModuleId("tl_mod_003_imu")}};
+  EXPECT_TRUE(validate_configuration(b, load_rev_a_catalog(), a, PowerSource::kUsb)
+                  .has(ManifestIssueCode::kI2cAddressConflict));
+}
+
+// HW-MF-004: wake-required card on a slot without a wake path.
+TEST(SensorNodeRevA, HW_MF_004_WakeRequiredOnSlotWithoutWake) {
+  auto b = sensor_node();
+  b.slots[3].wake = false;
+  std::vector<SlotAssignment> a{{3, ModuleId("tl_mod_002_pir")}};
+  EXPECT_TRUE(validate_configuration(b, load_rev_a_catalog(), a, PowerSource::kUsb)
+                  .has(ManifestIssueCode::kMissingWake));
+}
+
+// HW-MF-005: two UART cards but one muxed UART.
+TEST(SensorNodeRevA, HW_MF_005_TwoUartCardsOneUart) {
+  std::vector<SlotAssignment> a{{0, ModuleId("tl_test_001")}, {1, ModuleId("tl_test_001")}};
+  auto r = validate_configuration(sensor_node(), load_rev_a_catalog(), a, PowerSource::kUsb);
+  EXPECT_TRUE(r.has(ManifestIssueCode::kUartOversubscribed));
+  std::vector<SlotAssignment> one{{0, ModuleId("tl_test_001")}};
+  EXPECT_TRUE(
+      validate_configuration(sensor_node(), load_rev_a_catalog(), one, PowerSource::kUsb).ok());
+}
+
+// HW-MF-006: four high-current cards exceed the battery budget but fit on USB.
+TEST(SensorNodeRevA, HW_MF_006_HighCurrentCardsRejectedOnBattery) {
+  auto catalog = load_rev_a_catalog();
+  ModuleManifest hungry;
+  hungry.id = ModuleId("radar_class_card");
+  hungry.connector_standard = "sensor_edge_v1";
+  hungry.loads = {{"v3v3_sw", 70}};
+  hungry.average_mw = 200;
+  hungry.peak_mw = 190;
+  catalog.emplace(hungry.id, hungry);
+  std::vector<SlotAssignment> a;
+  for (SlotIndex i = 0; i < 4; ++i) a.push_back({i, hungry.id});
+  auto battery = validate_configuration(sensor_node(), catalog, a, PowerSource::kBatteryOnly);
+  EXPECT_TRUE(battery.has(ManifestIssueCode::kSustainedPowerExceeded));
+  EXPECT_TRUE(validate_configuration(sensor_node(), catalog, a, PowerSource::kUsb).ok());
+}
+
+// HW-MF-007: card for another connector revision is never activated.
+TEST(SensorNodeRevA, HW_MF_007_LegacyCardConnectorMismatch) {
+  std::vector<SlotAssignment> a{{0, ModuleId("pir_ekmb_v1")}};  // pre-sensor_edge_v1 manifest
+  EXPECT_TRUE(validate_configuration(sensor_node(), load_rev_a_catalog(), a, PowerSource::kUsb)
+                  .has(ManifestIssueCode::kConnectorMismatch));
+}
+
+// HW-MF-008: a card asking for 5 V keeps it disabled (Rev A routes no 5 V rail).
+TEST(SensorNodeRevA, HW_MF_008_FiveVoltCardRejected) {
+  auto catalog = load_rev_a_catalog();
+  ModuleManifest five;
+  five.id = ModuleId("needs_5v");
+  five.connector_standard = "sensor_edge_v1";
+  five.loads = {{"v5_sw", 50}};
+  catalog.emplace(five.id, five);
+  std::vector<SlotAssignment> a{{0, five.id}};
+  EXPECT_TRUE(validate_configuration(sensor_node(), catalog, a, PowerSource::kUsb)
+                  .has(ManifestIssueCode::kRailNotRouted));
+}
+
+// HW-MF-009: Vision Node with zero slots is valid on its own power sources.
+TEST(SensorNodeRevA, HW_MF_009_VisionNodeZeroSlotsValid) {
+  auto vn = load_board_manifest(kDir + "boards/vision_node_proto_a.yaml");
+  ASSERT_TRUE(vn.ok()) << vn.error().message;
+  EXPECT_TRUE(vn.value().slots.empty());
+  EXPECT_EQ(vn.value().transport, "ip");
+  EXPECT_TRUE(validate_configuration(vn.value(), {}, {}, PowerSource::kUsb).ok());
+  EXPECT_TRUE(validate_configuration(vn.value(), {}, {}, PowerSource::kBatteryOnly)
+                  .has(ManifestIssueCode::kPowerSourceUnsupported));
+}
+
+// Cards must avoid the board's root-bus addresses (mux branches join the root bus).
+TEST(SensorNodeRevA, RootAddressConflictRejected) {
+  auto catalog = load_rev_a_catalog();
+  ModuleManifest clash;
+  clash.id = ModuleId("expander_at_0x20");
+  clash.connector_standard = "sensor_edge_v1";
+  clash.i2c_addresses = {0x20};
+  catalog.emplace(clash.id, clash);
+  std::vector<SlotAssignment> a{{2, clash.id}};
+  EXPECT_TRUE(validate_configuration(sensor_node(), catalog, a, PowerSource::kUsb)
+                  .has(ManifestIssueCode::kI2cRootConflict));
+}
+
 }  // namespace
 }  // namespace talos::codec

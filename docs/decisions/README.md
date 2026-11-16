@@ -20,5 +20,6 @@ Short records of why each choice was made. A decision is changed by adding a new
 | [0014](0014-device-network-ota-observability.md) | Device network (CoAP), signed OTA delivery, observability | Accepted |
 | [0015](0015-integrations-and-remote-access.md) | Integrations, AI connector and remote access | Accepted |
 | [0016](0016-hardware-bring-up-and-hil.md) | Hardware bring-up path and HIL testing | Accepted |
+| [0017](0017-custom-hardware-workstream.md) | Custom hardware workstream (H0–H3); hardware ADRs in `hardware/architecture/decisions/` | Accepted |
 
 Open questions live in [open-decisions.md](open-decisions.md).

@@ -1,6 +1,6 @@
 #include "esp_platform.h"
 
-#include "board_proto_a.h"
+#include "board_tl_sn_001.h"
 #include "driver/gpio.h"
 #include "esp_timer.h"
 #include "nvs_flash.h"

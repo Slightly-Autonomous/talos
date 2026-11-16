@@ -517,8 +517,16 @@ Result<BoardManifest> from_proto(const v1::BoardManifest& p) {
   for (const auto& ps : p.power_sources()) {
     auto src = source_from(ps.source());
     if (!src) return src.error();
-    b.power_sources.push_back({src.value(), ps.sustained_mw(), ps.peak_mw()});
+    b.power_sources.push_back({src.value(), ps.sustained_mw(), ps.peak_mw(), ps.sustained_uw()});
   }
+  b.connector_standard = p.connector_standard();
+  b.uart_channels = p.uart_channels();
+  for (auto addr : p.reserved_i2c_addresses()) {
+    if (addr > 0x7F) return range_error("reserved i2c address");
+    b.reserved_i2c_addresses.push_back(static_cast<std::uint8_t>(addr));
+  }
+  b.board_family = p.board_family();
+  b.transport = p.transport();
   return b;
 }
 
@@ -538,7 +546,9 @@ Result<ModuleManifest> from_proto(const v1::ModuleManifest& p) {
   for (const auto& l : p.loads()) m.loads.push_back({l.rail(), l.active_ma()});
   m.average_mw = p.average_mw();
   m.peak_mw = p.peak_mw();
+  m.average_uw = p.average_uw();
   for (const auto& c : p.capabilities()) m.capabilities.emplace_back(c);
+  m.connector_standard = p.connector_standard();
   return m;
 }
 

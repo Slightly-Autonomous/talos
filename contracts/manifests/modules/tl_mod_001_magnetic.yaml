@@ -1,0 +1,11 @@
+# PROVISIONAL. TL-MOD-001: DRV5032FB Hall switch (0.69 uA typ @3 V, SLVSDC7H) + 24AA025E ID.
+id: tl_mod_001_magnetic
+revision: a
+provisional: true
+connector_standard: sensor_edge_v1
+needs_wake: true
+i2c_addresses: [80]        # 0x50 ID EEPROM
+loads: [{rail: v3v3_aon, active_ma: 1}]
+average_uw: 6              # 1.7 uA x 3.3 V; EEPROM standby unsourced (1 uA placeholder)
+peak_mw: 9                 # DRV5032 ICC(PK) 2.7 mA max
+capabilities: [contact.state]

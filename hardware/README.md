@@ -1,8 +1,54 @@
 # hardware
 
-Nothing in this folder is a validated design.
+The Talos custom-hardware workstream. It follows `TALOS_CUSTOM_HARDWARE_HANDOFF_v0_1` (milestones H0–H7). Root ADRs in `docs/decisions/` still win over anything here (ADR 0017 links the two).
 
-- `bom/`: provisional bill of materials for the first dev-kit rig and the future mainboard. **Candidate parts only.**
-- KiCad sources, connector spec, enclosures and fixtures land here after the dev-kit bring-up (docs/hardware/bringup.md) answers the open P0 questions in `docs/decisions/open-decisions.md`.
+> **Nothing in this folder is a validated design.** The schematics open in KiCad and pass ERC, but they have not been reviewed by an electrical engineer, laid out, built or measured. Every value is `provisional: true` until a bench measurement says otherwise.
 
-The board manifest (`contracts/manifests/boards/`) and the firmware `BoardSupport` table (`firmware/esp_idf/main/board_proto_a.h`) must describe the same wiring. Both stay `provisional` until a schematic exists.
+## Boards
+
+| ID | What | Bespoke? | State |
+|---|---|---|---|
+| TL-HUB-REF | Hub: Pi 5 / mini-PC + USB 802.15.4 RCP | No, bought | `bom/devkit_rig_v0.csv` |
+| TL-SN-001 | Four-slot Thread Sensor Node (ESP32-H2-MINI-1) | Yes | H3 schematic ([kicad/TL-SN-001](kicad/TL-SN-001)) |
+| TL-MOD-001 | Magnetic contact card (DRV5032FB Hall) | Yes | H3 schematic |
+| TL-MOD-002 | PIR card (Panasonic EKMB 1 µA) | Yes | H3 schematic |
+| TL-MOD-003 | Vibration/impact card (ST LIS2DW12) | Yes | H3 schematic |
+| TL-MOD-004 | Temperature/humidity card (Sensirion SHT4x) | Yes | H3 schematic |
+| TL-TEST-001 | Slot test cartridge | Yes | H3 schematic |
+| TL-VN-001 | Vision Node (separate board, CM4/CM5/video SoC) | Yes | H5 study not started; manifest only |
+
+The camera **slot** module (`smart_camera_s3_v1`) is superseded by TL-VN-001 ([ADR HW-0001](architecture/decisions/0001-hardware-family.md)).
+
+## Where things are
+
+| Path | Contents |
+|---|---|
+| `architecture/` | [hardware-overview.md](architecture/hardware-overview.md) and hardware ADRs HW-0001..0005 |
+| `requirements/` | Requirements (`hardware-requirements.yaml`), decision/risk register, datasheet register, component selection, interface test matrix |
+| `interfaces/` | [sensor_edge_v1](interfaces/sensor_edge_v1.md) slot connector contract |
+| `pins/` | Complete ESP32-H2-MINI-1 pad ledger (CSV), the single source for the firmware `BoardSupport` table |
+| `budgets/` | Per-slot and board resource budget (CSV) |
+| `power/` | Power-tree study and operating-mode matrix (H2) |
+| `mechanical/` | Connector shortlist and mechanical notes |
+| `kicad/` | KiCad 10 projects, all **generated** by `scripts/gen_schematics.py`; project-local symbols in `kicad/libraries/` |
+| `scripts/` | Schematic generator, ERC/netlist checks, power-budget calculator |
+| `results/` | Captured tool output (ERC reports, netlist comparison, power report), dated and versioned |
+| `templates/` | Component evaluation template |
+| `bom/` | Dev-kit rig BOM (bring-up path, ADR 0016) |
+
+Board and module manifests live in `contracts/manifests/` (one schema, validated by `core/manifest`). `sensor_node_proto_a.yaml` must agree with `pins/esp32h2_mini1_pin_ledger.csv` and `firmware/esp_idf/main/board_tl_sn_001.h`.
+
+## Reproduce
+
+```bash
+# KiCad 10.0.x: kicad-cli on PATH, or set KICAD_CLI.
+python3 hardware/scripts/gen_schematics.py          # regenerate all projects
+hardware/scripts/check_kicad.sh                      # ERC + netlist round-trip -> hardware/results/
+python3 hardware/scripts/power_budget.py             # H2 calculations -> hardware/results/power-budget.md
+bazel test //core/manifest:manifest_test //codec:yaml_loader_test   # manifest validator (HW-MF tests)
+```
+
+## Hard rules
+- Do not order parts or boards, request binding quotes, create factory keys or burn eFuses without explicit owner approval.
+- Never hand-edit a generated `.kicad_sch`. Change the generator, regenerate, and re-run the checks.
+- A green ERC is not "validated". See `requirements/design-risks.md` for what still needs a reviewer or a bench.

@@ -1,7 +1,7 @@
 // ESP32-H2 entry point: the same NodeRuntime the host tests and twin run.
 #include <algorithm>
 
-#include "board_proto_a.h"
+#include "board_tl_sn_001.h"
 #include "esp_log.h"
 #include "esp_platform.h"
 #include "firmware/portable/runtime.h"
@@ -10,7 +10,7 @@
 
 extern "C" void app_main(void) {
   using namespace talos::fw;
-  static const BoardSupport board = board::proto_a();
+  static const BoardSupport board = board::tl_sn_001();
   static esp::Clock clock;
   static esp::Gpio gpio(board);
   static esp::I2c i2c(board::kI2cSda, board::kI2cScl);

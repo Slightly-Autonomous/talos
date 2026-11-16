@@ -42,6 +42,12 @@ std::string_view to_string(ManifestIssueCode c) {
       return "sustained_power_exceeded";
     case ManifestIssueCode::kPeakPowerExceeded:
       return "peak_power_exceeded";
+    case ManifestIssueCode::kConnectorMismatch:
+      return "connector_mismatch";
+    case ManifestIssueCode::kI2cRootConflict:
+      return "i2c_root_conflict";
+    case ManifestIssueCode::kUartOversubscribed:
+      return "uart_oversubscribed";
   }
   return "invalid";
 }
@@ -104,6 +110,13 @@ ValidationResult validate_configuration(const BoardManifest& board, const Module
       continue;
     }
     const ModuleManifest& m = mit->second;
+    // A card built for another connector revision is never activated (HW-MF-007).
+    if (!board.connector_standard.empty() && m.connector_standard != board.connector_standard) {
+      issue(ManifestIssueCode::kConnectorMismatch, a.slot,
+            m.id.str() + " is built for connector '" + m.connector_standard + "', board has '" +
+                board.connector_standard + "'");
+      continue;
+    }
     placed.push_back({slot, &m});
 
     if (m.needs_wake && !slot->wake) {
@@ -152,6 +165,30 @@ ValidationResult validate_configuration(const BoardManifest& board, const Module
     }
   }
 
+  // Enabled mux branches join the root bus: root addresses are off limits.
+  for (const auto& p : placed) {
+    for (auto addr : p.module->i2c_addresses) {
+      for (auto reserved : board.reserved_i2c_addresses) {
+        if (addr == reserved) {
+          issue(ManifestIssueCode::kI2cRootConflict, p.slot->index,
+                p.module->id.str() + " uses i2c address " + std::to_string(addr) +
+                    ", reserved on the board's root bus");
+        }
+      }
+    }
+  }
+
+  // Card UARTs share a limited number of controller UARTs (HW-MF-005).
+  if (board.uart_channels > 0) {
+    std::uint32_t uart_users = 0;
+    for (const auto& p : placed) uart_users += p.module->needs_uart ? 1 : 0;
+    if (uart_users > board.uart_channels) {
+      issue(ManifestIssueCode::kUartOversubscribed, std::nullopt,
+            std::to_string(uart_users) + " modules need a UART, board provides " +
+                std::to_string(board.uart_channels));
+    }
+  }
+
   // Rail totals.
   for (const auto& rail : board.rails) {
     std::uint64_t total = 0;
@@ -177,21 +214,26 @@ ValidationResult validate_configuration(const BoardManifest& board, const Module
           "board does not support power source " + std::string(to_string(active_source)));
     return r;
   }
-  std::uint64_t avg = 0, peak = 0;
+  // Sustained budget in microwatts: sleepy nodes live below 1 mW.
+  auto module_uw = [](const ModuleManifest& m) -> std::uint64_t {
+    return m.average_uw != 0 ? m.average_uw : std::uint64_t{m.average_mw} * 1000;
+  };
+  const std::uint64_t budget_uw =
+      budget->sustained_uw != 0 ? budget->sustained_uw : std::uint64_t{budget->sustained_mw} * 1000;
+  std::uint64_t avg_uw = 0, peak = 0;
   for (const auto& p : placed) {
-    avg += p.module->average_mw;
+    avg_uw += module_uw(*p.module);
     peak += p.module->peak_mw;
   }
-  if (avg > budget->sustained_mw) {
+  if (avg_uw > budget_uw) {
     std::string heavy;
     for (const auto& p : placed) {
-      if (p.module->average_mw > budget->sustained_mw / 2) heavy += " " + p.module->id.str();
+      if (module_uw(*p.module) > budget_uw / 2) heavy += " " + p.module->id.str();
     }
     issue(ManifestIssueCode::kSustainedPowerExceeded, std::nullopt,
-          "average " + std::to_string(avg) + " mW exceeds " +
+          "average " + std::to_string(avg_uw) + " uW exceeds " +
               std::string(to_string(active_source)) + " sustained budget " +
-              std::to_string(budget->sustained_mw) + " mW" +
-              (heavy.empty() ? "" : "; dominant:" + heavy));
+              std::to_string(budget_uw) + " uW" + (heavy.empty() ? "" : "; dominant:" + heavy));
   }
   if (peak > budget->peak_mw) {
     issue(ManifestIssueCode::kPeakPowerExceeded, std::nullopt,

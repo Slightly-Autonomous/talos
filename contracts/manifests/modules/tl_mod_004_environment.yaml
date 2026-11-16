@@ -1,0 +1,11 @@
+# PROVISIONAL. TL-MOD-004: Sensirion SHT4x (0x44) + ID EEPROM. Idle current not yet sourced.
+id: tl_mod_004_environment
+revision: a
+provisional: true
+connector_standard: sensor_edge_v1
+needs_wake: false
+i2c_addresses: [68, 80]    # 0x44 SHT4x, 0x50 EEPROM
+loads: [{rail: v3v3_aon, active_ma: 1}]
+average_uw: 7
+peak_mw: 2
+capabilities: [temperature.read, humidity.read]

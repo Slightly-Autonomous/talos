@@ -26,6 +26,7 @@ struct PowerSourceBudget {
   PowerSource source = PowerSource::kBatteryOnly;
   std::uint32_t sustained_mw = 0;
   std::uint32_t peak_mw = 0;
+  std::uint32_t sustained_uw = 0;  // used instead of sustained_mw when non-zero
 };
 
 struct RailSpec {
@@ -52,6 +53,11 @@ struct BoardManifest {
   std::vector<SlotSpec> slots;
   std::vector<RailSpec> rails;
   std::vector<PowerSourceBudget> power_sources;
+  std::string connector_standard;                    // empty = not declared
+  std::uint32_t uart_channels = 0;                   // concurrent card UARTs; 0 = not declared
+  std::vector<std::uint8_t> reserved_i2c_addresses;  // root-bus addresses cards must avoid
+  std::string board_family;
+  std::string transport;
 };
 
 struct RailLoad {
@@ -71,7 +77,9 @@ struct ModuleManifest {
   std::vector<RailLoad> loads;
   std::uint32_t average_mw = 0;  // expected average draw in its configured duty cycle
   std::uint32_t peak_mw = 0;     // worst-case instantaneous draw
+  std::uint32_t average_uw = 0;  // used instead of average_mw when non-zero
   std::vector<CapabilityId> capabilities;
+  std::string connector_standard;  // empty = not declared
 };
 
 using ModuleCatalog = std::map<ModuleId, ModuleManifest>;
@@ -94,6 +102,9 @@ enum class ManifestIssueCode : std::uint8_t {
   kPowerSourceUnsupported,
   kSustainedPowerExceeded,
   kPeakPowerExceeded,
+  kConnectorMismatch,
+  kI2cRootConflict,
+  kUartOversubscribed,
 };
 
 std::string_view to_string(ManifestIssueCode c);

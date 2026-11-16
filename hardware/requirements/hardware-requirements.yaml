@@ -1,0 +1,84 @@
+# Hardware requirements (H0). status: proposed | designed (in schematic) | verified_tool (tool output captured)
+# | measured (bench). Nothing is `measured` yet. Tests point at the artifact that checks the requirement.
+schema_version: talos.hardware.req.v0
+requirements:
+  - id: HWR-001
+    statement: The hub is a bought computer plus USB 802.15.4 RCP; no bespoke hub PCB
+    board: TL-HUB-REF
+    status: proposed
+    test: hardware/bom/devkit_rig_v0.csv
+  - id: HWR-002
+    statement: The Sensor Node accepts four interchangeable cards through one connector standard (sensor_edge_v1)
+    board: TL-SN-001
+    status: designed
+    test: hardware/results/netlist-check.txt (connector contacts identical across five card schematics)
+  - id: HWR-003
+    statement: Each slot has a dedicated wake line usable from deep sleep (ESP32-H2 LP GPIO8-14)
+    board: TL-SN-001
+    status: designed
+    test: hardware/pins/esp32h2_mini1_pin_ledger.csv; bench HD-004
+  - id: HWR-004
+    statement: Each slot has an isolated I2C branch; identical card addresses on different slots never conflict
+    board: TL-SN-001
+    status: verified_tool
+    test: //core/manifest:manifest_test (HW_MF_002, HW_MF_003)
+  - id: HWR-005
+    statement: Card devices never use a reserved root I2C address (0x20, 0x21, 0x6A, 0x70)
+    board: TL-SN-001
+    status: verified_tool
+    test: //core/manifest:manifest_test (RootAddressConflictRejected)
+  - id: HWR-006
+    statement: Unpowered cards are not backfed through I2C; branch pull-ups and branch devices are on the slot AON rail
+    board: TL-SN-001
+    status: designed
+    test: EE review + bench leakage test (interface-test-matrix IT-07)
+  - id: HWR-007
+    statement: Every output that controls power, reset or chip select has a resistor-defined safe default at power-up
+    board: TL-SN-001
+    status: designed
+    test: hardware/scripts/check_kicad.sh (netlist check SAFE-DEFAULTS)
+  - id: HWR-008
+    statement: Runs from USB-C alone with no battery, from battery alone, and from PV+battery; USB has priority over PV; no cross-feed
+    board: TL-SN-001
+    status: designed
+    test: hardware/power/power-tree.md mode matrix; bench
+  - id: HWR-009
+    statement: Battery-only deep-sleep budget with four reference cards is under 40 uA at the battery (estimate until measured)
+    board: TL-SN-001
+    status: verified_tool
+    test: hardware/scripts/power_budget.py (asserts) -> hardware/results/power-budget.md
+  - id: HWR-010
+    statement: No charger path is ever connected to a primary (non-rechargeable) cell
+    board: TL-SN-001
+    status: designed
+    test: keyed 3-pin protected-pack connector; EE review
+  - id: HWR-011
+    statement: Battery temperature is sensed by the charger (NTC on BQ25186 TS/MR)
+    board: TL-SN-001
+    status: designed
+    test: schematic net BAT_NTC
+  - id: HWR-012
+    statement: Factory flashing and test need only pads and USB-C (no populated headers, no hand soldering)
+    board: TL-SN-001
+    status: designed
+    test: schematic test-point list
+  - id: HWR-013
+    statement: Each card carries an ID EEPROM at 0x50 on its slot branch, powered from AON
+    board: TL-MOD-001..004, TL-TEST-001
+    status: designed
+    test: hardware/results/netlist-check.txt
+  - id: HWR-014
+    statement: The Vision Node is a separate board with zero sensor slots
+    board: TL-VN-001
+    status: verified_tool
+    test: //core/manifest:manifest_test (HW_MF_009)
+  - id: HWR-015
+    statement: Board manifests carry no pin numbers; pins are compiled into the signed firmware BoardSupport table only
+    board: all
+    status: verified_tool
+    test: contracts/proto/talos/v1/manifest.proto (no pin fields); firmware/esp_idf/main/board_tl_sn_001.h
+  - id: HWR-016
+    statement: Every schematic opens in KiCad 10 and passes ERC with zero errors; the exported netlist matches the generator's intended netlist
+    board: TL-SN-001, TL-MOD-001..004, TL-TEST-001
+    status: verified_tool
+    test: hardware/scripts/check_kicad.sh -> hardware/results/

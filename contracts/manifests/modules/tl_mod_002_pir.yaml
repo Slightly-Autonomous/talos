@@ -1,0 +1,13 @@
+# PROVISIONAL. TL-MOD-002: Panasonic EKMB1101111 PIR (1.0 uA typ, 1.9 uA standby) + ID EEPROM.
+id: tl_mod_002_pir
+revision: a
+provisional: true
+connector_standard: sensor_edge_v1
+needs_wake: true
+i2c_addresses: [80]
+loads: [{rail: v3v3_aon, active_ma: 1}]
+average_uw: 10
+peak_mw: 1
+capabilities: [motion.detect]
+notes:
+  - "EKMB circuit stability (warm-up) ~25 s typ: firmware suppresses motion until then."

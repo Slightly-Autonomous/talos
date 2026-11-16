@@ -1,0 +1,27 @@
+# PROVISIONAL. TL-SN-001 Rev A Sensor Node (hardware/architecture/hardware-overview.md).
+# Resource shape follows the H3 schematic (hardware/kicad/TL-SN-001); no pin numbers
+# here by design (HW-0001/HWR-015): pins live only in the firmware BoardSupport table.
+id: sensor_node_proto_a
+revision: rev-a
+provisional: true
+board_family: TL-SN-001
+transport: thread
+connector_standard: sensor_edge_v1
+uart_channels: 1                            # UART1 + TS3A5017 dual 4:1 mux
+reserved_i2c_addresses: [32, 33, 106, 112]  # 0x20, 0x21 TCA9535; 0x6A BQ25186; 0x70 TCA9546A
+notes:
+  - "Rail limits are estimates (TPS63900 >400 mA at 3.3 V; TPS22917 2 A per switch); not measured."
+  - "Battery-only sustained budget is for card draw only; board baseline is in hardware/results/power-budget.md."
+  - "No 5 V rail in Rev A (HW-0003); no slot ADC (HD-003)."
+slots:
+  - {index: 0, wake: true, i2c_branch: 0, spi: true, uart: true, analog: false, rails: [v3v3_aon, v3v3_sw]}
+  - {index: 1, wake: true, i2c_branch: 1, spi: true, uart: true, analog: false, rails: [v3v3_aon, v3v3_sw]}
+  - {index: 2, wake: true, i2c_branch: 2, spi: true, uart: true, analog: false, rails: [v3v3_aon, v3v3_sw]}
+  - {index: 3, wake: true, i2c_branch: 3, spi: true, uart: true, analog: false, rails: [v3v3_aon, v3v3_sw]}
+rails:
+  - {name: v3v3_aon, voltage_mv: 3300, max_ma: 80, per_slot_max_ma: 20}
+  - {name: v3v3_sw, voltage_mv: 3300, max_ma: 300, per_slot_max_ma: 150}
+power_sources:
+  - {source: POWER_SOURCE_BATTERY_ONLY, sustained_mw: 0, sustained_uw: 100, peak_mw: 800}
+  - {source: POWER_SOURCE_USB, sustained_mw: 900, peak_mw: 800}
+  - {source: POWER_SOURCE_SOLAR_BATTERY, sustained_mw: 0, sustained_uw: 300, peak_mw: 800}
