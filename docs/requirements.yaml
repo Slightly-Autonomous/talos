@@ -145,3 +145,15 @@ requirements:
     test: //server:coap_test (DebouncedDoorReachesTheJournalOnce...)
     severity: high
     status: verified_sim
+  - id: REQ-025
+    statement: Supabase JWTs authenticate only mapped users; forged, expired, wrong-audience and alg=none tokens are rejected
+    subsystem: server.auth
+    test: //server:server_test (SupabaseAuth.AcceptsMappedValidTokensOnly)
+    severity: critical
+    status: implemented
+  - id: REQ-026
+    statement: AI agents get read/plan tools and policy-capped requests only; no unlock, disarm or rule saving; hub data is framed as untrusted
+    subsystem: connectors.mcp_server, core.policy
+    test: connectors/mcp_server/src/server.test.ts, //core/policy:policy_test
+    severity: critical
+    status: implemented

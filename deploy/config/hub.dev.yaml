@@ -26,6 +26,9 @@ coap:
   burst: 40
 principals:
   - {id: owner, kind: PRINCIPAL_KIND_HUMAN, max_risk: RISK_CLASS_SECURITY_CRITICAL, token_sha256: 8ac4afa44f3f01da2d47daaee53270af09cdf9b0482481377b750332904ddd94}
+  # AI assistants via connectors/mcp_server: an AGENT principal, so policy
+  # caps it at disruptive outputs and never allows unlock/disarm.
+  - {id: mcp-agent, kind: PRINCIPAL_KIND_AGENT, max_risk: RISK_CLASS_DISRUPTIVE_OUTPUT, token_sha256: d967787d3023c82861961e4fb7acaacf48d1175fa1873b4b679bec86c69afd7c}
   - {id: metrics, kind: PRINCIPAL_KIND_SYSTEM, max_risk: RISK_CLASS_INFORMATIONAL, token_sha256: a069201469e8a354bbd72208f9377a2f6c78d76b83a8fde56e763072dc7f42d8}
   - {id: sync-worker, kind: PRINCIPAL_KIND_SYSTEM, max_risk: RISK_CLASS_INFORMATIONAL, token_sha256: a5272572495630914856ca946d2c9868fb9cfce8fc1a674e411989cdd4c5a1bc}
 devices:

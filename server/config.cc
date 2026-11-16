@@ -71,7 +71,10 @@ Result<LoadedConfig> build_config(v1::HubConfig hub, const std::string& base_dir
     case v1::AUTH_MODE_LOCAL:
       break;
     case v1::AUTH_MODE_SUPABASE:
-      return reserved("auth: AUTH_MODE_SUPABASE");
+      if (hub.supabase_auth().jwt_secret_env().empty()) {
+        return invalid("auth SUPABASE needs supabase_auth.jwt_secret_env");
+      }
+      break;
     default:
       return invalid("unknown auth mode");
   }
@@ -139,6 +142,12 @@ Result<LoadedConfig> build_config(v1::HubConfig hub, const std::string& base_dir
   *out.bootstrap_document.mutable_rules() = hub.rules();
   if (auto parsed = parse_document(out.bootstrap_document, e.property.id); !parsed) {
     return parsed.error();
+  }
+  for (const auto& u : hub.supabase_auth().users()) {
+    if (u.user_id().empty() || !ids.contains(u.principal_id())) {
+      return invalid("supabase user '" + u.user_id() + "' maps to unknown principal '" +
+                     u.principal_id() + "'");
+    }
   }
   std::set<std::string> device_tokens;
   for (const auto& d : hub.devices()) {

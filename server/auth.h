@@ -24,12 +24,19 @@ struct Identity {
 
 class Authenticator {
  public:
-  explicit Authenticator(const talos::server::v1::HubConfig& hub);
+  // With AUTH_MODE_SUPABASE, `jwt_secret` (read from the configured env var)
+  // enables Supabase JWTs alongside local tokens; `clock` checks expiry.
+  explicit Authenticator(const talos::server::v1::HubConfig& hub, std::string jwt_secret = "",
+                         const IClock* clock = nullptr);
   // `authorization` is the raw Authorization header value.
   std::optional<Identity> authenticate(std::string_view authorization) const;
 
  private:
   std::map<std::string, Identity> by_hash_;
+  std::string jwt_secret_;
+  std::string audience_;
+  std::map<std::string, std::string> supabase_users_;  // sub -> principal id
+  const IClock* clock_;
 };
 
 }  // namespace talos::server

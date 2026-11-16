@@ -13,6 +13,7 @@
 #include "server/config.h"
 #include "server/http_server.h"
 #include "server/hub_service.h"
+#include "server/jwt.h"
 #include "server/persistence/config_store.h"
 #include "server/persistence/sqlite_journal.h"
 
@@ -112,8 +113,8 @@ TEST(Config, ReservedSwitchesFailLoudly) {
   pg.mutable_storage()->set_driver(sv::STORAGE_DRIVER_POSTGRES);
   EXPECT_EQ(build_config(pg, ".").error().code, "reserved_option");
   auto sb = hub_config(temp_db());
-  sb.set_auth(sv::AUTH_MODE_SUPABASE);
-  EXPECT_EQ(build_config(sb, ".").error().code, "reserved_option");
+  sb.set_auth(sv::AUTH_MODE_SUPABASE);  // now implemented, but needs a secret env name
+  EXPECT_EQ(build_config(sb, ".").error().code, "invalid_config");
   auto relay = hub_config(temp_db());
   relay.set_role(sv::HUB_ROLE_RELAY);
   EXPECT_EQ(build_config(relay, ".").error().code, "reserved_option");
@@ -534,6 +535,59 @@ TEST_F(HttpE2E, RulePreviewDryRunsAgainstHistory) {
   EXPECT_EQ(
       parse<api::StateResponse>(c.Get("/v1/state", bearer(kOwnerToken))->body).commands_size(),
       commands_before);
+}
+
+// --- Supabase JWT auth (ADR 0015) ---------------------------------------------------------
+
+std::string make_jwt(const std::string& header, const std::string& payload,
+                     const std::string& secret) {
+  const std::string input = base64url_encode(header) + "." + base64url_encode(payload);
+  HmacSha256 mac(reinterpret_cast<const std::uint8_t*>(secret.data()), secret.size());
+  mac.update(reinterpret_cast<const std::uint8_t*>(input.data()), input.size());
+  const auto sig = mac.finish();
+  return input + "." +
+         base64url_encode(std::string(reinterpret_cast<const char*>(sig.data()), sig.size()));
+}
+
+TEST(SupabaseAuth, AcceptsMappedValidTokensOnly) {
+  auto h = hub_config(temp_db());
+  h.set_auth(sv::AUTH_MODE_SUPABASE);
+  h.mutable_supabase_auth()->set_jwt_secret_env("SUPABASE_JWT_SECRET");
+  auto* u = h.mutable_supabase_auth()->add_users();
+  u->set_user_id("6f1c-uuid");
+  u->set_principal_id("owner");
+  ASSERT_TRUE(build_config(h, ".").ok());
+  auto bad_map = h;
+  bad_map.mutable_supabase_auth()->mutable_users(0)->set_principal_id("nobody");
+  EXPECT_EQ(build_config(bad_map, ".").error().code, "invalid_config");
+
+  AtomicClock clock(1'800'000'000'000);
+  const std::string secret = "super-secret-jwt-key";
+  Authenticator a(h, secret, &clock);
+  const std::string hs = R"({"alg":"HS256","typ":"JWT"})";
+  auto payload = [](const std::string& sub, std::int64_t exp, const std::string& aud) {
+    return R"({"sub":")" + sub + R"(","exp":)" + std::to_string(exp) + R"(,"aud":")" + aud +
+           R"(","role":"authenticated"})";
+  };
+  const std::int64_t now = 1'800'000'000;
+  auto ok = a.authenticate("Bearer " +
+                           make_jwt(hs, payload("6f1c-uuid", now + 600, "authenticated"), secret));
+  ASSERT_TRUE(ok);
+  EXPECT_EQ(ok->id, "owner");
+  EXPECT_FALSE(a.authenticate(
+      "Bearer " + make_jwt(hs, payload("6f1c-uuid", now - 1, "authenticated"), secret)));
+  EXPECT_FALSE(a.authenticate(
+      "Bearer " + make_jwt(hs, payload("6f1c-uuid", now + 600, "authenticated"), "wrong")));
+  EXPECT_FALSE(a.authenticate(
+      "Bearer " + make_jwt(hs, payload("stranger", now + 600, "authenticated"), secret)));
+  EXPECT_FALSE(
+      a.authenticate("Bearer " + make_jwt(hs, payload("6f1c-uuid", now + 600, "anon"), secret)));
+  // alg "none" with an empty signature is never accepted.
+  const std::string none = base64url_encode(R"({"alg":"none"})") + "." +
+                           base64url_encode(payload("6f1c-uuid", now + 600, "authenticated")) + ".";
+  EXPECT_FALSE(a.authenticate("Bearer " + none));
+  // Local tokens keep working in Supabase mode.
+  EXPECT_EQ(a.authenticate("Bearer " + kOwnerToken)->id, "owner");
 }
 
 }  // namespace

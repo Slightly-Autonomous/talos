@@ -7,7 +7,7 @@ An open-source, **local-first spatial security and automation platform** for hou
 - A deterministic digital twin that runs the real production logic in CI.
 - A website (PWA first). Optional cloud and observability are never in the alarm path.
 
-> **Status: Phase 6 (device network, signed OTA, observability).** Contracts, domain core, an L1 twin (29 scenarios), `talos_hub` (SQLite journal, HTTP API with live events, token auth, optional Supabase copy, Docker/Railway deploys), and a website with live floor plan, replay, engineering, simulation, plus layout and rule editors over versioned, journaled configuration, backed by browser E2E; portable device firmware (drivers, debounce, retry, power admission, A/B OTA) tested on a register-level virtual board against the real hub, and compiled for ESP32-H2 in CI; CoAP device ingress with HMAC-authenticated frames, Ed25519-signed OTA campaigns delivered end to end to virtual nodes, device health projection, metrics and an optional Prometheus/Grafana profile. Nothing has run on real hardware or a real Thread network yet. See [roadmap](#roadmap). Everything is experimental and is not a certified alarm or life-safety system.
+> **Status: Phase 7 (integrations).** Contracts, domain core, an L1 twin (29 scenarios), `talos_hub` (SQLite journal, HTTP API with live events, token auth, optional Supabase copy, Docker/Railway deploys), and a website with live floor plan, replay, engineering, simulation, plus layout and rule editors over versioned, journaled configuration, backed by browser E2E; portable device firmware (drivers, debounce, retry, power admission, A/B OTA) tested on a register-level virtual board against the real hub, and compiled for ESP32-H2 in CI; CoAP device ingress with HMAC-authenticated frames, Ed25519-signed OTA campaigns delivered end to end to virtual nodes, device health projection, metrics and an optional Prometheus/Grafana profile; Supabase sign-in, an MCP server for AI assistants (policy-capped, no unlock/disarm), a webhook notifier and a Frigate NVR connector. Nothing has run on real hardware or a real Thread network yet. See [roadmap](#roadmap). Everything is experimental and is not a certified alarm or life-safety system.
 
 ## Quick start
 
@@ -64,6 +64,9 @@ bazel run //simulation/runner:talos_sim -- $PWD/simulation/scenarios/scenarios/b
 | `server/` | `talos_hub`: SQLite journal, HTTP API v1 + SSE, auth, config switches |
 | `packages/contracts` | Generated TypeScript contracts and typed `HubClient` |
 | `connectors/supabase_sync` | Optional read-only Supabase copy |
+| `connectors/mcp_server` | MCP server for AI assistants (agent principal, policy-capped) |
+| `connectors/webhook_notifier` | `notify` commands → ntfy/JSON webhooks |
+| `connectors/frigate` | Frigate NVR detections → camera observations |
 | `deploy/` | Dev config, Docker Compose, Railway templates, Supabase migrations |
 | `web/` | React + TypeScript website: live floor plan, replay, engineering, simulation (Playwright E2E) |
 | `tools/devsim` | Virtual devices for the dev property, over the hub's device API |
@@ -72,7 +75,7 @@ bazel run //simulation/runner:talos_sim -- $PWD/simulation/scenarios/scenarios/b
 | `common/` | Shared portable code (SHA-256/HMAC, CoAP codec) |
 | `hardware/ observability/` | Placeholders for later phases |
 
-Start with [`docs/architecture/overview.md`](docs/architecture/overview.md) and [`docs/decisions/`](docs/decisions/README.md).
+API reference: [`docs/api.md`](docs/api.md). Start with [`docs/architecture/overview.md`](docs/architecture/overview.md) and [`docs/decisions/`](docs/decisions/README.md).
 
 ## Roadmap
 0–1. Repo, contracts, deterministic core
@@ -80,8 +83,8 @@ Start with [`docs/architecture/overview.md`](docs/architecture/overview.md) and 
 3. Local hub: SQLite journal, API, auth
 4. Website: live state, replay; 4b: versioned config, layout and rule editors
 5. Portable firmware on virtual hardware, then ESP-IDF
-6. Thread/CoAP, OTA, observability, hardening ← *here*
-7. Optional Supabase/Railway, MCP connector
+6. Thread/CoAP, OTA, observability, hardening
+7. Optional Supabase/Railway, MCP connector ← *here*
 8. Dev-board validation, custom PCB, manufacturing
 
 ## License

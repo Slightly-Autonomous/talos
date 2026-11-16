@@ -35,7 +35,7 @@ enum SyncTarget {
 enum AuthMode {
   AUTH_MODE_UNSPECIFIED = 0;
   AUTH_MODE_LOCAL = 1;
-  // Reserved: accept Supabase-issued JWTs (remote access phase).
+  // Local tokens plus Supabase-issued HS256 JWTs (ADR 0015).
   AUTH_MODE_SUPABASE = 2;
 }
 
@@ -103,6 +103,24 @@ message HubConfig {
   CoapConfig coap = 16;
   // Ed25519 public keys trusted to sign firmware releases (ADR 0014).
   repeated SigningKey firmware_signing_keys = 17;
+  SupabaseAuth supabase_auth = 18;
+}
+
+// AUTH_MODE_SUPABASE (ADR 0015): accept Supabase-issued HS256 JWTs in
+// addition to local tokens. A JWT only authenticates; the mapped principal's
+// grants (core/policy) still decide what it may do.
+message SupabaseAuth {
+  // Env var holding the project's JWT secret (never the secret itself).
+  string jwt_secret_env = 1;
+  // Expected "aud" claim; defaults to "authenticated".
+  string audience = 2;
+  repeated SupabaseUser users = 3;
+}
+
+message SupabaseUser {
+  // Supabase auth user id ("sub" claim).
+  string user_id = 1;
+  string principal_id = 2;
 }
 
 // CoAP/UDP device ingress (ADR 0014). Thread border routers route node

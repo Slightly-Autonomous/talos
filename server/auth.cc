@@ -1,6 +1,9 @@
 #include "server/auth.h"
 
+#include <algorithm>
+
 #include "common/sha256/sha256.h"
+#include "server/jwt.h"
 
 namespace talos::server {
 
@@ -27,7 +30,16 @@ bool constant_time_equal(std::string_view a, std::string_view b) {
 }
 }  // namespace
 
-Authenticator::Authenticator(const talos::server::v1::HubConfig& hub) {
+Authenticator::Authenticator(const talos::server::v1::HubConfig& hub, std::string jwt_secret,
+                             const IClock* clock)
+    : clock_(clock) {
+  if (hub.auth() == talos::server::v1::AUTH_MODE_SUPABASE) {
+    jwt_secret_ = std::move(jwt_secret);
+    audience_ =
+        hub.supabase_auth().audience().empty() ? "authenticated" : hub.supabase_auth().audience();
+    for (const auto& u : hub.supabase_auth().users())
+      supabase_users_[u.user_id()] = u.principal_id();
+  }
   for (const auto& p : hub.principals()) {
     if (!p.token_sha256().empty())
       by_hash_[p.token_sha256()] = {Identity::Kind::kPrincipal, p.id()};
@@ -38,6 +50,18 @@ Authenticator::Authenticator(const talos::server::v1::HubConfig& hub) {
 }
 
 std::optional<Identity> Authenticator::authenticate(std::string_view header) const {
+  constexpr std::string_view kBearerPrefix = "Bearer ";
+  if (!jwt_secret_.empty() && clock_ && header.size() > kBearerPrefix.size() &&
+      header.substr(0, kBearerPrefix.size()) == kBearerPrefix) {
+    const auto token = header.substr(kBearerPrefix.size());
+    if (std::count(token.begin(), token.end(), '.') == 2) {
+      auto claims = verify_hs256(token, jwt_secret_, audience_, clock_->now().unix_ms / 1000);
+      if (!claims) return std::nullopt;
+      auto it = supabase_users_.find(claims->subject);
+      if (it == supabase_users_.end()) return std::nullopt;  // signed in, but not a member
+      return Identity{Identity::Kind::kPrincipal, it->second};
+    }
+  }
   constexpr std::string_view kBearer = "Bearer ";
   if (header.size() <= kBearer.size() || header.substr(0, kBearer.size()) != kBearer) {
     return std::nullopt;

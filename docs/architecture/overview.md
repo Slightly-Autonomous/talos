@@ -40,6 +40,8 @@ The hub owns events, state, rules, commands and audit. Everything else is either
 | `server` | `talos_hub`: config, auth, `HubService`, HTTP API v1 + SSE | engine, persistence |
 | `packages/contracts` | generated TS types + typed `HubClient` | protos |
 | `connectors/supabase_sync` | read-only Supabase copy worker | contracts (HTTP only) |
+| `connectors/mcp_server` | MCP tools for AI agents (agent principal) | contracts (HTTP only) |
+| `connectors/webhook_notifier`, `connectors/frigate` | out-of-process device adapters | hub device API only |
 | `codec` | proto ↔ core mapping, YAML loader | core, generated protos |
 | `contracts/proto` | `talos.v1` schemas | — |
 | `web` | React website: live, replay, engineering, simulation | `packages/contracts` (HTTP only) |
@@ -62,6 +64,6 @@ The hub owns events, state, rules, commands and audit. Everything else is either
 - **Real and tested:** everything under `core/`, `codec/`, `contracts/`, `simulation/`, `server/`, `packages/`, `connectors/`, `tools/`, `web/` (browser E2E against the real hub) and `firmware/portable` + `firmware/sim`. The scenario corpus (`simulation/scenarios`) drives the real engine through the L1 twin.
 - **Provisional data:** every number in `contracts/manifests/`.
 - **Provisional behavior:** sensor and timing parameters in twin sites (ADR 0009).
-- **Reserved switches:** Postgres storage, Supabase auth, relay role (ADR 0010).
+- **Reserved switches:** Postgres storage, relay role (ADR 0010, 0015).
 - **Compile-only:** the ESP-IDF build (no silicon yet; pins provisional).
 - **Not started:** real Thread/OTNS, device claim/commissioning, hardware.

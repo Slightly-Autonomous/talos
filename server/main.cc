@@ -154,7 +154,17 @@ int main(int argc, char** argv) {
     coap->start();
     std::printf("CoAP device ingress on udp %s:%d\n", coap_host.c_str(), coap_port.value());
   }
-  Authenticator auth(hub_cfg);
+  std::string jwt_secret;
+  if (hub_cfg.auth() == talos::server::v1::AUTH_MODE_SUPABASE) {
+    const char* v = std::getenv(hub_cfg.supabase_auth().jwt_secret_env().c_str());
+    if (!v || !*v) {
+      std::fprintf(stderr, "auth SUPABASE: env var %s is not set\n",
+                   hub_cfg.supabase_auth().jwt_secret_env().c_str());
+      return 2;
+    }
+    jwt_secret = v;
+  }
+  Authenticator auth(hub_cfg, jwt_secret, &clock);
   HttpServer http(hub, auth, {hub_cfg.cors_origins().begin(), hub_cfg.cors_origins().end()});
   auto bound = http.bind(host, port);
   if (!bound) {
