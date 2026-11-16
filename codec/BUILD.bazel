@@ -1,0 +1,61 @@
+load("@rules_cc//cc:defs.bzl", "cc_library", "cc_test")
+load("//bazel:copts.bzl", "TALOS_PROTO_COPTS")
+
+cc_library(
+    name = "codec",
+    srcs = ["codec.cc"],
+    hdrs = ["codec.h"],
+    copts = TALOS_PROTO_COPTS,
+    visibility = ["//visibility:public"],
+    deps = [
+        "//contracts/proto/talos/v1:talos_cc_proto",
+        "//core/base",
+        "//core/domain",
+        "//core/events",
+        "//core/execution",
+        "//core/journal",
+        "//core/manifest",
+    ],
+)
+
+cc_library(
+    name = "yaml_loader",
+    srcs = ["yaml_loader.cc"],
+    hdrs = ["yaml_loader.h"],
+    copts = TALOS_PROTO_COPTS,
+    visibility = ["//visibility:public"],
+    deps = [
+        ":codec",
+        "//core/base",
+        "//core/domain",
+        "//core/manifest",
+        "@protobuf",
+        "@protobuf//:json_util",
+        "@yaml-cpp",
+    ],
+)
+
+cc_test(
+    name = "codec_test",
+    size = "small",
+    srcs = ["codec_test.cc"],
+    copts = TALOS_PROTO_COPTS,
+    deps = [
+        ":codec",
+        "//core/testing:fixtures",
+        "@googletest//:gtest_main",
+    ],
+)
+
+cc_test(
+    name = "yaml_loader_test",
+    size = "small",
+    srcs = ["yaml_loader_test.cc"],
+    copts = TALOS_PROTO_COPTS,
+    data = ["//contracts/manifests"],
+    deps = [
+        ":yaml_loader",
+        "//core/manifest",
+        "@googletest//:gtest_main",
+    ],
+)
