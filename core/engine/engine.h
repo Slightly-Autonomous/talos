@@ -50,6 +50,14 @@ class HubEngine {
   void tick();
 
   Status set_arm_mode(ArmMode mode, const PrincipalId& principal);
+
+  // Journals a ConfigRevisionApplied and swaps property, rules and principals.
+  // State is untouched: it derives from the journal, not from configuration.
+  // Authorization is the caller's job (authorize_config_change).
+  Status apply_config(std::uint32_t revision, const std::string& sha256,
+                      const PrincipalId& principal, Property property, std::vector<Rule> rules,
+                      std::vector<Principal> principals);
+  const EngineConfig& config() const { return config_; }
   // A user/agent command request; principal is taken from the command.
   RequestResult request(const Command& command);
 

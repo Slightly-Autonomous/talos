@@ -2,6 +2,7 @@ syntax = "proto3";
 
 package talos.api.v1;
 
+import "talos/server/v1/config.proto";
 import "talos/v1/command.proto";
 import "talos/v1/common.proto";
 import "talos/v1/journal.proto";
@@ -114,4 +115,37 @@ message PendingCommands {
 message ErrorResponse {
   string code = 1;
   string message = 2;
+}
+
+message ConfigResponse {
+  uint32 revision = 1;
+  talos.server.v1.ConfigDocument document = 2;
+  int64 created_at_unix_ms = 3;
+  string principal_id = 4;
+  string sha256 = 5;
+}
+
+// Optimistic concurrency: base_revision must equal the current revision.
+message PutConfigRequest {
+  uint32 base_revision = 1;
+  talos.server.v1.ConfigDocument document = 2;
+}
+
+message RulePreviewRequest {
+  talos.v1.Rule rule = 1;
+  int64 from_unix_ms = 2;
+  int64 to_unix_ms = 3;
+}
+
+message RulePreviewMatch {
+  uint64 journal_seq = 1;
+  int64 received_at_unix_ms = 2;
+  string event_id = 3;
+  string event_type = 4;
+  string device_id = 5;
+}
+
+message RulePreviewResponse {
+  repeated RulePreviewMatch matches = 1;
+  uint32 evaluated_observations = 2;
 }

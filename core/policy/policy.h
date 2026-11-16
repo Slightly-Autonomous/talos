@@ -50,4 +50,7 @@ Authorization evaluate(const Principal& principal, const Command& command,
 Authorization authorize_arm_change(const Principal& principal, const PropertyId& property,
                                    ArmMode target);
 
+// Changing layout or rules can silence alarms: security-critical, humans only.
+Authorization authorize_config_change(const Principal& principal, const PropertyId& property);
+
 }  // namespace talos

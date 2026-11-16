@@ -5,6 +5,10 @@ import { fromJson, toJson, type DescMessage, type MessageShape } from "@bufbuild
 import {
   CommandRequestSchema,
   CommandResponseSchema,
+  ConfigResponseSchema,
+  PutConfigRequestSchema,
+  RulePreviewRequestSchema,
+  RulePreviewResponseSchema,
   CommandViewSchema,
   ErrorResponseSchema,
   HealthResponseSchema,
@@ -15,7 +19,9 @@ import {
 } from "./gen/talos/api/v1/api_pb.ts";
 import { JournalEntrySchema, type JournalEntry } from "./gen/talos/v1/journal_pb.ts";
 import { PropertySchema } from "./gen/talos/v1/property_pb.ts";
-import type { ArmMode } from "./gen/talos/v1/rule_pb.ts";
+import type { ArmMode, Rule } from "./gen/talos/v1/rule_pb.ts";
+import type { ConfigDocument } from "./gen/talos/server/v1/config_pb.ts";
+import { create } from "@bufbuild/protobuf";
 import { ArmModeSchema } from "./gen/talos/v1/rule_pb.ts";
 import { enumToJson } from "@bufbuild/protobuf";
 
@@ -88,6 +94,27 @@ export class HubClient {
     return this.call(CommandResponseSchema, "/v1/commands", {
       method: "POST",
       body: JSON.stringify(toJson(CommandRequestSchema, req)),
+    });
+  }
+  // Current config, or the revision in force at `atUnixMs` (ADR 0012).
+  config(atUnixMs?: number) {
+    return this.call(ConfigResponseSchema, atUnixMs === undefined ? "/v1/config" : `/v1/config?at=${atUnixMs}`);
+  }
+  putConfig(baseRevision: number, document: ConfigDocument) {
+    return this.call(ConfigResponseSchema, "/v1/config", {
+      method: "PUT",
+      body: JSON.stringify(toJson(PutConfigRequestSchema, create(PutConfigRequestSchema, { baseRevision, document }))),
+    });
+  }
+  previewRule(rule: Rule, fromUnixMs: number, toUnixMs = 0) {
+    return this.call(RulePreviewResponseSchema, "/v1/rules/preview", {
+      method: "POST",
+      body: JSON.stringify(
+        toJson(
+          RulePreviewRequestSchema,
+          create(RulePreviewRequestSchema, { rule, fromUnixMs: BigInt(fromUnixMs), toUnixMs: BigInt(toUnixMs) }),
+        ),
+      ),
     });
   }
   command(id: string) {

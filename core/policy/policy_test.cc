@@ -84,6 +84,20 @@ TEST(Policy, ArmingAndDisarming) {
             "no_grant_for_property");
 }
 
+TEST(Policy, ConfigChangesAreHumanSecurityCritical) {
+  EXPECT_TRUE(authorize_config_change(owner(), PropertyId("house-01")).allowed);
+  Principal agent{PrincipalId("agent-1"),
+                  PrincipalKind::kAgent,
+                  {{PropertyId("house-01"), RiskClass::kSecurityCritical}}};
+  EXPECT_EQ(authorize_config_change(agent, PropertyId("house-01")).reason,
+            "requires_human_authorization");
+  Principal viewer = owner();
+  viewer.grants[0].max_risk = RiskClass::kDisruptiveOutput;
+  EXPECT_EQ(authorize_config_change(viewer, PropertyId("house-01")).reason, "risk_exceeds_grant");
+  EXPECT_EQ(authorize_config_change(owner(), PropertyId("house-02")).reason,
+            "no_grant_for_property");
+}
+
 TEST(Policy, ExpiredRequestDenied) {
   EXPECT_EQ(evaluate(owner(), cmd("notify"), {kNow + Millis{5'000}, true}).reason, "expired");
 }

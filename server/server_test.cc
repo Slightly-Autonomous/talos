@@ -12,6 +12,7 @@
 #include "server/config.h"
 #include "server/http_server.h"
 #include "server/hub_service.h"
+#include "server/persistence/config_store.h"
 #include "server/persistence/sqlite_journal.h"
 #include "server/sha256.h"
 
@@ -203,7 +204,8 @@ class Hub {
     auto cfg = build_config(hub_config(db), ".");
     EXPECT_TRUE(cfg.ok()) << (cfg.ok() ? "" : cfg.error().message);
     auth_ = std::make_unique<Authenticator>(cfg.value().hub);
-    service_ = std::make_unique<HubService>(cfg.value(), SqliteJournal::open(db).value(), clock);
+    service_ = std::make_unique<HubService>(cfg.value(), SqliteJournal::open(db).value(), clock,
+                                            SqliteConfigStore::open(db).value());
     http_ = std::make_unique<HttpServer>(*service_, *auth_,
                                          std::vector<std::string>{"http://localhost:5173"});
     port_ = http_->bind("127.0.0.1", 0).value();
@@ -369,7 +371,7 @@ TEST_F(HttpE2E, JournalPagingAndStateAt) {
     after = page.next_after();
     if (!page.has_more()) break;
   }
-  EXPECT_EQ(entries, 5);
+  EXPECT_EQ(entries, 6);  // bootstrap config revision + arm + 4 contacts
   EXPECT_EQ(pages, 3);
 
   auto before = parse<api::StateResponse>(
@@ -408,7 +410,8 @@ TEST_F(HttpE2E, EventStreamDeliversNewJournalEntries) {
     post(c, "/v1/arm", kOwnerToken, R"({"mode":"ARM_MODE_ARMED_AWAY"})");
   });
   auto c = hub.client();
-  auto res = c.Get("/v1/events?after=0", bearer(kOwnerToken), [&](const char* data, std::size_t n) {
+  // Entry 1 is the bootstrap config revision; stream what comes after it.
+  auto res = c.Get("/v1/events?after=1", bearer(kOwnerToken), [&](const char* data, std::size_t n) {
     received.append(data, n);
     return received.find("\n\n") == std::string::npos;  // stop after one event
   });
@@ -424,6 +427,113 @@ TEST_F(HttpE2E, CorsOnlyForConfiguredOrigins) {
   EXPECT_EQ(ok->get_header_value("Access-Control-Allow-Origin"), "http://localhost:5173");
   auto evil = c.Get("/v1/health", {{"Origin", "https://evil.example"}});
   EXPECT_FALSE(evil->has_header("Access-Control-Allow-Origin"));
+}
+
+// --- Versioned configuration (ADR 0012) ------------------------------------------------
+
+api::ConfigResponse get_config(httplib::Client& c, const std::string& query = "") {
+  auto r = c.Get("/v1/config" + query, bearer(kOwnerToken));
+  EXPECT_EQ(r->status, 200) << r->body;
+  return parse<api::ConfigResponse>(r->body);
+}
+
+httplib::Result put_config(httplib::Client& c, const std::string& token, std::uint32_t base,
+                           const sv::ConfigDocument& doc) {
+  api::PutConfigRequest req;
+  req.set_base_revision(base);
+  *req.mutable_document() = doc;
+  return c.Put("/v1/config", bearer(token), json(req), "application/json");
+}
+
+TEST_F(HttpE2E, ConfigIsVersionedAuthorizedAndHistoryKeepsOldLayout) {
+  Hub hub(db, clock);
+  auto c = hub.client();
+  auto v1 = get_config(c);
+  EXPECT_EQ(v1.revision(), 1u);
+  EXPECT_EQ(v1.principal_id(), "bootstrap");
+  const auto t_v1 = clock.now().unix_ms;
+
+  clock.advance(1'000);
+  sv::ConfigDocument doc = v1.document();
+  for (auto& z : *doc.mutable_property()->mutable_zones()) {
+    if (z.id() == "patio") z.set_name("Back patio");
+  }
+  auto r = put_config(c, kOwnerToken, 1, doc);
+  ASSERT_EQ(r->status, 200) << r->body;
+  EXPECT_EQ(parse<api::ConfigResponse>(r->body).revision(), 2u);
+
+  // Current property reflects the edit; history still sees revision 1.
+  auto prop = parse<talos::v1::Property>(c.Get("/v1/property", bearer(kOwnerToken))->body);
+  bool renamed = false;
+  for (const auto& z : prop.zones()) renamed |= z.name() == "Back patio";
+  EXPECT_TRUE(renamed);
+  EXPECT_EQ(get_config(c, "?at=" + std::to_string(t_v1)).revision(), 1u);
+
+  // Stale base revision -> 409; agents -> 403; invalid documents -> 400.
+  EXPECT_EQ(put_config(c, kOwnerToken, 1, doc)->status, 409);
+  auto agent = put_config(c, kAgentToken, 2, doc);
+  EXPECT_EQ(agent->status, 403);
+  EXPECT_EQ(parse<api::ErrorResponse>(agent->body).message(), "requires_human_authorization");
+  sv::ConfigDocument bad = doc;
+  bad.mutable_rules(0)->mutable_actions(0)->mutable_target()->set_device_id("ghost");
+  auto invalid = put_config(c, kOwnerToken, 2, bad);
+  EXPECT_EQ(invalid->status, 400);
+  EXPECT_EQ(parse<api::ErrorResponse>(invalid->body).code(), "invalid_config");
+
+  // The change is journaled.
+  auto page = parse<api::JournalPage>(c.Get("/v1/journal?after=0", bearer(kOwnerToken))->body);
+  int revisions = 0;
+  for (const auto& e : page.entries()) revisions += e.has_config_revision_applied();
+  EXPECT_EQ(revisions, 2);
+}
+
+TEST_F(HttpE2E, RemovingTheRuleStopsTheWarningAndSurvivesRestart) {
+  {
+    Hub hub(db, clock);
+    auto c = hub.client();
+    post(c, "/v1/arm", kOwnerToken, R"({"mode":"ARM_MODE_ARMED_AWAY"})");
+    sv::ConfigDocument doc = get_config(c).document();
+    doc.clear_rules();
+    ASSERT_EQ(put_config(c, kOwnerToken, 1, doc)->status, 200);
+    post(c, "/v1/devices/observations", kNodeToken, json(motion(1)));
+    EXPECT_EQ(
+        parse<api::StateResponse>(c.Get("/v1/state", bearer(kOwnerToken))->body).commands_size(),
+        0);
+  }
+  Hub restarted(db, clock);
+  auto c = restarted.client();
+  EXPECT_EQ(get_config(c).revision(), 2u);
+  EXPECT_EQ(get_config(c).document().rules_size(), 0);
+  post(c, "/v1/devices/observations", kNodeToken, json(motion(2)));
+  auto state = parse<api::StateResponse>(c.Get("/v1/state", bearer(kOwnerToken))->body);
+  EXPECT_EQ(state.commands_size(), 0);
+  // No duplicate revision events after restart.
+  auto page = parse<api::JournalPage>(c.Get("/v1/journal?after=0", bearer(kOwnerToken))->body);
+  int revisions = 0;
+  for (const auto& e : page.entries()) revisions += e.has_config_revision_applied();
+  EXPECT_EQ(revisions, 2);
+}
+
+TEST_F(HttpE2E, RulePreviewDryRunsAgainstHistory) {
+  Hub hub(db, clock);
+  auto c = hub.client();
+  post(c, "/v1/arm", kOwnerToken, R"({"mode":"ARM_MODE_ARMED_AWAY"})");
+  post(c, "/v1/devices/observations", kNodeToken, json(motion(1)));
+  const auto commands_before =
+      parse<api::StateResponse>(c.Get("/v1/state", bearer(kOwnerToken))->body).commands_size();
+
+  api::RulePreviewRequest req;
+  *req.mutable_rule() = get_config(c).document().rules(0);
+  req.set_from_unix_ms(0);
+  auto r = c.Post("/v1/rules/preview", bearer(kOwnerToken), json(req), "application/json");
+  ASSERT_EQ(r->status, 200) << r->body;
+  auto preview = parse<api::RulePreviewResponse>(r->body);
+  ASSERT_EQ(preview.matches_size(), 1);
+  EXPECT_EQ(preview.matches(0).event_id(), "node-07:1:1");
+  // Dry run: nothing new dispatched.
+  EXPECT_EQ(
+      parse<api::StateResponse>(c.Get("/v1/state", bearer(kOwnerToken))->body).commands_size(),
+      commands_before);
 }
 
 }  // namespace

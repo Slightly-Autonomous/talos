@@ -99,6 +99,28 @@ Status HubEngine::set_arm_mode(ArmMode mode, const PrincipalId& principal_id) {
   return Status::Ok();
 }
 
+Status HubEngine::apply_config(std::uint32_t revision, const std::string& sha256,
+                               const PrincipalId& principal, Property property,
+                               std::vector<Rule> rules, std::vector<Principal> principals) {
+  if (property.id != config_.property.id) {
+    return Error{"invalid_config", "a revision cannot change the property id"};
+  }
+  if (Status s = validate_property(property); !s) return s;
+  for (const auto& r : rules) {
+    if (r.property != property.id)
+      return Error{"invalid_config", "rule " + r.id.str() + " targets another property"};
+  }
+  if (revision <= state_.config_revision) {
+    return Error{"stale_revision", "revision " + std::to_string(revision) + " is not newer"};
+  }
+  journal(ConfigRevisionApplied{revision, sha256, principal});
+  // Assign in place: the ingestor holds a reference to config_.property.
+  config_.property = std::move(property);
+  config_.rules = std::move(rules);
+  config_.principals = std::move(principals);
+  return Status::Ok();
+}
+
 std::vector<Command> HubEngine::take_outbound() {
   std::vector<Command> out;
   out.swap(outbound_);

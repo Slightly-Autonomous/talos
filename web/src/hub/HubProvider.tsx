@@ -4,7 +4,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { HubClient } from "@talos/contracts/client";
-import type { StateResponse } from "@talos/contracts/talos/api/v1/api_pb";
+import type { ConfigResponse, StateResponse } from "@talos/contracts/talos/api/v1/api_pb";
 import type { JournalEntry } from "@talos/contracts/talos/v1/journal_pb";
 import type { Property } from "@talos/contracts/talos/v1/property_pb";
 
@@ -13,11 +13,13 @@ export type ConnectionStatus = "connecting" | "live" | "reconnecting";
 export interface HubContextValue {
   client: HubClient;
   property: Property | undefined;
+  config: ConfigResponse | undefined;
   state: StateResponse | undefined;
   entries: JournalEntry[];
   status: ConnectionStatus;
   error: string | undefined;
   refresh: () => Promise<void>;
+  reloadConfig: () => Promise<void>;
 }
 
 const HubContext = createContext<HubContextValue | null>(null);
@@ -41,6 +43,7 @@ async function loadJournal(client: HubClient, after: bigint): Promise<JournalEnt
 
 export function HubProvider({ client, children }: { client: HubClient; children: ReactNode }) {
   const [property, setProperty] = useState<Property>();
+  const [config, setConfig] = useState<ConfigResponse>();
   const [state, setState] = useState<StateResponse>();
   const [entries, setEntries] = useState<JournalEntry[]>([]);
   const [status, setStatus] = useState<ConnectionStatus>("connecting");
@@ -50,6 +53,16 @@ export function HubProvider({ client, children }: { client: HubClient; children:
 
   const refresh = useCallback(async () => {
     setState(await client.state());
+  }, [client]);
+
+  const reloadConfig = useCallback(async () => {
+    try {
+      const c = await client.config();
+      setConfig(c);
+      if (c.document?.property) setProperty(c.document.property);
+    } catch {
+      setProperty(await client.property()); // hub without versioned config
+    }
   }, [client]);
 
   const scheduleRefresh = useCallback(() => {
@@ -62,7 +75,7 @@ export function HubProvider({ client, children }: { client: HubClient; children:
     let stopped = false;
 
     const run = async () => {
-      setProperty(await client.property());
+      await reloadConfig();
       while (!stopped) {
         try {
           const fresh = await loadJournal(client, lastSeq.current);
@@ -77,6 +90,7 @@ export function HubProvider({ client, children }: { client: HubClient; children:
             if (entry.journalSeq <= lastSeq.current) continue;
             lastSeq.current = entry.journalSeq;
             setEntries((prev) => [...prev, entry]);
+            if (entry.event.case === "configRevisionApplied") void reloadConfig();
             scheduleRefresh();
           }
         } catch (e) {
@@ -96,10 +110,12 @@ export function HubProvider({ client, children }: { client: HubClient; children:
       clearInterval(poll);
       clearTimeout(refreshTimer.current);
     };
-  }, [client, refresh, scheduleRefresh]);
+  }, [client, refresh, scheduleRefresh, reloadConfig]);
 
   return (
-    <HubContext.Provider value={{ client, property, state, entries, status, error, refresh }}>
+    <HubContext.Provider
+      value={{ client, property, config, state, entries, status, error, refresh, reloadConfig }}
+    >
       {children}
     </HubContext.Provider>
   );

@@ -44,6 +44,7 @@ Status exec(sqlite3* db, const char* sql) {
 const char* kind_of(const DomainEvent& e) {
   if (std::holds_alternative<ObservationRecorded>(e)) return "observation";
   if (std::holds_alternative<CommandTransition>(e)) return "command_transition";
+  if (std::holds_alternative<ConfigRevisionApplied>(e)) return "config_revision_applied";
   return "arm_mode_changed";
 }
 

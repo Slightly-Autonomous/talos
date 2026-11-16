@@ -6,7 +6,10 @@ proto_library(
     srcs = glob(["*.proto"]),
     strip_import_prefix = "/contracts/proto",
     visibility = ["//visibility:public"],
-    deps = ["//contracts/proto/talos/v1:talos_proto"],
+    deps = [
+        "//contracts/proto/talos/server/v1:server_proto",
+        "//contracts/proto/talos/v1:talos_proto",
+    ],
 )
 
 cc_proto_library(

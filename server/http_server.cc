@@ -41,6 +41,7 @@ int status_for(const Error& e) {
   if (e.code == "forbidden" || e.code == "denied") return 403;
   if (e.code == "not_found") return 404;
   if (e.code == "unknown_principal") return 403;
+  if (e.code == "conflict") return 409;
   return 400;
 }
 
@@ -113,7 +114,7 @@ void HttpServer::routes() {
       res.set_header("Access-Control-Allow-Origin", origin);
       res.set_header("Vary", "Origin");
       res.set_header("Access-Control-Allow-Headers", "Authorization, Content-Type");
-      res.set_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+      res.set_header("Access-Control-Allow-Methods", "GET, POST, PUT, OPTIONS");
     }
     if (req.method == "OPTIONS") {
       res.status = 204;
@@ -192,6 +193,35 @@ void HttpServer::routes() {
                 return true;
               });
         }));
+
+  s.Get("/v1/config",
+        principal([this](const PrincipalId&, const httplib::Request& req, httplib::Response& res) {
+          std::optional<Timestamp> at;
+          if (req.has_param("at")) {
+            at = Timestamp{static_cast<std::int64_t>(query_u64(req, "at", 0))};
+          }
+          auto r = hub_.config(at);
+          if (!r) return send_error(res, r.error());
+          send(res, 200, r.value());
+        }));
+
+  s.Put("/v1/config", principal([this](const PrincipalId& who, const httplib::Request& req,
+                                       httplib::Response& res) {
+          api::PutConfigRequest body;
+          if (!parse_body(req, res, body)) return;
+          auto r = hub_.put_config(who, body);
+          if (!r) return send_error(res, r.error());
+          send(res, 200, r.value());
+        }));
+
+  s.Post("/v1/rules/preview",
+         principal([this](const PrincipalId&, const httplib::Request& req, httplib::Response& res) {
+           api::RulePreviewRequest body;
+           if (!parse_body(req, res, body)) return;
+           auto r = hub_.preview_rule(body);
+           if (!r) return send_error(res, r.error());
+           send(res, 200, r.value());
+         }));
 
   s.Post("/v1/arm", principal([this](const PrincipalId& who, const httplib::Request& req,
                                      httplib::Response& res) {

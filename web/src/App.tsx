@@ -6,8 +6,9 @@ import { Engineering } from "./pages/Engineering";
 import { Live } from "./pages/Live";
 import { Replay } from "./pages/Replay";
 import { Simulation } from "./pages/Simulation";
+import { Configure } from "./pages/Configure";
 
-const TABS = ["Live", "Replay", "Engineering", "Simulation"] as const;
+const TABS = ["Live", "Replay", "Configure", "Engineering", "Simulation"] as const;
 type Tab = (typeof TABS)[number];
 
 export function App() {
@@ -51,6 +52,7 @@ function Shell({ url, onDisconnect }: { url: string; onDisconnect: () => void })
       <main>
         {tab === "Live" && <Live />}
         {tab === "Replay" && <Replay />}
+        {tab === "Configure" && <Configure />}
         {tab === "Engineering" && <Engineering />}
         {tab === "Simulation" && <Simulation />}
       </main>

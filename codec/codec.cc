@@ -415,6 +415,11 @@ Result<JournalEntry> from_proto(const v1::JournalEntry& p) {
       e.event = ArmModeChanged{mode.value(), PrincipalId(p.arm_mode_changed().principal_id())};
       break;
     }
+    case v1::JournalEntry::kConfigRevisionApplied:
+      e.event = ConfigRevisionApplied{p.config_revision_applied().revision(),
+                                      p.config_revision_applied().sha256(),
+                                      PrincipalId(p.config_revision_applied().principal_id())};
+      break;
     case v1::JournalEntry::EVENT_NOT_SET:
       return Error{"invalid_journal_entry", "no event"};
   }
@@ -431,6 +436,11 @@ v1::JournalEntry to_proto(const JournalEntry& e) {
     p.mutable_observation()->set_order(order_to(obs->order));
   } else if (const auto* t = std::get_if<CommandTransition>(&e.event)) {
     *p.mutable_command_transition() = to_proto(*t);
+  } else if (const auto* c = std::get_if<ConfigRevisionApplied>(&e.event)) {
+    auto* out = p.mutable_config_revision_applied();
+    out->set_revision(c->revision);
+    out->set_sha256(c->sha256);
+    out->set_principal_id(c->principal.str());
   } else {
     const auto& m = std::get<ArmModeChanged>(e.event);
     p.mutable_arm_mode_changed()->set_mode(arm_to(m.mode));

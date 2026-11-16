@@ -69,4 +69,15 @@ Authorization authorize_arm_change(const Principal& principal, const PropertyId&
   return {true, "granted"};
 }
 
+Authorization authorize_config_change(const Principal& principal, const PropertyId& property) {
+  const Grant* grant = nullptr;
+  for (const auto& g : principal.grants) {
+    if (g.property == property) grant = &g;
+  }
+  if (principal.id.empty() || !grant) return {false, "no_grant_for_property"};
+  if (principal.kind != PrincipalKind::kHuman) return {false, "requires_human_authorization"};
+  if (grant->max_risk < RiskClass::kSecurityCritical) return {false, "risk_exceeds_grant"};
+  return {true, "granted"};
+}
+
 }  // namespace talos

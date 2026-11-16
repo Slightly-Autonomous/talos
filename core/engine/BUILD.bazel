@@ -3,8 +3,14 @@ load("//bazel:copts.bzl", "TALOS_COPTS")
 
 cc_library(
     name = "engine",
-    srcs = ["engine.cc"],
-    hdrs = ["engine.h"],
+    srcs = [
+        "engine.cc",
+        "preview.cc",
+    ],
+    hdrs = [
+        "engine.h",
+        "preview.h",
+    ],
     copts = TALOS_COPTS,
     visibility = ["//visibility:public"],
     deps = [

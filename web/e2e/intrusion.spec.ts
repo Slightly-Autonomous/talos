@@ -69,3 +69,59 @@ test("a wrong token is refused", async ({ page }) => {
   await page.getByTestId("connect").click();
   await expect(page.getByRole("alert")).toContainText("401");
 });
+
+// Phase 4b (ADR 0012): edits are versioned; history keeps the old layout and
+// new rules are previewed against history, then take effect.
+test("layout and rule edits are versioned and take effect", async ({ page }) => {
+  await page.goto("/");
+  await page.getByTestId("hub-token").fill("dev-owner-token");
+  await page.getByTestId("connect").click();
+  await expect(page.getByTestId("connection")).toContainText("Live");
+  await page.getByTestId("arm-away").click();
+  await expect(page.getByTestId("arm-mode")).toHaveText("Armed away");
+
+  // History for the preview: the front door opens while armed away.
+  await page.getByRole("tab", { name: "Simulation" }).click();
+  await page.getByRole("button", { name: "Open front door" }).click();
+  await page.getByRole("button", { name: "Close front door" }).click();
+
+  // Layout: rename the patio.
+  await page.getByRole("tab", { name: "Configure" }).click();
+  await page.getByTestId("layout-zone").selectOption("patio");
+  await page.getByTestId("layout-zone-name").fill("Back patio");
+  await expect(page.getByTestId("layout-diff")).toContainText(
+    'rename patio: "Patio" → "Back patio"',
+  );
+  await page.getByTestId("save-layout").click();
+  await expect(page.getByTestId("save-status")).toContainText("Saved as revision");
+
+  // Rules: a front-door chime, previewed against history, then saved.
+  await page.getByRole("button", { name: "Rules" }).click();
+  await page.getByTestId("rule-select").selectOption("__new");
+  await page.getByTestId("rule-id").fill("front_door_chime");
+  await page.getByTestId("rule-trigger").selectOption("contact.opened");
+  await page.getByTestId("rule-zone").selectOption("hallway");
+  await page.getByTestId("rule-target").selectOption("patio_speaker");
+  await page.getByTestId("rule-text").fill("Front door opened");
+  await page.getByTestId("rule-preview").click();
+  await expect(page.getByTestId("preview-summary")).toContainText(/Would have fired [1-9]/);
+  await page.getByTestId("rule-save").click();
+  await expect(page.getByTestId("save-status")).toContainText("Saved as revision");
+
+  // The live plan shows the new name; the new rule fires for real.
+  await page.getByRole("tab", { name: "Live" }).click();
+  await expect(page.getByTestId("zone-patio")).toContainText("Back patio");
+  await page.getByRole("tab", { name: "Simulation" }).click();
+  await page.getByRole("button", { name: "Open front door" }).click();
+  await page.getByRole("tab", { name: "Live" }).click();
+  await expect(page.getByTestId("command-audio.speak").first().getByTestId("outcome")).toHaveText(
+    "Verified",
+  );
+
+  // Replay at the start of history draws the layout in force then.
+  await page.getByRole("tab", { name: "Replay" }).click();
+  const slider = page.getByTestId("replay-slider");
+  await slider.fill((await slider.getAttribute("min"))!);
+  await expect(page.getByTestId("zone-patio")).toContainText("Patio");
+  await expect(page.getByTestId("zone-patio")).not.toContainText("Back patio");
+});

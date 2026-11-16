@@ -78,6 +78,9 @@ TEST(Codec, JournalEntryRoundTrip) {
   JournalEntry arm{6, Timestamp{101}, false,
                    ArmModeChanged{ArmMode::kArmedAway, PrincipalId("user-33")}};
   EXPECT_EQ(from_proto(to_proto(arm)).value(), arm);
+  JournalEntry rev{7, Timestamp{102}, false,
+                   ConfigRevisionApplied{3, "deadbeef", PrincipalId("owner")}};
+  EXPECT_EQ(from_proto(to_proto(rev)).value(), rev);
 }
 
 TEST(Codec, RejectsOutOfRangeAndInvalidEnums) {

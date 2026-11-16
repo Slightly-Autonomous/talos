@@ -40,6 +40,7 @@ struct PropertyState {
   std::map<CapabilityRef, CapabilityState> capabilities;
   CommandLedger commands;
   ArmMode arm_mode = ArmMode::kDisarmed;
+  std::uint32_t config_revision = 0;  // 0: none journaled yet
   bool operator==(const PropertyState&) const = default;
 };
 

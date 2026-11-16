@@ -12,21 +12,32 @@
 #include <map>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <vector>
 
 #include "core/engine/engine.h"
 #include "server/config.h"
+#include "server/persistence/config_store.h"
 #include "talos/api/v1/api.pb.h"
 
 namespace talos::server {
 
 class HubService {
  public:
-  HubService(LoadedConfig config, std::unique_ptr<IJournal> journal, const IClock& clock);
+  // With a config store, the latest stored revision is the active config
+  // (revision 1 is bootstrapped from the YAML). Without one, config is fixed.
+  HubService(LoadedConfig config, std::unique_ptr<IJournal> journal, const IClock& clock,
+             std::unique_ptr<SqliteConfigStore> config_store = nullptr);
 
   talos::api::v1::HealthResponse health() const;
-  talos::v1::Property property() const { return config_.property_proto; }
+  talos::v1::Property property() const;
+  // Current config, or the revision in force at `at`.
+  Result<talos::api::v1::ConfigResponse> config(std::optional<Timestamp> at) const;
+  Result<talos::api::v1::ConfigResponse> put_config(const PrincipalId& who,
+                                                    const talos::api::v1::PutConfigRequest& req);
+  Result<talos::api::v1::RulePreviewResponse> preview_rule(
+      const talos::api::v1::RulePreviewRequest& req) const;
   talos::api::v1::StateResponse state() const;
   talos::api::v1::StateResponse state_at(Timestamp t) const;
   talos::api::v1::JournalPage journal_page(std::uint64_t after, std::uint32_t limit) const;
@@ -61,7 +72,9 @@ class HubService {
   const IClock& clock_;
   mutable std::mutex mu_;
   std::condition_variable cv_;
-  HubEngine engine_;
+  std::unique_ptr<SqliteConfigStore> store_;
+  std::optional<ConfigRevision> current_;
+  std::unique_ptr<HubEngine> engine_;
   std::map<DeviceId, std::deque<Command>> outbound_;
   bool shutting_down_ = false;
 };

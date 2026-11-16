@@ -3,14 +3,22 @@ load("//bazel:copts.bzl", "TALOS_PROTO_COPTS")
 
 cc_library(
     name = "persistence",
-    srcs = ["sqlite_journal.cc"],
-    hdrs = ["sqlite_journal.h"],
+    srcs = [
+        "config_store.cc",
+        "sqlite_journal.cc",
+    ],
+    hdrs = [
+        "config_store.h",
+        "sqlite_journal.h",
+    ],
     copts = TALOS_PROTO_COPTS,
     visibility = ["//server:__subpackages__"],
     deps = [
         "//codec",
         "//core/base",
+        "//contracts/proto/talos/server/v1:server_cc_proto",
         "//core/journal",
+        "//server:sha256",
         "@sqlite3",
     ],
 )

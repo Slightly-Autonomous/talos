@@ -41,8 +41,11 @@ inline std::vector<DomainEvent> conformance_events() {
   verified.to = CommandStatus::kVerified;
   verified.late = true;
   verified.evidence = EventId("x");
-  return {ObservationRecorded{conformance_observation(1), SourceOrder::kInOrder}, created, verified,
+  return {ObservationRecorded{conformance_observation(1), SourceOrder::kInOrder},
+          created,
+          verified,
           ArmModeChanged{ArmMode::kArmedAway, PrincipalId("owner")},
+          ConfigRevisionApplied{2, "abc123", PrincipalId("owner")},
           ObservationRecorded{conformance_observation(3), SourceOrder::kGap}};
 }
 

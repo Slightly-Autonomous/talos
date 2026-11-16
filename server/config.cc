@@ -133,12 +133,12 @@ Result<LoadedConfig> build_config(v1::HubConfig hub, const std::string& base_dir
     }
     e.principals.push_back({PrincipalId(p.id()), kind, {{e.property.id, to_risk(p.max_risk())}}});
   }
-  for (const auto& rule : e.rules) {
-    if (!ids.contains(rule.principal.str())) {
-      e.principals.push_back(
-          {rule.principal, PrincipalKind::kRule, {{e.property.id, RiskClass::kDisruptiveOutput}}});
-      ids.insert(rule.principal.str());
-    }
+  out.base_principals = e.principals;
+  e.principals = with_rule_principals(out.base_principals, e.rules, e.property.id);
+  *out.bootstrap_document.mutable_property() = out.property_proto;
+  *out.bootstrap_document.mutable_rules() = hub.rules();
+  if (auto parsed = parse_document(out.bootstrap_document, e.property.id); !parsed) {
+    return parsed.error();
   }
   std::set<std::string> device_tokens;
   for (const auto& d : hub.devices()) {
@@ -160,6 +160,56 @@ Result<LoadedConfig> build_config(v1::HubConfig hub, const std::string& base_dir
     return static_cast<std::uint16_t>(m);
   };
   out.hub = std::move(hub);
+  return out;
+}
+
+std::vector<Principal> with_rule_principals(std::vector<Principal> base,
+                                            const std::vector<Rule>& rules,
+                                            const PropertyId& property) {
+  for (const auto& rule : rules) {
+    bool present = false;
+    for (const auto& p : base) present |= p.id == rule.principal;
+    if (!present) {
+      base.push_back(
+          {rule.principal, PrincipalKind::kRule, {{property, RiskClass::kDisruptiveOutput}}});
+    }
+  }
+  return base;
+}
+
+Result<ParsedDocument> parse_document(const v1::ConfigDocument& doc,
+                                      const PropertyId& expected_property) {
+  auto property = codec::from_proto(doc.property());
+  if (!property) return property.error();
+  if (property.value().id != expected_property) {
+    return invalid("document is for property '" + property.value().id.str() + "', expected '" +
+                   expected_property.str() + "'");
+  }
+  if (Status s = validate_property(property.value()); !s) return s.error();
+  ParsedDocument out{property.value(), {}};
+  std::set<std::string> rule_ids;
+  for (const auto& r : doc.rules()) {
+    auto rule = codec::from_proto(r);
+    if (!rule) return rule.error();
+    const Rule& ru = rule.value();
+    if (ru.id.empty() || !rule_ids.insert(ru.id.str()).second) {
+      return invalid("rule ids must be unique and non-empty: '" + ru.id.str() + "'");
+    }
+    if (ru.property != expected_property) {
+      return invalid("rule " + ru.id.str() + " targets another property");
+    }
+    if (ru.principal.empty()) return invalid("rule " + ru.id.str() + " needs a principal_id");
+    if (ru.trigger.event_type.empty()) return invalid("rule " + ru.id.str() + " needs a trigger");
+    if (ru.trigger.zone && !out.property.find_zone(*ru.trigger.zone)) {
+      return invalid("rule " + ru.id.str() + " uses unknown zone " + ru.trigger.zone->str());
+    }
+    for (const auto& a : ru.actions) {
+      if (!out.property.find_device(a.target.device)) {
+        return invalid("rule " + ru.id.str() + " targets unknown device " + a.target.device.str());
+      }
+    }
+    out.rules.push_back(ru);
+  }
   return out;
 }
 

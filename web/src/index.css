@@ -377,3 +377,49 @@ main {
 code {
   font-size: 12px;
 }
+.subtabs {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+.editor .grid {
+  stroke: var(--border);
+  stroke-width: 0.02;
+}
+.zone-selected {
+  fill: var(--accent);
+  fill-opacity: 0.2;
+  stroke: var(--accent);
+  stroke-width: 0.08;
+}
+.vertex {
+  fill: var(--accent);
+}
+.device-selected {
+  fill: var(--accent);
+}
+.editor {
+  cursor: crosshair;
+}
+.editor-panel label,
+.form-grid label {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+.editor-panel label.inline,
+.form-grid label.inline {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.form-grid {
+  display: grid;
+  gap: 4px;
+}
+fieldset {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  margin: 0 0 8px;
+}

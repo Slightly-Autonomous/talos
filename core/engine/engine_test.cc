@@ -2,6 +2,7 @@
 
 #include <gtest/gtest.h>
 
+#include "core/engine/preview.h"
 #include "core/testing/fixtures.h"
 
 namespace talos {
@@ -164,6 +165,43 @@ TEST_F(EngineTest, RestartRebuildsIdenticalStateAndDedup) {
   EXPECT_EQ(restarted.on_observation(testing::motion("node-07", 1, 1)).status,
             IngestStatus::kDuplicate);
   EXPECT_TRUE(restarted.take_outbound().empty());
+}
+
+TEST_F(EngineTest, ApplyConfigSwapsRulesAndIsJournaled) {
+  // Remove the backyard rule: motion no longer speaks.
+  auto cfg = config();
+  ASSERT_TRUE(engine.apply_config(2, "abc", kOwner, cfg.property, {}, cfg.principals));
+  EXPECT_EQ(engine.state().config_revision, 2u);
+  engine.on_observation(testing::motion("node-07", 1, 1));
+  EXPECT_TRUE(engine.take_outbound().empty());
+  // Stale or property-changing revisions are refused.
+  EXPECT_EQ(engine.apply_config(2, "x", kOwner, cfg.property, {}, cfg.principals).error().code,
+            "stale_revision");
+  Property other = cfg.property;
+  other.id = PropertyId("house-02");
+  EXPECT_FALSE(engine.apply_config(3, "x", kOwner, other, {}, cfg.principals));
+  // Replay reproduces the revision.
+  EXPECT_EQ(replay({}, journal).config_revision, 2u);
+}
+
+TEST_F(EngineTest, PreviewMatchesWhatTheEngineDid) {
+  engine.on_observation(testing::motion("node-07", 1, 1));  // armed: fires
+  engine.on_observation(testing::motion("node-07", 1, 2, false));
+  ASSERT_TRUE(engine.set_arm_mode(ArmMode::kDisarmed, kOwner));
+  engine.on_observation(testing::motion("node-07", 1, 3));  // disarmed: no
+  engine.on_observation(testing::motion("node-07", 1, 5, false));
+  engine.on_observation(testing::motion("node-07", 1, 4));  // late: superseded
+  ASSERT_TRUE(engine.set_arm_mode(ArmMode::kArmedAway, kOwner));
+  engine.on_observation(testing::motion("node-12", 1, 1));  // hallway: wrong zone
+
+  auto result =
+      preview_rule(backyard_rule(), config().property, read_all(journal), Timestamp{0},
+                   Timestamp{1'000'000}, [](Timestamp) -> std::uint16_t { return 2 * 60; });
+  ASSERT_EQ(result.matches.size(), 1u);
+  EXPECT_EQ(result.matches[0].event_id, EventId("node-07:1:1"));
+  EXPECT_EQ(result.evaluated_observations, 6u);
+  // Exactly the one command the engine dispatched.
+  EXPECT_EQ(engine.state().commands.records().size(), 1u);
 }
 
 }  // namespace

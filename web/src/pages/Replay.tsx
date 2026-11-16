@@ -2,6 +2,7 @@
 // the hub (/v1/state_at), which reduces the same journal the live engine uses.
 import { useEffect, useMemo, useState } from "react";
 import type { StateResponse } from "@talos/contracts/talos/api/v1/api_pb";
+import type { Property } from "@talos/contracts/talos/v1/property_pb";
 import { FloorPlan } from "../components/FloorPlan";
 import { CommandList } from "../components/CommandList";
 import { useHub } from "../hub/HubProvider";
@@ -17,6 +18,9 @@ export function Replay() {
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState(4);
   const [view, setView] = useState<StateResponse>();
+  // The layout in force at the scrub time (ADR 0012): history is never
+  // redrawn with today's floor plan.
+  const [layoutAt, setLayoutAt] = useState<Property>();
   const at = t ?? t1;
 
   // Fetch the state at the scrub position (debounced).
@@ -27,6 +31,10 @@ export function Replay() {
         .stateAt(at)
         .then(setView)
         .catch(() => {});
+      client
+        .config(at)
+        .then((c) => setLayoutAt(c.document?.property))
+        .catch(() => setLayoutAt(undefined));
     }, 80);
     return () => clearTimeout(h);
   }, [client, at, entries.length]);
@@ -112,7 +120,7 @@ export function Replay() {
           />
           <time data-testid="replay-time">{new Date(at).toLocaleString()}</time>
         </div>
-        <FloorPlan property={property} state={view} nowMs={at} heat={heat} />
+        <FloorPlan property={layoutAt ?? property} state={view} nowMs={at} heat={heat} />
         <p className="legend muted">
           Shading = motion detections per zone from the start of history to the scrub time.
         </p>

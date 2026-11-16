@@ -13,6 +13,7 @@
 #include "server/config.h"
 #include "server/http_server.h"
 #include "server/hub_service.h"
+#include "server/persistence/config_store.h"
 #include "server/persistence/sqlite_journal.h"
 #include "server/system_clock.h"
 
@@ -66,7 +67,14 @@ int main(int argc, char** argv) {
 
   SystemClock clock;
   const std::string sqlite_path = cfg.value().sqlite_path;
-  HubService hub(std::move(cfg).value(), std::move(journal).value(), clock);
+  auto store = SqliteConfigStore::open(sqlite_path);
+  if (!store) {
+    std::fprintf(stderr, "config store error [%s]: %s\n", store.error().code.c_str(),
+                 store.error().message.c_str());
+    return 2;
+  }
+  HubService hub(std::move(cfg).value(), std::move(journal).value(), clock,
+                 std::move(store).value());
   Authenticator auth(hub_cfg);
   HttpServer http(hub, auth, {hub_cfg.cors_origins().begin(), hub_cfg.cors_origins().end()});
   auto bound = http.bind(host, port);

@@ -3,6 +3,7 @@ syntax = "proto3";
 package talos.server.v1;
 
 import "talos/v1/command.proto";
+import "talos/v1/property.proto";
 import "talos/v1/rule.proto";
 
 // Hub process configuration (ADR 0010). Loaded from YAML. Never contains
@@ -99,4 +100,11 @@ message HubConfig {
   // listen on a non-loopback address in dev mode unless
   // TALOS_ALLOW_DEV_ON_NETWORK=1 (set by the local Compose file only).
   bool dev_mode = 15;
+}
+
+// The editable, versioned part of the configuration (ADR 0012): layout and
+// rules. Principals, credentials and storage stay in the hub's YAML file.
+message ConfigDocument {
+  talos.v1.Property property = 1;
+  repeated talos.v1.Rule rules = 2;
 }

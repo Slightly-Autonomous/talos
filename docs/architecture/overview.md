@@ -57,4 +57,4 @@ The hub owns events, state, rules, commands and audit. Everything else is either
 - **Provisional data:** every number in `contracts/manifests/`.
 - **Provisional behavior:** sensor and timing parameters in twin sites (ADR 0009).
 - **Reserved switches:** Postgres storage, Supabase auth, relay role (ADR 0010).
-- **Not started:** property/rule editors (4b), firmware, networking, OTA, hardware.
+- **Not started:** firmware, networking, OTA, hardware.

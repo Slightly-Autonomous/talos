@@ -1,6 +1,7 @@
 #include "server/hub_service.h"
 
 #include "codec/codec.h"
+#include "core/engine/preview.h"
 
 namespace talos::server {
 
@@ -90,11 +91,122 @@ api::IngestResponse ingest_response(const IngestResult& r) {
 
 }  // namespace
 
-HubService::HubService(LoadedConfig config, std::unique_ptr<IJournal> journal, const IClock& clock)
+HubService::HubService(LoadedConfig config, std::unique_ptr<IJournal> journal, const IClock& clock,
+                       std::unique_ptr<SqliteConfigStore> config_store)
     : config_(std::move(config)),
       journal_(std::move(journal)),
       clock_(clock),
-      engine_(config_.engine, *journal_, clock_) {}
+      store_(std::move(config_store)) {
+  EngineConfig ec = config_.engine;
+  if (store_) {
+    current_ = store_->latest();
+    if (!current_) {
+      auto boot = store_->append(config_.bootstrap_document, "bootstrap", clock_.now());
+      if (boot) current_ = boot.value();
+    }
+    if (current_) {
+      auto parsed = parse_document(current_->document, config_.engine.property.id);
+      if (parsed) {
+        ec.property = parsed.value().property;
+        ec.rules = parsed.value().rules;
+        ec.principals = with_rule_principals(config_.base_principals, ec.rules, ec.property.id);
+      }
+    }
+  }
+  engine_ = std::make_unique<HubEngine>(ec, *journal_, clock_);
+  // Catch up if the store holds a revision the journal has not recorded yet
+  // (first start, or a crash between the store write and the journal append).
+  if (current_ && engine_->state().config_revision < current_->revision) {
+    (void)engine_->apply_config(current_->revision, current_->sha256,
+                                PrincipalId(current_->principal), ec.property, ec.rules,
+                                ec.principals);
+  }
+}
+
+talos::v1::Property HubService::property() const {
+  std::lock_guard lock(mu_);
+  return current_ ? current_->document.property() : config_.property_proto;
+}
+
+namespace {
+api::ConfigResponse config_response(const ConfigRevision& r) {
+  api::ConfigResponse out;
+  out.set_revision(r.revision);
+  *out.mutable_document() = r.document;
+  out.set_created_at_unix_ms(r.created_at.unix_ms);
+  out.set_principal_id(r.principal);
+  out.set_sha256(r.sha256);
+  return out;
+}
+}  // namespace
+
+Result<api::ConfigResponse> HubService::config(std::optional<Timestamp> at) const {
+  std::lock_guard lock(mu_);
+  if (!store_ || !current_) return Error{"not_found", "no versioned configuration"};
+  if (!at) return config_response(*current_);
+  const auto rev = talos::state_at(*journal_, *at).config_revision;
+  if (rev == 0) return Error{"not_found", "no configuration revision in force at that time"};
+  auto r = store_->get(rev);
+  if (!r) return Error{"not_found", "revision " + std::to_string(rev)};
+  return config_response(*r);
+}
+
+Result<api::ConfigResponse> HubService::put_config(const PrincipalId& who,
+                                                   const api::PutConfigRequest& req) {
+  std::lock_guard lock(mu_);
+  if (!store_ || !current_) return Error{"not_found", "configuration is not editable"};
+  const Principal* principal = nullptr;
+  for (const auto& p : engine_->config().principals) {
+    if (p.id == who) principal = &p;
+  }
+  if (!principal) return Error{"unknown_principal", who.str()};
+  if (auto auth = authorize_config_change(*principal, config_.engine.property.id); !auth.allowed) {
+    return Error{"denied", auth.reason};
+  }
+  if (req.base_revision() != current_->revision) {
+    return Error{"conflict", "configuration changed: current revision is " +
+                                 std::to_string(current_->revision)};
+  }
+  auto parsed = parse_document(req.document(), config_.engine.property.id);
+  if (!parsed) return parsed.error();
+  auto stored = store_->append(req.document(), who.str(), clock_.now());
+  if (!stored) return stored.error();
+  auto principals = with_rule_principals(config_.base_principals, parsed.value().rules,
+                                         parsed.value().property.id);
+  if (Status s = engine_->apply_config(stored.value().revision, stored.value().sha256, who,
+                                       parsed.value().property, parsed.value().rules, principals);
+      !s) {
+    return s.error();
+  }
+  current_ = stored.value();
+  after_mutation_locked();
+  return config_response(*current_);
+}
+
+Result<api::RulePreviewResponse> HubService::preview_rule(
+    const api::RulePreviewRequest& req) const {
+  auto rule = codec::from_proto(req.rule());
+  if (!rule) return rule.error();
+  std::lock_guard lock(mu_);
+  if (rule.value().property != config_.engine.property.id) {
+    return Error{"invalid_request", "rule targets another property"};
+  }
+  const auto& ec = engine_->config();
+  const Timestamp to{req.to_unix_ms() > 0 ? req.to_unix_ms() : clock_.now().unix_ms};
+  auto result = talos::preview_rule(rule.value(), ec.property, read_all(*journal_),
+                                    Timestamp{req.from_unix_ms()}, to, ec.local_minute_of_day);
+  api::RulePreviewResponse out;
+  out.set_evaluated_observations(result.evaluated_observations);
+  for (const auto& m : result.matches) {
+    auto* o = out.add_matches();
+    o->set_journal_seq(m.journal_seq);
+    o->set_received_at_unix_ms(m.received_at.unix_ms);
+    o->set_event_id(m.event_id.str());
+    o->set_event_type(m.event_type);
+    o->set_device_id(m.device.str());
+  }
+  return out;
+}
 
 api::HealthResponse HubService::health() const {
   std::lock_guard lock(mu_);
@@ -134,7 +246,7 @@ api::StateResponse HubService::view_locked(const PropertyState& s, Timestamp now
 
 api::StateResponse HubService::state() const {
   std::lock_guard lock(mu_);
-  return view_locked(engine_.state(), clock_.now());
+  return view_locked(engine_->state(), clock_.now());
 }
 
 api::StateResponse HubService::state_at(Timestamp t) const {
@@ -155,17 +267,17 @@ api::JournalPage HubService::journal_page(std::uint64_t after, std::uint32_t lim
 }
 
 void HubService::after_mutation_locked() {
-  for (auto& cmd : engine_.take_outbound()) outbound_[cmd.target.device].push_back(std::move(cmd));
+  for (auto& cmd : engine_->take_outbound()) outbound_[cmd.target.device].push_back(std::move(cmd));
   cv_.notify_all();
 }
 
 Result<api::SetArmModeResponse> HubService::set_arm_mode(const PrincipalId& who, ArmMode mode) {
   std::lock_guard lock(mu_);
-  Status s = engine_.set_arm_mode(mode, who);
+  Status s = engine_->set_arm_mode(mode, who);
   after_mutation_locked();
   if (!s) return s.error();
   api::SetArmModeResponse r;
-  r.set_mode(arm_to_proto(engine_.state().arm_mode));
+  r.set_mode(arm_to_proto(engine_->state().arm_mode));
   return r;
 }
 
@@ -199,9 +311,9 @@ Result<api::CommandResponse> HubService::request_command(const PrincipalId& who,
   } else {
     c.verification = VerificationMode::kAckOnly;
   }
-  RequestResult rr = engine_.request(c);
+  RequestResult rr = engine_->request(c);
   after_mutation_locked();
-  const CommandRecord* rec = engine_.state().commands.find(rr.id);
+  const CommandRecord* rec = engine_->state().commands.find(rr.id);
   api::CommandResponse out;
   out.set_command_id(rr.id.str());
   out.set_duplicate(rr.duplicate);
@@ -214,7 +326,7 @@ Result<api::CommandResponse> HubService::request_command(const PrincipalId& who,
 
 Result<api::CommandView> HubService::command(const CommandId& id) const {
   std::lock_guard lock(mu_);
-  const CommandRecord* rec = engine_.state().commands.find(id);
+  const CommandRecord* rec = engine_->state().commands.find(id);
   if (!rec) return Error{"not_found", "command " + id.str()};
   return command_view(*rec);
 }
@@ -228,7 +340,7 @@ Result<api::IngestResponse> HubService::ingest_observation(
                                   env.value().source.device.str()};
   }
   std::lock_guard lock(mu_);
-  IngestResult r = engine_.on_observation(env.value());
+  IngestResult r = engine_->on_observation(env.value());
   after_mutation_locked();
   return ingest_response(r);
 }
@@ -236,12 +348,12 @@ Result<api::IngestResponse> HubService::ingest_observation(
 Result<api::IngestResponse> HubService::ingest_ack(const DeviceId& device,
                                                    const talos::v1::CommandAck& p) {
   std::lock_guard lock(mu_);
-  const CommandRecord* rec = engine_.state().commands.find(CommandId(p.command_id()));
+  const CommandRecord* rec = engine_->state().commands.find(CommandId(p.command_id()));
   if (!rec) return Error{"not_found", "command " + p.command_id()};
   if (rec->command.target.device != device) {
     return Error{"forbidden", "device " + device.str() + " is not the target of " + p.command_id()};
   }
-  auto r = engine_.on_ack({CommandId(p.command_id()), p.accepted(), p.detail()});
+  auto r = engine_->on_ack({CommandId(p.command_id()), p.accepted(), p.detail()});
   after_mutation_locked();
   if (!r) return r.error();
   api::IngestResponse out;
@@ -262,7 +374,7 @@ api::PendingCommands HubService::take_commands(const DeviceId& device) {
 void HubService::tick() {
   std::lock_guard lock(mu_);
   const auto before = journal_->last_seq();
-  engine_.tick();
+  engine_->tick();
   if (journal_->last_seq() != before) after_mutation_locked();
 }
 

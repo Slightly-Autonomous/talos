@@ -21,6 +21,7 @@ A living register (spec §55). Nothing here is decided until an ADR, a test, a b
 | P1 | NVR | Frigate vs custom adapter, RTSP/ONVIF profiles | Integration proof of concept |
 | P1 | Hub hardware | Pi model vs mini-PC; MQTT placement; RCP firmware | Measured load |
 | P1 | Twin calibration | All PIR/camera/impact/latency parameters in `simulation/scenarios/sites` are placeholders (ADR 0009) | Bench and field measurements, Phase 8 |
+| P2 | Config editing | Floor-plan image import and scale calibration, multi-level, coverage editing, two-person approval (ADR 0012) | Phase 4c / user feedback |
 | P1 | Rule complexity | Cooldowns, priorities, conflicts, sun schedules (ADR 0007) | Scenario coverage |
 | P2 | Observability stack | Default Compose profile, retention overhead | Compose performance tests |
 | P2 | AI/MCP connector | Client support, OAuth, required human confirmations | Client verification + policy tests |

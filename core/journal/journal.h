@@ -46,7 +46,18 @@ struct ArmModeChanged {
   bool operator==(const ArmModeChanged&) const = default;
 };
 
-using DomainEvent = std::variant<ObservationRecorded, CommandTransition, ArmModeChanged>;
+// A new configuration revision (property layout + rules) took effect. The
+// document itself lives in the hub's config store; the journal records when it
+// applied so history is interpreted against the layout in force (ADR 0012).
+struct ConfigRevisionApplied {
+  std::uint32_t revision = 0;
+  std::string sha256;
+  PrincipalId principal;
+  bool operator==(const ConfigRevisionApplied&) const = default;
+};
+
+using DomainEvent =
+    std::variant<ObservationRecorded, CommandTransition, ArmModeChanged, ConfigRevisionApplied>;
 
 struct JournalEntry {
   std::uint64_t journal_seq = 0;  // 1-based, strictly increasing

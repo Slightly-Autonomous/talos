@@ -97,3 +97,15 @@ requirements:
     test: web/src/model/view.test.ts, web/e2e/intrusion.spec.ts (silent-ACK speaker)
     severity: critical
     status: implemented
+  - id: REQ-017
+    statement: Layout and rule changes are versioned, owner-only, journaled; history is shown with the layout in force at the time
+    subsystem: server, core.engine, web
+    test: //server:server_test (ConfigIsVersioned..., RemovingTheRule...), web/e2e/intrusion.spec.ts (layout and rule edits)
+    severity: critical
+    status: implemented
+  - id: REQ-018
+    statement: Rule preview dry-runs against history with exactly the engine's semantics and dispatches nothing
+    subsystem: core.engine
+    test: //core/engine:engine_test (PreviewMatchesWhatTheEngineDid), //server:server_test (RulePreviewDryRunsAgainstHistory)
+    severity: high
+    status: implemented
