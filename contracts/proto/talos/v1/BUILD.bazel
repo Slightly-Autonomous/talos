@@ -1,0 +1,15 @@
+load("@protobuf//bazel:cc_proto_library.bzl", "cc_proto_library")
+load("@protobuf//bazel:proto_library.bzl", "proto_library")
+
+proto_library(
+    name = "talos_proto",
+    srcs = glob(["*.proto"]),
+    strip_import_prefix = "/contracts/proto",
+    visibility = ["//visibility:public"],
+)
+
+cc_proto_library(
+    name = "talos_cc_proto",
+    visibility = ["//visibility:public"],
+    deps = [":talos_proto"],
+)

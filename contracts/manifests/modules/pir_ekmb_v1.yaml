@@ -1,0 +1,9 @@
+# PROVISIONAL. Panasonic EKMB-class low-current PIR (candidate, unvalidated).
+id: pir_ekmb_v1
+revision: a
+provisional: true
+needs_wake: true
+loads: [{rail: v3v3_aon, active_ma: 1}]
+average_mw: 1
+peak_mw: 5
+capabilities: [motion.detect]

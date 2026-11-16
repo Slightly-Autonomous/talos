@@ -1,0 +1,23 @@
+# PROVISIONAL. Not a schematic or a pin map. Resource *shape* only (spec §31).
+id: universal_controller_v1
+revision: proto-a
+provisional: true
+notes:
+  - "Slot capabilities assume a TCA9546A-style I2C mux (one branch per slot); unverified."
+  - "Only slot 2 is assumed to have a UART for an intelligent (camera/radar) module; unverified."
+  - "Rail limits and power budgets are placeholders pending charger/regulator selection and measurement."
+slots:
+  - {index: 0, wake: true, i2c_branch: 0, spi: true, uart: false, analog: false, rails: [v3v3_aon, v3v3_sw, v5_sw]}
+  - {index: 1, wake: true, i2c_branch: 1, spi: true, uart: false, analog: false, rails: [v3v3_aon, v3v3_sw, v5_sw]}
+  - {index: 2, wake: true, i2c_branch: 2, spi: true, uart: true, analog: false, rails: [v3v3_aon, v3v3_sw, v5_sw]}
+  - {index: 3, wake: true, i2c_branch: 3, spi: true, uart: false, analog: true, rails: [v3v3_aon, v3v3_sw, v5_sw]}
+rails:
+  - {name: v3v3_aon, voltage_mv: 3300, max_ma: 50, per_slot_max_ma: 20}
+  - {name: v3v3_sw, voltage_mv: 3300, max_ma: 300, per_slot_max_ma: 150}
+  - {name: v5_sw, voltage_mv: 5000, max_ma: 900, per_slot_max_ma: 700}
+power_sources:
+  # Battery-only "sustained" means what a 1S pack supports for a target
+  # multi-month life, not what it can momentarily deliver.
+  - {source: POWER_SOURCE_BATTERY_ONLY, sustained_mw: 15, peak_mw: 3000}
+  - {source: POWER_SOURCE_USB, sustained_mw: 2500, peak_mw: 4500}
+  - {source: POWER_SOURCE_SOLAR_BATTERY, sustained_mw: 300, peak_mw: 3000}

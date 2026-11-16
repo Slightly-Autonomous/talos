@@ -1,0 +1,32 @@
+syntax = "proto3";
+
+package talos.v1;
+
+import "talos/v1/command.proto";
+import "talos/v1/observation.proto";
+
+// Relation of an observation's source position to what the hub had seen.
+enum SourceOrder {
+  SOURCE_ORDER_UNSPECIFIED = 0;
+  SOURCE_ORDER_IN_ORDER = 1;
+  SOURCE_ORDER_GAP = 2;
+  SOURCE_ORDER_LATE = 3;
+  SOURCE_ORDER_NEW_BOOT = 4;
+}
+
+message ObservationRecorded {
+  ObservationEnvelope envelope = 1;
+  SourceOrder order = 2;
+}
+
+// Journal entry (ADR 0008). journal_seq is the only cross-device ordering
+// authority. received_at is non-decreasing in journal order.
+message JournalEntry {
+  uint64 journal_seq = 1;
+  int64 received_at_unix_ms = 2;
+  bool clock_regressed = 3;
+  oneof event {
+    ObservationRecorded observation = 4;
+    CommandTransition command_transition = 5;
+  }
+}

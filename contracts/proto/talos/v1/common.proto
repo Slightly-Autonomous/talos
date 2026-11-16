@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+package talos.v1;
+
+// Addresses one capability instance on a device, optionally via a slot.
+message CapabilityRef {
+  string device_id = 1;
+  // Slot index 0..3; unset for devices without slots.
+  optional uint32 slot = 2;
+  // Capability type, e.g. "motion.detect".
+  string capability_id = 3;
+}
+
+// Per-device source position. boot_epoch increments on every boot; sequence
+// restarts per boot. Identifies an event at its source; does not order events
+// across devices (see journal.proto).
+message SourcePosition {
+  uint32 boot_epoch = 1;
+  uint64 sequence = 2;
+}

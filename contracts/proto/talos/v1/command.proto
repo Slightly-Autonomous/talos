@@ -1,0 +1,113 @@
+syntax = "proto3";
+
+package talos.v1;
+
+import "talos/v1/common.proto";
+import "talos/v1/observation.proto";
+
+enum RiskClass {
+  RISK_CLASS_UNSPECIFIED = 0;
+  RISK_CLASS_INFORMATIONAL = 1;
+  RISK_CLASS_SENSITIVE_READ = 2;
+  RISK_CLASS_BENIGN_OUTPUT = 3;
+  RISK_CLASS_DISRUPTIVE_OUTPUT = 4;
+  RISK_CLASS_SECURITY_CRITICAL = 5;
+}
+
+// Lifecycle (ADR 0004). TTL gates dispatch only; verification has its own
+// window; late evidence is recorded with late=true.
+enum CommandStatus {
+  COMMAND_STATUS_UNSPECIFIED = 0;
+  COMMAND_STATUS_REQUESTED = 1;
+  COMMAND_STATUS_DENIED = 2;
+  COMMAND_STATUS_ACCEPTED = 3;
+  COMMAND_STATUS_EXPIRED = 4;
+  COMMAND_STATUS_CANCELED = 5;
+  COMMAND_STATUS_DISPATCHED = 6;
+  COMMAND_STATUS_DEVICE_ACKNOWLEDGED = 7;
+  COMMAND_STATUS_REJECTED = 8;
+  COMMAND_STATUS_COMPLETED_UNVERIFIED = 9;
+  COMMAND_STATUS_VERIFIED = 10;
+  COMMAND_STATUS_UNKNOWN_RESULT = 11;
+}
+
+enum VerificationMode {
+  VERIFICATION_MODE_UNSPECIFIED = 0;
+  VERIFICATION_MODE_ACK_ONLY = 1;
+  VERIFICATION_MODE_OBSERVED_STATE = 2;
+}
+
+message AudioSpeak {
+  string text = 1;
+  uint32 volume_percent = 2;
+}
+
+message SetLocked {
+  bool locked = 1;
+}
+
+message Notify {
+  string recipient_role = 1;
+  string text = 2;
+}
+
+message CommandArgs {
+  oneof kind {
+    AudioSpeak audio_speak = 1;
+    SetLocked set_locked = 2;
+    Notify notify = 3;
+  }
+}
+
+message ExpectedObservation {
+  CapabilityRef source = 1;
+  ObservationPayload payload = 2;
+}
+
+message Command {
+  string id = 1;
+  string idempotency_key = 2;
+  string principal_id = 3;
+  string property_id = 4;
+  CapabilityRef target = 5;
+  string operation = 6;
+  CommandArgs args = 7;
+  int64 created_at_unix_ms = 8;
+  // Dispatch deadline.
+  int64 expires_at_unix_ms = 9;
+  VerificationMode verification = 10;
+  int64 verification_window_ms = 11;
+  optional ExpectedObservation expect = 12;
+  optional string causation_id = 13;
+}
+
+message CommandAck {
+  string command_id = 1;
+  bool accepted = 2;
+  string detail = 3;
+}
+
+// One journaled lifecycle step.
+message CommandTransition {
+  string command_id = 1;
+  CommandStatus to = 2;
+  int64 at_unix_ms = 3;
+  string reason = 4;
+  bool late = 5;
+  // Present only on COMMAND_STATUS_REQUESTED.
+  optional Command created = 6;
+  optional string evidence_event_id = 7;
+}
+
+// A requested behavior before authorization (from a user, rule or agent).
+message Intent {
+  string key = 1;
+  string rule_id = 2;
+  uint32 rule_revision = 3;
+  string principal_id = 4;
+  string property_id = 5;
+  string causation_id = 6;
+  string operation = 7;
+  CapabilityRef target = 8;
+  CommandArgs args = 9;
+}

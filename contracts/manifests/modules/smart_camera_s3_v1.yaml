@@ -1,0 +1,12 @@
+# PROVISIONAL. Intelligent camera cartridge with its own processor and Wi-Fi
+# (ESP32-S3 class). Power figures are rough allowances, not measurements.
+id: smart_camera_s3_v1
+revision: a
+provisional: true
+needs_uart: true
+loads: [{rail: v5_sw, active_ma: 600}]
+average_mw: 600
+peak_mw: 2500
+capabilities: [camera.snapshot, camera.detection]
+notes:
+  - "Startup and Wi-Fi TX peaks unmeasured; see spec §33 and §55 (P0 camera performance)."

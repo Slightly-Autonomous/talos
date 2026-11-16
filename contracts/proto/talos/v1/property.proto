@@ -1,0 +1,44 @@
+syntax = "proto3";
+
+package talos.v1;
+
+import "talos/v1/common.proto";
+
+enum ZoneKind {
+  ZONE_KIND_UNSPECIFIED = 0;
+  ZONE_KIND_INDOOR = 1;
+  ZONE_KIND_OUTDOOR = 2;
+}
+
+message Zone {
+  string id = 1;
+  string name = 2;
+  ZoneKind kind = 3;
+}
+
+// A physical thing (door, window, gate), distinct from the devices that
+// observe or control it.
+message Asset {
+  string id = 1;
+  string type = 2;
+  optional string zone_id = 3;
+  repeated CapabilityRef attached = 4;
+}
+
+message Device {
+  string id = 1;
+  string property_id = 2;
+  optional string board_id = 3;
+  // Module type per slot; empty string means the slot is empty.
+  repeated string slot_modules = 4;
+  optional string zone_id = 5;
+}
+
+message Property {
+  string id = 1;
+  // IANA time-zone name.
+  string timezone = 2;
+  repeated Zone zones = 3;
+  repeated Asset assets = 4;
+  repeated Device devices = 5;
+}

@@ -1,0 +1,10 @@
+# PROVISIONAL. ST LIS2DW12 accelerometer with wake interrupt (candidate).
+id: vibration_lis2dw12_v1
+revision: a
+provisional: true
+needs_wake: true
+i2c_addresses: [25]  # 0x19
+loads: [{rail: v3v3_aon, active_ma: 1}]
+average_mw: 1
+peak_mw: 3
+capabilities: [impact.detect, tamper.orientation]

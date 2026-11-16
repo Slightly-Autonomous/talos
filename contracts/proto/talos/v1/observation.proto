@@ -1,0 +1,58 @@
+syntax = "proto3";
+
+package talos.v1;
+
+import "talos/v1/common.proto";
+
+message ContactState {
+  bool open = 1;
+}
+
+message MotionState {
+  bool detected = 1;
+}
+
+message ImpactDetected {
+  int32 peak_mg = 1;
+  uint32 duration_ms = 2;
+}
+
+message TemperatureHumidity {
+  int32 temperature_milli_c = 1;
+  uint32 humidity_permille = 2;
+}
+
+message LockState {
+  bool locked = 1;
+}
+
+message AudioPlayback {
+  bool playing = 1;
+}
+
+message ObservationPayload {
+  oneof kind {
+    ContactState contact = 1;
+    MotionState motion = 2;
+    ImpactDetected impact = 3;
+    TemperatureHumidity temperature_humidity = 4;
+    LockState lock = 5;
+    AudioPlayback audio_playback = 6;
+  }
+}
+
+// Normalized sensor evidence entering the hub (spec §22).
+message ObservationEnvelope {
+  uint32 schema_version = 1;
+  string property_id = 2;
+  CapabilityRef source = 3;
+  optional string module_id = 4;
+  string event_type = 5;
+  // Stable across transport retries.
+  string event_id = 6;
+  SourcePosition position = 7;
+  // Device clock; may be wrong or absent. Never used for ordering.
+  optional int64 observed_at_unix_ms = 8;
+  ObservationPayload payload = 9;
+  optional string causation_id = 10;
+}

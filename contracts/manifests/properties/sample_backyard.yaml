@@ -1,0 +1,27 @@
+# Sample property for tests and the upcoming twin (spec §52).
+id: house-01
+timezone: America/Los_Angeles
+zones:
+  - {id: backyard, name: Backyard, kind: ZONE_KIND_OUTDOOR}
+  - {id: patio, name: Patio, kind: ZONE_KIND_OUTDOOR}
+  - {id: hallway, name: Hallway, kind: ZONE_KIND_INDOOR}
+devices:
+  - id: node-07
+    property_id: house-01
+    board_id: universal_controller_v1
+    slot_modules: [pir_ekmb_v1, vibration_lis2dw12_v1, smart_camera_s3_v1, environment_sht40_v1]
+    zone_id: backyard
+  - id: node-12
+    property_id: house-01
+    board_id: universal_controller_v1
+    slot_modules: [pir_ekmb_v1]
+    zone_id: hallway
+  - {id: patio_speaker, property_id: house-01, zone_id: patio}
+  - {id: lock-3, property_id: house-01, zone_id: hallway}
+assets:
+  - id: front_door
+    type: portal.door
+    zone_id: hallway
+    attached:
+      - {device_id: node-12, slot: 0, capability_id: contact.open_state}
+      - {device_id: lock-3, capability_id: access.lock}

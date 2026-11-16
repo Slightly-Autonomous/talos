@@ -1,0 +1,9 @@
+# PROVISIONAL. Sensirion SHT40 temperature/humidity (candidate).
+id: environment_sht40_v1
+revision: a
+provisional: true
+i2c_addresses: [68]  # 0x44
+loads: [{rail: v3v3_sw, active_ma: 1}]
+average_mw: 1
+peak_mw: 2
+capabilities: [environment.temperature_humidity]

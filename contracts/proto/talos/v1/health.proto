@@ -1,0 +1,32 @@
+syntax = "proto3";
+
+package talos.v1;
+
+// User-actionable health projection (spec §27).
+enum HealthStatus {
+  HEALTH_STATUS_UNSPECIFIED = 0;
+  HEALTH_STATUS_HEALTHY = 1;
+  HEALTH_STATUS_DEGRADED = 2;
+  HEALTH_STATUS_OFFLINE = 3;
+  HEALTH_STATUS_LOW_POWER = 4;
+  HEALTH_STATUS_FAULTED = 5;
+  HEALTH_STATUS_MAINTENANCE = 6;
+}
+
+message Health {
+  string device_id = 1;
+  HealthStatus status = 2;
+  int64 last_seen_unix_ms = 3;
+  repeated string evidence = 4;
+  string recommended_action = 5;
+}
+
+// Engineering diagnostic record; never a domain event.
+message Diagnostic {
+  string device_id = 1;
+  int64 at_unix_ms = 2;
+  string kind = 3;
+  int64 value = 4;
+  string unit = 5;
+  optional string correlation_id = 6;
+}

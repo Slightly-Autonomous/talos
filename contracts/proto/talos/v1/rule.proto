@@ -1,0 +1,42 @@
+syntax = "proto3";
+
+package talos.v1;
+
+import "talos/v1/command.proto";
+import "talos/v1/common.proto";
+
+enum ArmMode {
+  ARM_MODE_UNSPECIFIED = 0;
+  ARM_MODE_DISARMED = 1;
+  ARM_MODE_ARMED_HOME = 2;
+  ARM_MODE_ARMED_AWAY = 3;
+}
+
+// Local minutes of day, [start, end); wraps past midnight when start > end.
+message TimeWindow {
+  uint32 start_minute = 1;
+  uint32 end_minute = 2;
+}
+
+message RuleAction {
+  string operation = 1;
+  CapabilityRef target = 2;
+  CommandArgs args = 3;
+  int64 ttl_ms = 4;
+  VerificationMode verification = 5;
+  int64 verification_window_ms = 6;
+  optional ExpectedObservation expect = 7;
+}
+
+message Rule {
+  string id = 1;
+  uint32 revision = 2;
+  string property_id = 3;
+  string principal_id = 4;
+  bool enabled = 5;
+  string trigger_event_type = 6;
+  optional string trigger_zone_id = 7;
+  repeated ArmMode armed_modes = 8;
+  optional TimeWindow schedule = 9;
+  repeated RuleAction actions = 10;
+}

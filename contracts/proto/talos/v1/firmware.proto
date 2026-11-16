@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+package talos.v1;
+
+// Signed firmware release manifest (spec §36). Signing design is open
+// (docs/decisions/open-decisions.md); fields here are the minimum for OTA
+// orchestration and audit.
+message FirmwareRelease {
+  string version = 1;
+  string board_id = 2;
+  string board_revision = 3;
+  bytes image_sha256 = 4;
+  uint64 image_size_bytes = 5;
+  string min_bootloader_version = 6;
+  repeated string compatible_module_ids = 7;
+  bytes signature = 8;
+  string signing_key_id = 9;
+}
+
+// Links events, commands and diagnostics for end-to-end debugging.
+message TraceCorrelation {
+  string correlation_id = 1;
+  repeated string event_ids = 2;
+  repeated string command_ids = 3;
+}
