@@ -20,7 +20,7 @@
   - µW-resolution budgets (`sustained_uw`, `average_uw`)
   
   The validator adds `kConnectorMismatch`, `kI2cRootConflict` and `kUartOversubscribed`. The handoff §38 cases HW-MF-001..009 are tests in `//codec:yaml_loader_test`.
-- **KiCad sources are generated** by `hardware/scripts/gen_schematics.py` and checked by `hardware/scripts/check_kicad.sh` (ERC plus a netlist round-trip). This stays true until layout starts.
+- **KiCad sources are generated** by `hardware/scripts/gen_schematics.py` and checked by `hardware/scripts/check_kicad.py` (ERC plus a netlist round-trip). This stays true until layout starts.
 
 ## Not decided here
 Connector MPN, charger values, battery pack, wake semantics on silicon, and everything in the Vision Node. See `hardware/requirements/design-risks.md`.

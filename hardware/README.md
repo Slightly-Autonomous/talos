@@ -43,7 +43,7 @@ Board and module manifests live in `contracts/manifests/` (one schema, validated
 ```bash
 # KiCad 10.0.x: kicad-cli on PATH, or set KICAD_CLI.
 python3 hardware/scripts/gen_schematics.py          # regenerate all projects
-hardware/scripts/check_kicad.sh                      # ERC + netlist round-trip -> hardware/results/
+python3 hardware/scripts/check_kicad.py --pdf      # ERC + netlist round-trip + PDFs -> hardware/results/
 python3 hardware/scripts/power_budget.py             # H2 calculations -> hardware/results/power-budget.md
 bazel test //core/manifest:manifest_test //codec:yaml_loader_test   # manifest validator (HW-MF tests)
 ```

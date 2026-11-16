@@ -1,0 +1,1623 @@
+{
+ "board": "TL-SN-001",
+ "parts": {
+  "C1": {
+   "footprint": "Capacitor_SMD:C_0805_2012Metric",
+   "lib_id": "Device:C",
+   "note": "",
+   "pins": {
+    "1": "V3V3_CORE",
+    "2": "GND"
+   },
+   "value": "10u"
+  },
+  "C10": {
+   "footprint": "Capacitor_SMD:C_0402_1005Metric",
+   "lib_id": "Device:C",
+   "note": "",
+   "pins": {
+    "1": "VBAT",
+    "2": "GND"
+   },
+   "value": "1u"
+  },
+  "C11": {
+   "footprint": "Capacitor_SMD:C_0805_2012Metric",
+   "lib_id": "Device:C",
+   "note": "",
+   "pins": {
+    "1": "SYS_PATH",
+    "2": "GND"
+   },
+   "value": "10u"
+  },
+  "C12": {
+   "footprint": "Capacitor_SMD:C_0805_2012Metric",
+   "lib_id": "Device:C",
+   "note": "",
+   "pins": {
+    "1": "V3V3_CORE",
+    "2": "GND"
+   },
+   "value": "22u"
+  },
+  "C13": {
+   "footprint": "Capacitor_SMD:C_0402_1005Metric",
+   "lib_id": "Device:C",
+   "note": "",
+   "pins": {
+    "1": "V3V3_AON_0",
+    "2": "GND"
+   },
+   "value": "1u"
+  },
+  "C14": {
+   "footprint": "Capacitor_SMD:C_0402_1005Metric",
+   "lib_id": "Device:C",
+   "note": "",
+   "pins": {
+    "1": "V3V3_AON_1",
+    "2": "GND"
+   },
+   "value": "1u"
+  },
+  "C15": {
+   "footprint": "Capacitor_SMD:C_0402_1005Metric",
+   "lib_id": "Device:C",
+   "note": "",
+   "pins": {
+    "1": "V3V3_AON_2",
+    "2": "GND"
+   },
+   "value": "1u"
+  },
+  "C16": {
+   "footprint": "Capacitor_SMD:C_0402_1005Metric",
+   "lib_id": "Device:C",
+   "note": "",
+   "pins": {
+    "1": "V3V3_AON_3",
+    "2": "GND"
+   },
+   "value": "1u"
+  },
+  "C17": {
+   "footprint": "Capacitor_SMD:C_0402_1005Metric",
+   "lib_id": "Device:C",
+   "note": "",
+   "pins": {
+    "1": "V3V3_SW_0",
+    "2": "GND"
+   },
+   "value": "1u"
+  },
+  "C18": {
+   "footprint": "Capacitor_SMD:C_0402_1005Metric",
+   "lib_id": "Device:C",
+   "note": "",
+   "pins": {
+    "1": "V3V3_SW_1",
+    "2": "GND"
+   },
+   "value": "1u"
+  },
+  "C19": {
+   "footprint": "Capacitor_SMD:C_0402_1005Metric",
+   "lib_id": "Device:C",
+   "note": "",
+   "pins": {
+    "1": "V3V3_SW_2",
+    "2": "GND"
+   },
+   "value": "1u"
+  },
+  "C2": {
+   "footprint": "Capacitor_SMD:C_0402_1005Metric",
+   "lib_id": "Device:C",
+   "note": "",
+   "pins": {
+    "1": "V3V3_CORE",
+    "2": "GND"
+   },
+   "value": "100n"
+  },
+  "C20": {
+   "footprint": "Capacitor_SMD:C_0402_1005Metric",
+   "lib_id": "Device:C",
+   "note": "",
+   "pins": {
+    "1": "V3V3_SW_3",
+    "2": "GND"
+   },
+   "value": "1u"
+  },
+  "C21": {
+   "footprint": "Capacitor_SMD:C_0402_1005Metric",
+   "lib_id": "Device:C",
+   "note": "",
+   "pins": {
+    "1": "V3V3_CORE",
+    "2": "GND"
+   },
+   "value": "100n"
+  },
+  "C22": {
+   "footprint": "Capacitor_SMD:C_0402_1005Metric",
+   "lib_id": "Device:C",
+   "note": "",
+   "pins": {
+    "1": "V3V3_CORE",
+    "2": "GND"
+   },
+   "value": "100n"
+  },
+  "C23": {
+   "footprint": "Capacitor_SMD:C_0402_1005Metric",
+   "lib_id": "Device:C",
+   "note": "",
+   "pins": {
+    "1": "V3V3_CORE",
+    "2": "GND"
+   },
+   "value": "100n"
+  },
+  "C24": {
+   "footprint": "Capacitor_SMD:C_0402_1005Metric",
+   "lib_id": "Device:C",
+   "note": "",
+   "pins": {
+    "1": "V3V3_CORE",
+    "2": "GND"
+   },
+   "value": "100n"
+  },
+  "C3": {
+   "footprint": "Capacitor_SMD:C_0402_1005Metric",
+   "lib_id": "Device:C",
+   "note": "",
+   "pins": {
+    "1": "CHIP_EN",
+    "2": "GND"
+   },
+   "value": "1u"
+  },
+  "C4": {
+   "footprint": "Capacitor_SMD:C_0402_1005Metric",
+   "lib_id": "Device:C",
+   "note": "",
+   "pins": {
+    "1": "VBAT_SENSE",
+    "2": "GND"
+   },
+   "value": "100n"
+  },
+  "C5": {
+   "footprint": "Capacitor_SMD:C_0805_2012Metric",
+   "lib_id": "Device:C",
+   "note": "",
+   "pins": {
+    "1": "USB_VBUS",
+    "2": "GND"
+   },
+   "value": "4.7u"
+  },
+  "C6": {
+   "footprint": "Capacitor_SMD:C_0805_2012Metric",
+   "lib_id": "Device:C",
+   "note": "",
+   "pins": {
+    "1": "PV_IN",
+    "2": "GND"
+   },
+   "value": "10u/25V"
+  },
+  "C7": {
+   "footprint": "Capacitor_SMD:C_0402_1005Metric",
+   "lib_id": "Device:C",
+   "note": "",
+   "pins": {
+    "1": "PMUX_SS",
+    "2": "GND"
+   },
+   "value": "TBD"
+  },
+  "C8": {
+   "footprint": "Capacitor_SMD:C_0805_2012Metric",
+   "lib_id": "Device:C",
+   "note": "",
+   "pins": {
+    "1": "CHG_IN",
+    "2": "GND"
+   },
+   "value": "4.7u/25V"
+  },
+  "C9": {
+   "footprint": "Capacitor_SMD:C_0805_2012Metric",
+   "lib_id": "Device:C",
+   "note": "",
+   "pins": {
+    "1": "SYS_PATH",
+    "2": "GND"
+   },
+   "value": "10u"
+  },
+  "D1": {
+   "footprint": "LED_SMD:LED_0603_1608Metric",
+   "lib_id": "Device:LED",
+   "note": "",
+   "pins": {
+    "1": "LED_K",
+    "2": "V3V3_CORE"
+   },
+   "value": "STATUS"
+  },
+  "D2": {
+   "footprint": "Diode_SMD:D_SMA",
+   "lib_id": "Diode:SS34",
+   "note": "PV reverse-polarity block",
+   "pins": {
+    "1": "PV_IN",
+    "2": "PV_RAW"
+   },
+   "value": "SS34"
+  },
+  "D3": {
+   "footprint": "Diode_SMD:D_SMA",
+   "lib_id": "Diode:SMAJ12A",
+   "note": "TVS; orientation review item 4",
+   "pins": {
+    "1": "GND",
+    "2": "PV_IN"
+   },
+   "value": "SMAJ12A"
+  },
+  "D4": {
+   "footprint": "Package_TO_SOT_SMD:SOT-666",
+   "lib_id": "Power_Protection:PESD3V3L5UV",
+   "note": "",
+   "pins": {
+    "1": "SLOT_WAKE0",
+    "2": "GND",
+    "3": "SLOT0_SDA",
+    "4": "SLOT0_SCL",
+    "5": "SLOT0_ALERT_N",
+    "6": "SLOT0_RESET_N"
+   },
+   "value": "PESD3V3L5UV"
+  },
+  "D5": {
+   "footprint": "Package_TO_SOT_SMD:SOT-666",
+   "lib_id": "Power_Protection:PESD3V3L5UV",
+   "note": "",
+   "pins": {
+    "1": "SLOT_WAKE1",
+    "2": "GND",
+    "3": "SLOT1_SDA",
+    "4": "SLOT1_SCL",
+    "5": "SLOT1_ALERT_N",
+    "6": "SLOT1_RESET_N"
+   },
+   "value": "PESD3V3L5UV"
+  },
+  "D6": {
+   "footprint": "Package_TO_SOT_SMD:SOT-666",
+   "lib_id": "Power_Protection:PESD3V3L5UV",
+   "note": "",
+   "pins": {
+    "1": "SLOT_WAKE2",
+    "2": "GND",
+    "3": "SLOT2_SDA",
+    "4": "SLOT2_SCL",
+    "5": "SLOT2_ALERT_N",
+    "6": "SLOT2_RESET_N"
+   },
+   "value": "PESD3V3L5UV"
+  },
+  "D7": {
+   "footprint": "Package_TO_SOT_SMD:SOT-666",
+   "lib_id": "Power_Protection:PESD3V3L5UV",
+   "note": "",
+   "pins": {
+    "1": "SLOT_WAKE3",
+    "2": "GND",
+    "3": "SLOT3_SDA",
+    "4": "SLOT3_SCL",
+    "5": "SLOT3_ALERT_N",
+    "6": "SLOT3_RESET_N"
+   },
+   "value": "PESD3V3L5UV"
+  },
+  "J1": {
+   "footprint": "Connector_USB:USB_C_Receptacle_GCT_USB4105-xx-A_16P_TopMnt_Horizontal",
+   "lib_id": "Connector:USB_C_Receptacle_USB2.0_16P",
+   "note": "",
+   "pins": {
+    "A1": "GND",
+    "A12": "GND",
+    "A4": "USB_VBUS",
+    "A5": "USB_CC1",
+    "A6": "USB_DP",
+    "A7": "USB_DN",
+    "A8": null,
+    "A9": "USB_VBUS",
+    "B1": "GND",
+    "B12": "GND",
+    "B4": "USB_VBUS",
+    "B5": "USB_CC2",
+    "B6": "USB_DP",
+    "B7": "USB_DN",
+    "B8": null,
+    "B9": "USB_VBUS",
+    "SH": "GND"
+   },
+   "value": "USB-C sink"
+  },
+  "J2": {
+   "footprint": "Connector_JST:JST_PH_S2B-PH-SM4-TB_1x02-1MP_P2.00mm_Horizontal",
+   "lib_id": "Connector_Generic:Conn_01x02",
+   "note": "placeholder connector; outdoor-rated keyed jack TBD",
+   "pins": {
+    "1": "PV_RAW",
+    "2": "GND"
+   },
+   "value": "PV in"
+  },
+  "J3": {
+   "footprint": "Connector_JST:JST_PH_S3B-PH-SM4-TB_1x03-1MP_P2.00mm_Horizontal",
+   "lib_id": "Connector_Generic:Conn_01x03",
+   "note": "keyed protected-pack connector TBD (HD-006)",
+   "pins": {
+    "1": "VBAT",
+    "2": "BAT_NTC",
+    "3": "GND"
+   },
+   "value": "1S pack (BAT+, NTC, GND)"
+  },
+  "J4": {
+   "footprint": "",
+   "lib_id": "Connector_Generic:Conn_02x10_Odd_Even",
+   "note": "Samtec MEC8-110-02-L-D-EM2 candidate; footprint TBD (HD-002)",
+   "pins": {
+    "1": "GND",
+    "10": "SLOT0_ALERT_N",
+    "11": "SPI_SCK",
+    "12": "SPI_MOSI",
+    "13": "SPI_MISO",
+    "14": "SLOT0_CS_N",
+    "15": "SLOT0_UART_TX",
+    "16": "SLOT0_UART_RX",
+    "17": "SLOT0_RESET_N",
+    "18": "SLOT0_PRESENT_N",
+    "19": null,
+    "2": "GND",
+    "20": "GND",
+    "3": "V3V3_AON_0",
+    "4": "V3V3_SW_0",
+    "5": null,
+    "6": "GND",
+    "7": "SLOT0_SDA",
+    "8": "SLOT0_SCL",
+    "9": "SLOT_WAKE0"
+   },
+   "value": "sensor_edge_v1 slot 0"
+  },
+  "J5": {
+   "footprint": "",
+   "lib_id": "Connector_Generic:Conn_02x10_Odd_Even",
+   "note": "Samtec MEC8-110-02-L-D-EM2 candidate; footprint TBD (HD-002)",
+   "pins": {
+    "1": "GND",
+    "10": "SLOT1_ALERT_N",
+    "11": "SPI_SCK",
+    "12": "SPI_MOSI",
+    "13": "SPI_MISO",
+    "14": "SLOT1_CS_N",
+    "15": "SLOT1_UART_TX",
+    "16": "SLOT1_UART_RX",
+    "17": "SLOT1_RESET_N",
+    "18": "SLOT1_PRESENT_N",
+    "19": null,
+    "2": "GND",
+    "20": "GND",
+    "3": "V3V3_AON_1",
+    "4": "V3V3_SW_1",
+    "5": null,
+    "6": "GND",
+    "7": "SLOT1_SDA",
+    "8": "SLOT1_SCL",
+    "9": "SLOT_WAKE1"
+   },
+   "value": "sensor_edge_v1 slot 1"
+  },
+  "J6": {
+   "footprint": "",
+   "lib_id": "Connector_Generic:Conn_02x10_Odd_Even",
+   "note": "Samtec MEC8-110-02-L-D-EM2 candidate; footprint TBD (HD-002)",
+   "pins": {
+    "1": "GND",
+    "10": "SLOT2_ALERT_N",
+    "11": "SPI_SCK",
+    "12": "SPI_MOSI",
+    "13": "SPI_MISO",
+    "14": "SLOT2_CS_N",
+    "15": "SLOT2_UART_TX",
+    "16": "SLOT2_UART_RX",
+    "17": "SLOT2_RESET_N",
+    "18": "SLOT2_PRESENT_N",
+    "19": null,
+    "2": "GND",
+    "20": "GND",
+    "3": "V3V3_AON_2",
+    "4": "V3V3_SW_2",
+    "5": null,
+    "6": "GND",
+    "7": "SLOT2_SDA",
+    "8": "SLOT2_SCL",
+    "9": "SLOT_WAKE2"
+   },
+   "value": "sensor_edge_v1 slot 2"
+  },
+  "J7": {
+   "footprint": "",
+   "lib_id": "Connector_Generic:Conn_02x10_Odd_Even",
+   "note": "Samtec MEC8-110-02-L-D-EM2 candidate; footprint TBD (HD-002)",
+   "pins": {
+    "1": "GND",
+    "10": "SLOT3_ALERT_N",
+    "11": "SPI_SCK",
+    "12": "SPI_MOSI",
+    "13": "SPI_MISO",
+    "14": "SLOT3_CS_N",
+    "15": "SLOT3_UART_TX",
+    "16": "SLOT3_UART_RX",
+    "17": "SLOT3_RESET_N",
+    "18": "SLOT3_PRESENT_N",
+    "19": null,
+    "2": "GND",
+    "20": "GND",
+    "3": "V3V3_AON_3",
+    "4": "V3V3_SW_3",
+    "5": null,
+    "6": "GND",
+    "7": "SLOT3_SDA",
+    "8": "SLOT3_SCL",
+    "9": "SLOT_WAKE3"
+   },
+   "value": "sensor_edge_v1 slot 3"
+  },
+  "L1": {
+   "footprint": "Inductor_SMD:L_1008_2520Metric",
+   "lib_id": "Device:L",
+   "note": "",
+   "pins": {
+    "1": "REG_LX1",
+    "2": "REG_LX2"
+   },
+   "value": "2.2u DFE252012F-2R2M"
+  },
+  "R1": {
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "EN RC per datasheet \u00a79",
+   "pins": {
+    "1": "V3V3_CORE",
+    "2": "CHIP_EN"
+   },
+   "value": "10k"
+  },
+  "R10": {
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "UFP Rd",
+   "pins": {
+    "1": "USB_CC1",
+    "2": "GND"
+   },
+   "value": "5.1k"
+  },
+  "R11": {
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "UFP Rd",
+   "pins": {
+    "1": "USB_CC2",
+    "2": "GND"
+   },
+   "value": "5.1k"
+  },
+  "R12": {
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "ILIM per SLVSEA3F equation (HD-007)",
+   "pins": {
+    "1": "PMUX_ILIM",
+    "2": "GND"
+   },
+   "value": "TBD"
+  },
+  "R13": {
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "priority divider placeholder (HD-007)",
+   "pins": {
+    "1": "USB_VBUS",
+    "2": "PMUX_PR1"
+   },
+   "value": "100k"
+  },
+  "R14": {
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "priority divider placeholder (HD-007)",
+   "pins": {
+    "1": "PMUX_PR1",
+    "2": "GND"
+   },
+   "value": "33k"
+  },
+  "R15": {
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "",
+   "pins": {
+    "1": "V3V3_CORE",
+    "2": "PMUX_ST"
+   },
+   "value": "100k"
+  },
+  "R16": {
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "",
+   "pins": {
+    "1": "V3V3_CORE",
+    "2": "CHG_PG_N"
+   },
+   "value": "100k"
+  },
+  "R17": {
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "",
+   "pins": {
+    "1": "V3V3_CORE",
+    "2": "CHG_INT_N"
+   },
+   "value": "10k"
+  },
+  "R18": {
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "SEL-high 3.3 V, unlimited ILIM (Table 7-2)",
+   "pins": {
+    "1": "REG_CFG1",
+    "2": "GND"
+   },
+   "value": "36.5k 1%"
+  },
+  "R19": {
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "SEL-high 3.3 V, unlimited ILIM (Table 7-2)",
+   "pins": {
+    "1": "REG_CFG2",
+    "2": "GND"
+   },
+   "value": "0R"
+  },
+  "R2": {
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "GPIO9 strap pull-up (SPI boot)",
+   "pins": {
+    "1": "V3V3_CORE",
+    "2": "BOOT_N"
+   },
+   "value": "10k"
+  },
+  "R20": {
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "SEL-low 3.3 V (Table 7-3)",
+   "pins": {
+    "1": "REG_CFG3",
+    "2": "GND"
+   },
+   "value": "16.2k 1%"
+  },
+  "R21": {
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "",
+   "pins": {
+    "1": "V3V3_CORE",
+    "2": "SLOT_AON_EN0"
+   },
+   "value": "100k"
+  },
+  "R22": {
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "",
+   "pins": {
+    "1": "V3V3_CORE",
+    "2": "SLOT_AON_EN1"
+   },
+   "value": "100k"
+  },
+  "R23": {
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "",
+   "pins": {
+    "1": "V3V3_CORE",
+    "2": "SLOT_AON_EN2"
+   },
+   "value": "100k"
+  },
+  "R24": {
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "",
+   "pins": {
+    "1": "V3V3_CORE",
+    "2": "SLOT_AON_EN3"
+   },
+   "value": "100k"
+  },
+  "R25": {
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "",
+   "pins": {
+    "1": "SLOT_SW_EN0",
+    "2": "GND"
+   },
+   "value": "1M"
+  },
+  "R26": {
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "",
+   "pins": {
+    "1": "SLOT_SW_EN1",
+    "2": "GND"
+   },
+   "value": "1M"
+  },
+  "R27": {
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "",
+   "pins": {
+    "1": "SLOT_SW_EN2",
+    "2": "GND"
+   },
+   "value": "1M"
+  },
+  "R28": {
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "",
+   "pins": {
+    "1": "SLOT_SW_EN3",
+    "2": "GND"
+   },
+   "value": "1M"
+  },
+  "R29": {
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "QOD to VOUT",
+   "pins": {
+    "1": "SW_QOD0",
+    "2": "V3V3_SW_0"
+   },
+   "value": "0R"
+  },
+  "R3": {
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "GPIO8 strap held high",
+   "pins": {
+    "1": "V3V3_CORE",
+    "2": "STATUS_LED_N"
+   },
+   "value": "10k"
+  },
+  "R30": {
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "QOD to VOUT",
+   "pins": {
+    "1": "SW_QOD1",
+    "2": "V3V3_SW_1"
+   },
+   "value": "0R"
+  },
+  "R31": {
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "QOD to VOUT",
+   "pins": {
+    "1": "SW_QOD2",
+    "2": "V3V3_SW_2"
+   },
+   "value": "0R"
+  },
+  "R32": {
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "QOD to VOUT",
+   "pins": {
+    "1": "SW_QOD3",
+    "2": "V3V3_SW_3"
+   },
+   "value": "0R"
+  },
+  "R33": {
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "",
+   "pins": {
+    "1": "V3V3_CORE",
+    "2": "MUX_RESET_N"
+   },
+   "value": "100k"
+  },
+  "R34": {
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "",
+   "pins": {
+    "1": "V3V3_AON_0",
+    "2": "SLOT0_SDA"
+   },
+   "value": "4.7k"
+  },
+  "R35": {
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "",
+   "pins": {
+    "1": "V3V3_AON_0",
+    "2": "SLOT0_SCL"
+   },
+   "value": "4.7k"
+  },
+  "R36": {
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "",
+   "pins": {
+    "1": "V3V3_AON_1",
+    "2": "SLOT1_SDA"
+   },
+   "value": "4.7k"
+  },
+  "R37": {
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "",
+   "pins": {
+    "1": "V3V3_AON_1",
+    "2": "SLOT1_SCL"
+   },
+   "value": "4.7k"
+  },
+  "R38": {
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "",
+   "pins": {
+    "1": "V3V3_AON_2",
+    "2": "SLOT2_SDA"
+   },
+   "value": "4.7k"
+  },
+  "R39": {
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "",
+   "pins": {
+    "1": "V3V3_AON_2",
+    "2": "SLOT2_SCL"
+   },
+   "value": "4.7k"
+  },
+  "R4": {
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "",
+   "pins": {
+    "1": "LED_K",
+    "2": "STATUS_LED_N"
+   },
+   "value": "1k"
+  },
+  "R40": {
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "",
+   "pins": {
+    "1": "V3V3_AON_3",
+    "2": "SLOT3_SDA"
+   },
+   "value": "4.7k"
+  },
+  "R41": {
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "",
+   "pins": {
+    "1": "V3V3_AON_3",
+    "2": "SLOT3_SCL"
+   },
+   "value": "4.7k"
+  },
+  "R42": {
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "",
+   "pins": {
+    "1": "UART_SEL0",
+    "2": "GND"
+   },
+   "value": "1M"
+  },
+  "R43": {
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "",
+   "pins": {
+    "1": "UART_SEL1",
+    "2": "GND"
+   },
+   "value": "1M"
+  },
+  "R44": {
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "mux disabled by default (S-3)",
+   "pins": {
+    "1": "V3V3_CORE",
+    "2": "UART_MUX_EN_N"
+   },
+   "value": "100k"
+  },
+  "R45": {
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "empty slot never wakes",
+   "pins": {
+    "1": "SLOT_WAKE0",
+    "2": "GND"
+   },
+   "value": "1M"
+  },
+  "R46": {
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "",
+   "pins": {
+    "1": "V3V3_AON_0",
+    "2": "SLOT0_ALERT_N"
+   },
+   "value": "100k"
+  },
+  "R47": {
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "",
+   "pins": {
+    "1": "V3V3_AON_0",
+    "2": "SLOT0_CS_N"
+   },
+   "value": "100k"
+  },
+  "R48": {
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "",
+   "pins": {
+    "1": "V3V3_AON_0",
+    "2": "SLOT0_RESET_N"
+   },
+   "value": "100k"
+  },
+  "R49": {
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "biased only while probing",
+   "pins": {
+    "1": "PRESENT_PROBE",
+    "2": "SLOT0_PRESENT_N"
+   },
+   "value": "100k"
+  },
+  "R5": {
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "",
+   "pins": {
+    "1": "V3V3_CORE",
+    "2": "I2C_SDA"
+   },
+   "value": "4.7k"
+  },
+  "R50": {
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "empty slot never wakes",
+   "pins": {
+    "1": "SLOT_WAKE1",
+    "2": "GND"
+   },
+   "value": "1M"
+  },
+  "R51": {
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "",
+   "pins": {
+    "1": "V3V3_AON_1",
+    "2": "SLOT1_ALERT_N"
+   },
+   "value": "100k"
+  },
+  "R52": {
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "",
+   "pins": {
+    "1": "V3V3_AON_1",
+    "2": "SLOT1_CS_N"
+   },
+   "value": "100k"
+  },
+  "R53": {
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "",
+   "pins": {
+    "1": "V3V3_AON_1",
+    "2": "SLOT1_RESET_N"
+   },
+   "value": "100k"
+  },
+  "R54": {
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "biased only while probing",
+   "pins": {
+    "1": "PRESENT_PROBE",
+    "2": "SLOT1_PRESENT_N"
+   },
+   "value": "100k"
+  },
+  "R55": {
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "empty slot never wakes",
+   "pins": {
+    "1": "SLOT_WAKE2",
+    "2": "GND"
+   },
+   "value": "1M"
+  },
+  "R56": {
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "",
+   "pins": {
+    "1": "V3V3_AON_2",
+    "2": "SLOT2_ALERT_N"
+   },
+   "value": "100k"
+  },
+  "R57": {
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "",
+   "pins": {
+    "1": "V3V3_AON_2",
+    "2": "SLOT2_CS_N"
+   },
+   "value": "100k"
+  },
+  "R58": {
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "",
+   "pins": {
+    "1": "V3V3_AON_2",
+    "2": "SLOT2_RESET_N"
+   },
+   "value": "100k"
+  },
+  "R59": {
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "biased only while probing",
+   "pins": {
+    "1": "PRESENT_PROBE",
+    "2": "SLOT2_PRESENT_N"
+   },
+   "value": "100k"
+  },
+  "R6": {
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "",
+   "pins": {
+    "1": "V3V3_CORE",
+    "2": "I2C_SCL"
+   },
+   "value": "4.7k"
+  },
+  "R60": {
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "empty slot never wakes",
+   "pins": {
+    "1": "SLOT_WAKE3",
+    "2": "GND"
+   },
+   "value": "1M"
+  },
+  "R61": {
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "",
+   "pins": {
+    "1": "V3V3_AON_3",
+    "2": "SLOT3_ALERT_N"
+   },
+   "value": "100k"
+  },
+  "R62": {
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "",
+   "pins": {
+    "1": "V3V3_AON_3",
+    "2": "SLOT3_CS_N"
+   },
+   "value": "100k"
+  },
+  "R63": {
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "",
+   "pins": {
+    "1": "V3V3_AON_3",
+    "2": "SLOT3_RESET_N"
+   },
+   "value": "100k"
+  },
+  "R64": {
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "biased only while probing",
+   "pins": {
+    "1": "PRESENT_PROBE",
+    "2": "SLOT3_PRESENT_N"
+   },
+   "value": "100k"
+  },
+  "R7": {
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "",
+   "pins": {
+    "1": "VBAT",
+    "2": "VBAT_SENSE"
+   },
+   "value": "4.7M"
+  },
+  "R8": {
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "",
+   "pins": {
+    "1": "VBAT_SENSE",
+    "2": "GND"
+   },
+   "value": "4.7M"
+  },
+  "R9": {
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "",
+   "pins": {
+    "1": "V3V3_CORE",
+    "2": "EXP_INT_N"
+   },
+   "value": "47k"
+  },
+  "SW1": {
+   "footprint": "Button_Switch_SMD:SW_SPST_PTS810",
+   "lib_id": "Switch:SW_Push",
+   "note": "",
+   "pins": {
+    "1": "CHIP_EN",
+    "2": "GND"
+   },
+   "value": "RESET"
+  },
+  "SW2": {
+   "footprint": "Button_Switch_SMD:SW_SPST_PTS810",
+   "lib_id": "Switch:SW_Push",
+   "note": "",
+   "pins": {
+    "1": "BOOT_N",
+    "2": "GND"
+   },
+   "value": "BOOT"
+  },
+  "TP1": {
+   "footprint": "TestPoint:TestPoint_Pad_D1.0mm",
+   "lib_id": "Connector:TestPoint",
+   "note": "",
+   "pins": {
+    "1": "V3V3_CORE"
+   },
+   "value": "V3V3_CORE"
+  },
+  "TP10": {
+   "footprint": "TestPoint:TestPoint_Pad_D1.0mm",
+   "lib_id": "Connector:TestPoint",
+   "note": "",
+   "pins": {
+    "1": "I2C_SCL"
+   },
+   "value": "I2C_SCL"
+  },
+  "TP11": {
+   "footprint": "TestPoint:TestPoint_Pad_D1.0mm",
+   "lib_id": "Connector:TestPoint",
+   "note": "",
+   "pins": {
+    "1": "EXPB_SPARE"
+   },
+   "value": "EXPB_SPARE"
+  },
+  "TP12": {
+   "footprint": "TestPoint:TestPoint_Pad_D1.0mm",
+   "lib_id": "Connector:TestPoint",
+   "note": "",
+   "pins": {
+    "1": "USB_VBUS"
+   },
+   "value": "USB_VBUS"
+  },
+  "TP2": {
+   "footprint": "TestPoint:TestPoint_Pad_D1.0mm",
+   "lib_id": "Connector:TestPoint",
+   "note": "",
+   "pins": {
+    "1": "GND"
+   },
+   "value": "GND"
+  },
+  "TP3": {
+   "footprint": "TestPoint:TestPoint_Pad_D1.0mm",
+   "lib_id": "Connector:TestPoint",
+   "note": "",
+   "pins": {
+    "1": "CHIP_EN"
+   },
+   "value": "CHIP_EN"
+  },
+  "TP4": {
+   "footprint": "TestPoint:TestPoint_Pad_D1.0mm",
+   "lib_id": "Connector:TestPoint",
+   "note": "",
+   "pins": {
+    "1": "BOOT_N"
+   },
+   "value": "BOOT_N"
+  },
+  "TP5": {
+   "footprint": "TestPoint:TestPoint_Pad_D1.0mm",
+   "lib_id": "Connector:TestPoint",
+   "note": "",
+   "pins": {
+    "1": "U0TXD"
+   },
+   "value": "U0TXD"
+  },
+  "TP6": {
+   "footprint": "TestPoint:TestPoint_Pad_D1.0mm",
+   "lib_id": "Connector:TestPoint",
+   "note": "",
+   "pins": {
+    "1": "U0RXD"
+   },
+   "value": "U0RXD"
+  },
+  "TP7": {
+   "footprint": "TestPoint:TestPoint_Pad_D1.0mm",
+   "lib_id": "Connector:TestPoint",
+   "note": "",
+   "pins": {
+    "1": "VBAT"
+   },
+   "value": "VBAT"
+  },
+  "TP8": {
+   "footprint": "TestPoint:TestPoint_Pad_D1.0mm",
+   "lib_id": "Connector:TestPoint",
+   "note": "",
+   "pins": {
+    "1": "SYS_PATH"
+   },
+   "value": "SYS_PATH"
+  },
+  "TP9": {
+   "footprint": "TestPoint:TestPoint_Pad_D1.0mm",
+   "lib_id": "Connector:TestPoint",
+   "note": "",
+   "pins": {
+    "1": "I2C_SDA"
+   },
+   "value": "I2C_SDA"
+  },
+  "U1": {
+   "footprint": "",
+   "lib_id": "talos:ESP32-H2-MINI-1",
+   "note": "footprint TBD from datasheet \u00a711 land pattern; antenna keepout",
+   "pins": {
+    "1": "GND",
+    "10": "VBAT_SENSE",
+    "11": "GND",
+    "12": "SLOT_WAKE3",
+    "13": "EXP_INT_N",
+    "14": "GND",
+    "15": "V3V3_CORE",
+    "16": "SLOT_WAKE2",
+    "17": null,
+    "18": "SPI_SCK",
+    "19": "SPI_MOSI",
+    "2": "GND",
+    "20": "SLOT_WAKE0",
+    "21": "SLOT_WAKE1",
+    "22": "STATUS_LED_N",
+    "23": "BOOT_N",
+    "24": "UART1_TX",
+    "25": "UART1_RX",
+    "26": "USB_DN",
+    "27": "USB_DP",
+    "28": null,
+    "29": null,
+    "3": "V3V3_CORE",
+    "30": "U0RXD",
+    "31": "U0TXD",
+    "32": null,
+    "33": null,
+    "34": null,
+    "35": null,
+    "36": "GND",
+    "37": "GND",
+    "38": "GND",
+    "39": "GND",
+    "4": null,
+    "40": "GND",
+    "41": "GND",
+    "42": "GND",
+    "43": "GND",
+    "44": "GND",
+    "45": "GND",
+    "46": "GND",
+    "47": "GND",
+    "48": "GND",
+    "49": "GND",
+    "5": "I2C_SDA",
+    "50": "GND",
+    "51": "GND",
+    "52": "GND",
+    "53": "GND",
+    "6": "I2C_SCL",
+    "7": null,
+    "8": "CHIP_EN",
+    "9": "SPI_MISO"
+   },
+   "value": "ESP32-H2-MINI-1-H4S"
+  },
+  "U10": {
+   "footprint": "Package_TO_SOT_SMD:SOT-23-6",
+   "lib_id": "Power_Management:TPS22917DBV",
+   "note": "slot 0 switched rail, default off",
+   "pins": {
+    "1": "V3V3_CORE",
+    "2": "GND",
+    "3": "SLOT_SW_EN0",
+    "4": null,
+    "5": "SW_QOD0",
+    "6": "V3V3_SW_0"
+   },
+   "value": "TPS22917DBVR"
+  },
+  "U11": {
+   "footprint": "Package_TO_SOT_SMD:SOT-23-6",
+   "lib_id": "Power_Management:TPS22917DBV",
+   "note": "slot 1 switched rail, default off",
+   "pins": {
+    "1": "V3V3_CORE",
+    "2": "GND",
+    "3": "SLOT_SW_EN1",
+    "4": null,
+    "5": "SW_QOD1",
+    "6": "V3V3_SW_1"
+   },
+   "value": "TPS22917DBVR"
+  },
+  "U12": {
+   "footprint": "Package_TO_SOT_SMD:SOT-23-6",
+   "lib_id": "Power_Management:TPS22917DBV",
+   "note": "slot 2 switched rail, default off",
+   "pins": {
+    "1": "V3V3_CORE",
+    "2": "GND",
+    "3": "SLOT_SW_EN2",
+    "4": null,
+    "5": "SW_QOD2",
+    "6": "V3V3_SW_2"
+   },
+   "value": "TPS22917DBVR"
+  },
+  "U13": {
+   "footprint": "Package_TO_SOT_SMD:SOT-23-6",
+   "lib_id": "Power_Management:TPS22917DBV",
+   "note": "slot 3 switched rail, default off",
+   "pins": {
+    "1": "V3V3_CORE",
+    "2": "GND",
+    "3": "SLOT_SW_EN3",
+    "4": null,
+    "5": "SW_QOD3",
+    "6": "V3V3_SW_3"
+   },
+   "value": "TPS22917DBVR"
+  },
+  "U14": {
+   "footprint": "Package_SO:TSSOP-16_4.4x5mm_P0.65mm",
+   "lib_id": "Interface_Expansion:TCA9546APW",
+   "note": "root 0x70",
+   "pins": {
+    "1": "GND",
+    "10": "SLOT2_SCL",
+    "11": "SLOT3_SDA",
+    "12": "SLOT3_SCL",
+    "13": "GND",
+    "14": "I2C_SCL",
+    "15": "I2C_SDA",
+    "16": "V3V3_CORE",
+    "2": "GND",
+    "3": "MUX_RESET_N",
+    "4": "SLOT0_SDA",
+    "5": "SLOT0_SCL",
+    "6": "SLOT1_SDA",
+    "7": "SLOT1_SCL",
+    "8": "GND",
+    "9": "SLOT2_SDA"
+   },
+   "value": "TCA9546APWR"
+  },
+  "U15": {
+   "footprint": "Package_SO:TSSOP-24_4.4x7.8mm_P0.65mm",
+   "lib_id": "Interface_Expansion:TCA9535PWR",
+   "note": "EXP_A root 0x20",
+   "pins": {
+    "1": "EXP_INT_N",
+    "10": "SLOT_AON_EN2",
+    "11": "SLOT_AON_EN3",
+    "12": "GND",
+    "13": "SLOT0_RESET_N",
+    "14": "SLOT1_RESET_N",
+    "15": "SLOT2_RESET_N",
+    "16": "SLOT3_RESET_N",
+    "17": "SLOT0_CS_N",
+    "18": "SLOT1_CS_N",
+    "19": "SLOT2_CS_N",
+    "2": "GND",
+    "20": "SLOT3_CS_N",
+    "21": "GND",
+    "22": "I2C_SCL",
+    "23": "I2C_SDA",
+    "24": "V3V3_CORE",
+    "3": "GND",
+    "4": "SLOT_SW_EN0",
+    "5": "SLOT_SW_EN1",
+    "6": "SLOT_SW_EN2",
+    "7": "SLOT_SW_EN3",
+    "8": "SLOT_AON_EN0",
+    "9": "SLOT_AON_EN1"
+   },
+   "value": "TCA9535PWR"
+  },
+  "U16": {
+   "footprint": "Package_SO:TSSOP-24_4.4x7.8mm_P0.65mm",
+   "lib_id": "Interface_Expansion:TCA9535PWR",
+   "note": "EXP_B root 0x21",
+   "pins": {
+    "1": "EXP_INT_N",
+    "10": "SLOT2_ALERT_N",
+    "11": "SLOT3_ALERT_N",
+    "12": "GND",
+    "13": "UART_SEL0",
+    "14": "UART_SEL1",
+    "15": "UART_MUX_EN_N",
+    "16": "PRESENT_PROBE",
+    "17": "CHG_INT_N",
+    "18": "CHG_PG_N",
+    "19": "PMUX_ST",
+    "2": "GND",
+    "20": "EXPB_SPARE",
+    "21": "V3V3_CORE",
+    "22": "I2C_SCL",
+    "23": "I2C_SDA",
+    "24": "V3V3_CORE",
+    "3": "GND",
+    "4": "SLOT0_PRESENT_N",
+    "5": "SLOT1_PRESENT_N",
+    "6": "SLOT2_PRESENT_N",
+    "7": "SLOT3_PRESENT_N",
+    "8": "SLOT0_ALERT_N",
+    "9": "SLOT1_ALERT_N"
+   },
+   "value": "TCA9535PWR"
+  },
+  "U17": {
+   "footprint": "Package_DFN_QFN:UQFN-16_1.8x2.6mm_P0.4mm",
+   "lib_id": "Analog_Switch:TS3A5017RSV",
+   "note": "",
+   "pins": {
+    "1": "SLOT3_UART_TX",
+    "10": "SLOT2_UART_RX",
+    "11": "SLOT3_UART_RX",
+    "12": "UART_SEL0",
+    "13": "UART_MUX_EN_N",
+    "14": "V3V3_CORE",
+    "15": "UART_MUX_EN_N",
+    "16": "UART_SEL1",
+    "2": "SLOT2_UART_TX",
+    "3": "SLOT1_UART_TX",
+    "4": "SLOT0_UART_TX",
+    "5": "UART1_TX",
+    "6": "GND",
+    "7": "UART1_RX",
+    "8": "SLOT0_UART_RX",
+    "9": "SLOT1_UART_RX"
+   },
+   "value": "TS3A5017RSVR"
+  },
+  "U2": {
+   "footprint": "Package_TO_SOT_SMD:SOT-23-6",
+   "lib_id": "Power_Protection:USBLC6-2SC6",
+   "note": "",
+   "pins": {
+    "1": "USB_DP",
+    "2": "GND",
+    "3": "USB_DN",
+    "4": "USB_DN",
+    "5": "USB_VBUS",
+    "6": "USB_DP"
+   },
+   "value": "USBLC6-2SC6"
+  },
+  "U3": {
+   "footprint": "Package_DFN_QFN:Texas_VQFN-HR-12_2x2.5mm_P0.5mm",
+   "lib_id": "talos:TPS2121",
+   "note": "",
+   "pins": {
+    "1": "CHG_IN",
+    "10": "PMUX_ILIM",
+    "11": "PMUX_SS",
+    "12": "GND",
+    "2": "PV_IN",
+    "3": "GND",
+    "4": "GND",
+    "5": "GND",
+    "6": "PMUX_PR1",
+    "7": "USB_VBUS",
+    "8": "CHG_IN",
+    "9": "PMUX_ST"
+   },
+   "value": "TPS2121RUXR"
+  },
+  "U4": {
+   "footprint": "",
+   "lib_id": "talos:BQ25186",
+   "note": "footprint TBD: DLH WSON-10 2.2x2.0 (SLUSF69 \u00a712)",
+   "pins": {
+    "1": "SYS_PATH",
+    "10": "CHG_IN",
+    "2": "VBAT",
+    "3": "CHG_PG_N",
+    "4": "GND",
+    "5": "GND",
+    "6": "BAT_NTC",
+    "7": "I2C_SDA",
+    "8": "I2C_SCL",
+    "9": "CHG_INT_N"
+   },
+   "value": "BQ25186DLHR"
+  },
+  "U5": {
+   "footprint": "Package_SON:WSON-10-1EP_2.5x2.5mm_P0.5mm_EP1.2x2mm_ThermalVias",
+   "lib_id": "Regulator_Switching:TPS63900",
+   "note": "",
+   "pins": {
+    "1": "SYS_PATH",
+    "10": "SYS_PATH",
+    "11": "GND",
+    "2": "GND",
+    "3": "REG_CFG1",
+    "4": "REG_CFG2",
+    "5": "REG_CFG3",
+    "6": "V3V3_CORE",
+    "7": "REG_LX2",
+    "8": "GND",
+    "9": "REG_LX1"
+   },
+   "value": "TPS63900DSKR"
+  },
+  "U6": {
+   "footprint": "Package_TO_SOT_SMD:SOT-23-6",
+   "lib_id": "Power_Management:TPS22917DBV",
+   "note": "slot 0 AON switch, default on",
+   "pins": {
+    "1": "V3V3_CORE",
+    "2": "GND",
+    "3": "SLOT_AON_EN0",
+    "4": null,
+    "5": null,
+    "6": "V3V3_AON_0"
+   },
+   "value": "TPS22917DBVR"
+  },
+  "U7": {
+   "footprint": "Package_TO_SOT_SMD:SOT-23-6",
+   "lib_id": "Power_Management:TPS22917DBV",
+   "note": "slot 1 AON switch, default on",
+   "pins": {
+    "1": "V3V3_CORE",
+    "2": "GND",
+    "3": "SLOT_AON_EN1",
+    "4": null,
+    "5": null,
+    "6": "V3V3_AON_1"
+   },
+   "value": "TPS22917DBVR"
+  },
+  "U8": {
+   "footprint": "Package_TO_SOT_SMD:SOT-23-6",
+   "lib_id": "Power_Management:TPS22917DBV",
+   "note": "slot 2 AON switch, default on",
+   "pins": {
+    "1": "V3V3_CORE",
+    "2": "GND",
+    "3": "SLOT_AON_EN2",
+    "4": null,
+    "5": null,
+    "6": "V3V3_AON_2"
+   },
+   "value": "TPS22917DBVR"
+  },
+  "U9": {
+   "footprint": "Package_TO_SOT_SMD:SOT-23-6",
+   "lib_id": "Power_Management:TPS22917DBV",
+   "note": "slot 3 AON switch, default on",
+   "pins": {
+    "1": "V3V3_CORE",
+    "2": "GND",
+    "3": "SLOT_AON_EN3",
+    "4": null,
+    "5": null,
+    "6": "V3V3_AON_3"
+   },
+   "value": "TPS22917DBVR"
+  }
+ }
+}

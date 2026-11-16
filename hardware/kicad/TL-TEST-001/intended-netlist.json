@@ -1,0 +1,185 @@
+{
+ "board": "TL-TEST-001",
+ "parts": {
+  "C1": {
+   "footprint": "Capacitor_SMD:C_0402_1005Metric",
+   "lib_id": "Device:C",
+   "note": "",
+   "pins": {
+    "1": "V3V3_AON",
+    "2": "GND"
+   },
+   "value": "100n"
+  },
+  "C2": {
+   "footprint": "Capacitor_SMD:C_0402_1005Metric",
+   "lib_id": "Device:C",
+   "note": "",
+   "pins": {
+    "1": "V3V3_AON",
+    "2": "GND"
+   },
+   "value": "100n"
+  },
+  "J1": {
+   "footprint": "",
+   "lib_id": "Connector_Generic:Conn_02x10_Odd_Even",
+   "note": "finger footprint TBD (H4): 1.60 mm card, 0.80 mm pitch, mates MEC8-EM2",
+   "pins": {
+    "1": "GND",
+    "10": "ALERT_N",
+    "11": "SCK",
+    "12": "MOSI",
+    "13": "MISO",
+    "14": "CS_N",
+    "15": "UART_TX",
+    "16": "UART_RX",
+    "17": "RESET_N",
+    "18": "GND",
+    "19": null,
+    "2": "GND",
+    "20": "GND",
+    "3": "V3V3_AON",
+    "4": "V3V3_SW",
+    "5": null,
+    "6": "GND",
+    "7": "SDA",
+    "8": "SCL",
+    "9": "WAKE"
+   },
+   "value": "sensor_edge_v1 card fingers"
+  },
+  "R1": {
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "",
+   "pins": {
+    "1": "DRV_WAKE",
+    "2": "WAKE"
+   },
+   "value": "1k"
+  },
+  "R2": {
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "test only; ALERT_N is open-drain",
+   "pins": {
+    "1": "DRV_ALERT",
+    "2": "ALERT_N"
+   },
+   "value": "1k"
+  },
+  "R3": {
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "",
+   "pins": {
+    "1": "DRV_MISO",
+    "2": "MISO"
+   },
+   "value": "1k"
+  },
+  "R4": {
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "",
+   "pins": {
+    "1": "DRV_UART_RX",
+    "2": "UART_RX"
+   },
+   "value": "1k"
+  },
+  "R5": {
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "~10 mA switched-rail load",
+   "pins": {
+    "1": "V3V3_SW",
+    "2": "GND"
+   },
+   "value": "330"
+  },
+  "TP1": {
+   "footprint": "TestPoint:TestPoint_Pad_D1.0mm",
+   "lib_id": "Connector:TestPoint",
+   "note": "",
+   "pins": {
+    "1": "V3V3_AON"
+   },
+   "value": "V3V3_AON"
+  },
+  "TP2": {
+   "footprint": "TestPoint:TestPoint_Pad_D1.0mm",
+   "lib_id": "Connector:TestPoint",
+   "note": "",
+   "pins": {
+    "1": "GND"
+   },
+   "value": "GND"
+  },
+  "TP3": {
+   "footprint": "TestPoint:TestPoint_Pad_D1.0mm",
+   "lib_id": "Connector:TestPoint",
+   "note": "",
+   "pins": {
+    "1": "V3V3_SW"
+   },
+   "value": "V3V3_SW"
+  },
+  "TP4": {
+   "footprint": "TestPoint:TestPoint_Pad_D1.0mm",
+   "lib_id": "Connector:TestPoint",
+   "note": "",
+   "pins": {
+    "1": "WAKE"
+   },
+   "value": "WAKE"
+  },
+  "U1": {
+   "footprint": "Package_TO_SOT_SMD:SOT-23-6",
+   "lib_id": "Memory_EEPROM:24AA025E-OT",
+   "note": "ID EEPROM 0x50 with factory EUI-48 (S-1)",
+   "pins": {
+    "1": "SCL",
+    "2": "GND",
+    "3": "SDA",
+    "4": "GND",
+    "5": "GND",
+    "6": "V3V3_AON"
+   },
+   "value": "24AA025E48T-I/OT"
+  },
+  "U2": {
+   "footprint": "Package_SO:TSSOP-24_4.4x7.8mm_P0.65mm",
+   "lib_id": "Interface_Expansion:TCA9535PWR",
+   "note": "branch address 0x27",
+   "pins": {
+    "1": null,
+    "10": null,
+    "11": null,
+    "12": "GND",
+    "13": "CS_N",
+    "14": "RESET_N",
+    "15": "SCK",
+    "16": "MOSI",
+    "17": "UART_TX",
+    "18": null,
+    "19": null,
+    "2": "V3V3_AON",
+    "20": null,
+    "21": "V3V3_AON",
+    "22": "SCL",
+    "23": "SDA",
+    "24": "V3V3_AON",
+    "3": "V3V3_AON",
+    "4": "DRV_WAKE",
+    "5": "DRV_ALERT",
+    "6": "DRV_MISO",
+    "7": "DRV_UART_RX",
+    "8": null,
+    "9": null
+   },
+   "value": "TCA9535PWR"
+  }
+ }
+}

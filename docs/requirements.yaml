@@ -166,6 +166,6 @@ requirements:
   - id: REQ-028
     statement: Sensor Node and card schematics open in KiCad, pass ERC with zero errors, and their exported netlists match the generator's intended connectivity
     subsystem: hardware.kicad
-    test: hardware/scripts/check_kicad.sh -> hardware/results/
+    test: hardware/scripts/check_kicad.py -> hardware/results/
     severity: high
     status: implemented

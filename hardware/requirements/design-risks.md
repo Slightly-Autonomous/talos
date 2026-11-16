@@ -34,3 +34,5 @@ Status at H3 (2026-11-16). Owner for every row is "EE reviewer" unless it says "
 8. **The SPI/UART lines are bused to unpowered cards.** Firmware must hold SCK/MOSI low and the UART mux disabled whenever a slot is unpowered (interface rule S-3).
 9. **No footprints for three parts** (MINI-1 module, MEC8-EM2 socket, EKMB can) and no card-edge finger footprint. They must be drawn from vendor drawings in H4. They are listed in results/footprint-audit.txt.
 10. **SHT4x idle and 24AA025E standby currents are not yet sourced.** The budget uses conservative 1 µA placeholders.
+11. **Floating expander inputs.** `PRESENT_PROBE` floats until firmware drives it, so EXP_B P13 must default to an output driven low. SLOTn_ALERT_N floats while that slot's AON switch is off, because AON has no QOD. Floating CMOS inputs raise TCA9535 current. Options: enable QOD on the AON switches too, or have firmware mask the slot. Decide at review.
+12. **C6 and C8 (10 µF/25 V and 4.7 µF/25 V in 0805)** lose most of their capacitance under DC bias at PV voltages. Size them from the vendor's DC-bias curves.

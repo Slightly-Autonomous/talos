@@ -1,0 +1,69 @@
+ref,pin,net,value
+C1,1,V3V3_AON,100n
+C1,2,GND,100n
+C2,1,V3V3_AON,100n
+C2,2,GND,100n
+J1,1,GND,sensor_edge_v1 card fingers
+J1,2,GND,sensor_edge_v1 card fingers
+J1,3,V3V3_AON,sensor_edge_v1 card fingers
+J1,4,V3V3_SW,sensor_edge_v1 card fingers
+J1,5,NC,sensor_edge_v1 card fingers
+J1,6,GND,sensor_edge_v1 card fingers
+J1,7,SDA,sensor_edge_v1 card fingers
+J1,8,SCL,sensor_edge_v1 card fingers
+J1,9,WAKE,sensor_edge_v1 card fingers
+J1,10,ALERT_N,sensor_edge_v1 card fingers
+J1,11,SCK,sensor_edge_v1 card fingers
+J1,12,MOSI,sensor_edge_v1 card fingers
+J1,13,MISO,sensor_edge_v1 card fingers
+J1,14,CS_N,sensor_edge_v1 card fingers
+J1,15,UART_TX,sensor_edge_v1 card fingers
+J1,16,UART_RX,sensor_edge_v1 card fingers
+J1,17,RESET_N,sensor_edge_v1 card fingers
+J1,18,GND,sensor_edge_v1 card fingers
+J1,19,NC,sensor_edge_v1 card fingers
+J1,20,GND,sensor_edge_v1 card fingers
+R1,1,DRV_WAKE,1k
+R1,2,WAKE,1k
+R2,1,DRV_ALERT,1k
+R2,2,ALERT_N,1k
+R3,1,DRV_MISO,1k
+R3,2,MISO,1k
+R4,1,DRV_UART_RX,1k
+R4,2,UART_RX,1k
+R5,1,V3V3_SW,330
+R5,2,GND,330
+TP1,1,V3V3_AON,V3V3_AON
+TP2,1,GND,GND
+TP3,1,V3V3_SW,V3V3_SW
+TP4,1,WAKE,WAKE
+U1,1,SCL,24AA025E48T-I/OT
+U1,2,GND,24AA025E48T-I/OT
+U1,3,SDA,24AA025E48T-I/OT
+U1,4,GND,24AA025E48T-I/OT
+U1,5,GND,24AA025E48T-I/OT
+U1,6,V3V3_AON,24AA025E48T-I/OT
+U2,1,NC,TCA9535PWR
+U2,2,V3V3_AON,TCA9535PWR
+U2,3,V3V3_AON,TCA9535PWR
+U2,4,DRV_WAKE,TCA9535PWR
+U2,5,DRV_ALERT,TCA9535PWR
+U2,6,DRV_MISO,TCA9535PWR
+U2,7,DRV_UART_RX,TCA9535PWR
+U2,8,NC,TCA9535PWR
+U2,9,NC,TCA9535PWR
+U2,10,NC,TCA9535PWR
+U2,11,NC,TCA9535PWR
+U2,12,GND,TCA9535PWR
+U2,13,CS_N,TCA9535PWR
+U2,14,RESET_N,TCA9535PWR
+U2,15,SCK,TCA9535PWR
+U2,16,MOSI,TCA9535PWR
+U2,17,UART_TX,TCA9535PWR
+U2,18,NC,TCA9535PWR
+U2,19,NC,TCA9535PWR
+U2,20,NC,TCA9535PWR
+U2,21,V3V3_AON,TCA9535PWR
+U2,22,SCL,TCA9535PWR
+U2,23,SDA,TCA9535PWR
+U2,24,V3V3_AON,TCA9535PWR

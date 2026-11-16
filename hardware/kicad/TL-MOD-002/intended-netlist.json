@@ -1,0 +1,96 @@
+{
+ "board": "TL-MOD-002",
+ "parts": {
+  "C1": {
+   "footprint": "Capacitor_SMD:C_0402_1005Metric",
+   "lib_id": "Device:C",
+   "note": "",
+   "pins": {
+    "1": "V3V3_AON",
+    "2": "GND"
+   },
+   "value": "100n"
+  },
+  "C2": {
+   "footprint": "Capacitor_SMD:C_0402_1005Metric",
+   "lib_id": "Device:C",
+   "note": "",
+   "pins": {
+    "1": "V3V3_AON",
+    "2": "GND"
+   },
+   "value": "100n"
+  },
+  "J1": {
+   "footprint": "",
+   "lib_id": "Connector_Generic:Conn_02x10_Odd_Even",
+   "note": "finger footprint TBD (H4): 1.60 mm card, 0.80 mm pitch, mates MEC8-EM2",
+   "pins": {
+    "1": "GND",
+    "10": null,
+    "11": null,
+    "12": null,
+    "13": null,
+    "14": null,
+    "15": null,
+    "16": null,
+    "17": null,
+    "18": "GND",
+    "19": null,
+    "2": "GND",
+    "20": "GND",
+    "3": "V3V3_AON",
+    "4": null,
+    "5": null,
+    "6": "GND",
+    "7": "SDA",
+    "8": "SCL",
+    "9": "WAKE"
+   },
+   "value": "sensor_edge_v1 card fingers"
+  },
+  "TP1": {
+   "footprint": "TestPoint:TestPoint_Pad_D1.0mm",
+   "lib_id": "Connector:TestPoint",
+   "note": "",
+   "pins": {
+    "1": "V3V3_AON"
+   },
+   "value": "V3V3_AON"
+  },
+  "TP2": {
+   "footprint": "TestPoint:TestPoint_Pad_D1.0mm",
+   "lib_id": "Connector:TestPoint",
+   "note": "",
+   "pins": {
+    "1": "GND"
+   },
+   "value": "GND"
+  },
+  "U1": {
+   "footprint": "Package_TO_SOT_SMD:SOT-23-6",
+   "lib_id": "Memory_EEPROM:24AA025E-OT",
+   "note": "ID EEPROM 0x50 with factory EUI-48 (S-1)",
+   "pins": {
+    "1": "SCL",
+    "2": "GND",
+    "3": "SDA",
+    "4": "GND",
+    "5": "GND",
+    "6": "V3V3_AON"
+   },
+   "value": "24AA025E48T-I/OT"
+  },
+  "U2": {
+   "footprint": "",
+   "lib_id": "talos:EKMB",
+   "note": "TO-5 3-pin, footprint TBD from Panasonic drawing (PCD 5.08 mm)",
+   "pins": {
+    "1": "V3V3_AON",
+    "2": "WAKE",
+    "3": "GND"
+   },
+   "value": "EKMB1101111"
+  }
+ }
+}

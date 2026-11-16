@@ -10,8 +10,8 @@ requirements:
   - id: HWR-002
     statement: The Sensor Node accepts four interchangeable cards through one connector standard (sensor_edge_v1)
     board: TL-SN-001
-    status: designed
-    test: hardware/results/netlist-check.txt (connector contacts identical across five card schematics)
+    status: verified_tool
+    test: hardware/results/kicad-check.md (cross-board connector check)
   - id: HWR-003
     statement: Each slot has a dedicated wake line usable from deep sleep (ESP32-H2 LP GPIO8-14)
     board: TL-SN-001
@@ -35,8 +35,8 @@ requirements:
   - id: HWR-007
     statement: Every output that controls power, reset or chip select has a resistor-defined safe default at power-up
     board: TL-SN-001
-    status: designed
-    test: hardware/scripts/check_kicad.sh (netlist check SAFE-DEFAULTS)
+    status: verified_tool
+    test: hardware/scripts/check_kicad.py (safe-default check) -> hardware/results/kicad-check.md
   - id: HWR-008
     statement: Runs from USB-C alone with no battery, from battery alone, and from PV+battery; USB has priority over PV; no cross-feed
     board: TL-SN-001
@@ -65,8 +65,8 @@ requirements:
   - id: HWR-013
     statement: Each card carries an ID EEPROM at 0x50 on its slot branch, powered from AON
     board: TL-MOD-001..004, TL-TEST-001
-    status: designed
-    test: hardware/results/netlist-check.txt
+    status: verified_tool
+    test: hardware/results/pin-to-net/*.csv; hardware/results/kicad-check.md
   - id: HWR-014
     statement: The Vision Node is a separate board with zero sensor slots
     board: TL-VN-001
@@ -81,4 +81,4 @@ requirements:
     statement: Every schematic opens in KiCad 10 and passes ERC with zero errors; the exported netlist matches the generator's intended netlist
     board: TL-SN-001, TL-MOD-001..004, TL-TEST-001
     status: verified_tool
-    test: hardware/scripts/check_kicad.sh -> hardware/results/
+    test: hardware/scripts/check_kicad.py -> hardware/results/

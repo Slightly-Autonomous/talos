@@ -1,0 +1,8 @@
+[
+  {
+    "board": "TL-MOD-003",
+    "type": "pin_to_pin",
+    "match": ["SDO/SA0", "#FLG"],
+    "justification": "LIS2DW12 SDO/SA0 is strapped to V3V3_AON to select I2C address 0x19; in I2C mode it is an address input, not a driver (DS11811 §6). Its internal pull-up cannot be disabled, so strapping low would waste current."
+  }
+]

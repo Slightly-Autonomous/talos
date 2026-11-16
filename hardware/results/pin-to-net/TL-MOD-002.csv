@@ -1,0 +1,36 @@
+ref,pin,net,value
+C1,1,V3V3_AON,100n
+C1,2,GND,100n
+C2,1,V3V3_AON,100n
+C2,2,GND,100n
+J1,1,GND,sensor_edge_v1 card fingers
+J1,2,GND,sensor_edge_v1 card fingers
+J1,3,V3V3_AON,sensor_edge_v1 card fingers
+J1,4,NC,sensor_edge_v1 card fingers
+J1,5,NC,sensor_edge_v1 card fingers
+J1,6,GND,sensor_edge_v1 card fingers
+J1,7,SDA,sensor_edge_v1 card fingers
+J1,8,SCL,sensor_edge_v1 card fingers
+J1,9,WAKE,sensor_edge_v1 card fingers
+J1,10,NC,sensor_edge_v1 card fingers
+J1,11,NC,sensor_edge_v1 card fingers
+J1,12,NC,sensor_edge_v1 card fingers
+J1,13,NC,sensor_edge_v1 card fingers
+J1,14,NC,sensor_edge_v1 card fingers
+J1,15,NC,sensor_edge_v1 card fingers
+J1,16,NC,sensor_edge_v1 card fingers
+J1,17,NC,sensor_edge_v1 card fingers
+J1,18,GND,sensor_edge_v1 card fingers
+J1,19,NC,sensor_edge_v1 card fingers
+J1,20,GND,sensor_edge_v1 card fingers
+TP1,1,V3V3_AON,V3V3_AON
+TP2,1,GND,GND
+U1,1,SCL,24AA025E48T-I/OT
+U1,2,GND,24AA025E48T-I/OT
+U1,3,SDA,24AA025E48T-I/OT
+U1,4,GND,24AA025E48T-I/OT
+U1,5,GND,24AA025E48T-I/OT
+U1,6,V3V3_AON,24AA025E48T-I/OT
+U2,1,V3V3_AON,EKMB1101111
+U2,2,WAKE,EKMB1101111
+U2,3,GND,EKMB1101111

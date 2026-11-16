@@ -1,0 +1,11 @@
+qty,refs,value,symbol,footprint
+2,C1 C2,100n,Device:C,Capacitor_SMD:C_0402_1005Metric
+1,J1,sensor_edge_v1 card fingers,Connector_Generic:Conn_02x10_Odd_Even,TBD
+4,R1 R2 R3 R4,1k,Device:R,Resistor_SMD:R_0402_1005Metric
+1,R5,330,Device:R,Resistor_SMD:R_0402_1005Metric
+1,TP1,V3V3_AON,Connector:TestPoint,TestPoint:TestPoint_Pad_D1.0mm
+1,TP2,GND,Connector:TestPoint,TestPoint:TestPoint_Pad_D1.0mm
+1,TP3,V3V3_SW,Connector:TestPoint,TestPoint:TestPoint_Pad_D1.0mm
+1,TP4,WAKE,Connector:TestPoint,TestPoint:TestPoint_Pad_D1.0mm
+1,U1,24AA025E48T-I/OT,Memory_EEPROM:24AA025E-OT,Package_TO_SOT_SMD:SOT-23-6
+1,U2,TCA9535PWR,Interface_Expansion:TCA9535PWR,Package_SO:TSSOP-24_4.4x7.8mm_P0.65mm
