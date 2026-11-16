@@ -1,4 +1,4 @@
-import { CommandStatus } from "./gen/talos/v1/command_pb";
+import { CommandStatus } from "@talos/contracts/talos/v1/command_pb";
 
 export type Outcome = "pending" | "verified" | "unverified" | "failed" | "unknown";
 

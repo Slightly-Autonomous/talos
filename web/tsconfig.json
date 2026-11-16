@@ -12,7 +12,9 @@
     "isolatedModules": true,
     "verbatimModuleSyntax": true,
     "skipLibCheck": true,
-    "types": ["vitest/globals"]
+    "types": ["vitest/globals"],
+    "allowImportingTsExtensions": true,
+    "noEmit": true
   },
   "include": ["src", "vite.config.ts"]
 }

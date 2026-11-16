@@ -1,6 +1,6 @@
 import { create, fromBinary, toBinary } from "@bufbuild/protobuf";
-import { CommandStatus } from "./gen/talos/v1/command_pb";
-import { ObservationEnvelopeSchema } from "./gen/talos/v1/observation_pb";
+import { CommandStatus } from "@talos/contracts/talos/v1/command_pb";
+import { ObservationEnvelopeSchema } from "@talos/contracts/talos/v1/observation_pb";
 import { outcomeOf } from "./commandStatus";
 
 test("generated contract types round-trip through binary", () => {

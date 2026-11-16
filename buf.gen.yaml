@@ -1,6 +1,8 @@
 version: v2
 plugins:
   - local: protoc-gen-es
-    out: web/src/gen
-    opt: target=ts
+    out: packages/contracts/src/gen
+    opt:
+      - target=ts
+      - import_extension=ts
 clean: true

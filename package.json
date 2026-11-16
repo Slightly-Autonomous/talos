@@ -3,11 +3,14 @@
   "private": true,
   "license": "Apache-2.0",
   "packageManager": "pnpm@10.23.0",
-  "engines": { "node": ">=20.19" },
+  "engines": {
+    "node": ">=20.19"
+  },
   "scripts": {
     "proto:lint": "buf lint",
     "proto:gen": "buf generate",
-    "web:check": "pnpm proto:gen && pnpm -C web lint && pnpm -C web typecheck && pnpm -C web test && pnpm -C web build"
+    "ts:check": "pnpm proto:gen && pnpm -r --stream run typecheck && pnpm -r --stream run test && pnpm -C web lint && pnpm -C web build",
+    "web:check": "pnpm ts:check"
   },
   "devDependencies": {
     "@bufbuild/buf": "^1.57.0",

@@ -8,7 +8,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "typecheck": "tsc -b --noEmit",
+    "typecheck": "tsc --noEmit",
     "lint": "eslint . && prettier --check .",
     "format": "prettier --write .",
     "test": "vitest run"
@@ -16,7 +16,8 @@
   "dependencies": {
     "@bufbuild/protobuf": "^2.9.0",
     "react": "^19.1.0",
-    "react-dom": "^19.1.0"
+    "react-dom": "^19.1.0",
+    "@talos/contracts": "workspace:*"
   },
   "devDependencies": {
     "@eslint/js": "^9.35.0",

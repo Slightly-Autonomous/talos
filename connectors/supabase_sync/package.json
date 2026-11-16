@@ -1,0 +1,23 @@
+{
+  "name": "@talos/supabase-sync",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "license": "Apache-2.0",
+  "scripts": {
+    "start": "tsx src/main.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@bufbuild/protobuf": "^2.9.0",
+    "@supabase/supabase-js": "^2.57.0",
+    "@talos/contracts": "workspace:*",
+    "tsx": "^4.20.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.18.0",
+    "typescript": "~5.9.2",
+    "vitest": "^3.2.0"
+  }
+}

@@ -1,5 +1,7 @@
 packages:
   - web
+  - packages/*
+  - connectors/*
 onlyBuiltDependencies:
   - "@bufbuild/buf"
   - esbuild
