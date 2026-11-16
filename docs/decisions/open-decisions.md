@@ -11,8 +11,9 @@ A living register (spec §55). Nothing here is decided until an ADR, a test, a b
 | P0 | Camera performance | Snapshot cartridge vs IP camera; night/IR; pre-trigger buffering; real power | Camera benchmark against use cases |
 | P0 | OTA resources | Is 4 MB flash enough? Partition sizes; update over Thread | Real images + HIL |
 | P0 | Actuation safety | Strong authorization, local fail-safe, no policy bypass paths | Security invariants + hardware interlocks |
-| P1 | DB authority/sync | SQLite specifics; Supabase projection/auth shape | Phase 3 slice + failure simulation |
-| P1 | Client/API schema | gRPC vs JSON HTTP over the same protos; WebSocket/SSE semantics | Phase 3 proof of concept |
+| P1 | Postgres driver | libpq via Bazel for `STORAGE_DRIVER_POSTGRES` (cloud-hosted hub on Supabase/Postgres) | Implement behind `IJournal` + conformance suite |
+| P1 | Remote access | Relay role, Supabase JWT auth, per-principal read scopes | Remote-access phase (ADR 0010) |
+
 | P1 | Sensor specifics | Hall vs reed, accelerometer thresholds, PIR model | Prototype BOM, measured false alarms and power |
 | P1 | Power budget | Real sleepy-node average, charger quiescent, pack life, panel size | Profiler measurements + weather scenarios |
 | P1 | Four-slot modules | Per-slot ID EEPROM, duplicate I²C, multi-wake modules, UART conflicts | Electrical prototype + manifest tests |

@@ -6,7 +6,7 @@ MODULE.bazel.lock.tmp
 # Node / web
 node_modules/
 web/dist/
-web/src/gen/
+packages/contracts/src/gen/
 *.tsbuildinfo
 
 # Editors / OS
@@ -15,3 +15,10 @@ web/src/gen/
 .idea/
 compile_commands.json
 .cache/
+
+# Local hub data
+.data/
+*.db
+*.db-wal
+*.db-shm
+.env

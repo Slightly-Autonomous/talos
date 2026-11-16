@@ -1,0 +1,10 @@
+.git
+bazel-*
+**/node_modules
+.data
+*.db
+*.db-wal
+*.db-shm
+.env
+web/dist
+packages/contracts/src/gen

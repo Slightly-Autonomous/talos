@@ -1,0 +1,39 @@
+# Local Talos stack. From the repository root:
+#   docker compose -f deploy/docker-compose.yml up --build
+#   docker compose -f deploy/docker-compose.yml --profile supabase-sync up --build
+# Copy deploy/.env.example to deploy/.env for the Supabase profile.
+name: talos
+
+services:
+  hub:
+    build:
+      context: ..
+      dockerfile: server/Dockerfile
+    environment:
+      TALOS_CONFIG: ${TALOS_CONFIG:-/etc/talos/deploy/config/hub.dev.yaml}
+      # Dev config only: allowed because the port below is bound to localhost.
+      TALOS_ALLOW_DEV_ON_NETWORK: "1"
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - talos-data:/data
+    restart: unless-stopped
+
+  supabase-sync:
+    profiles: ["supabase-sync"]
+    build:
+      context: ..
+      dockerfile: connectors/supabase_sync/Dockerfile
+    environment:
+      HUB_URL: http://hub:8080
+      HUB_TOKEN: ${TALOS_SYNC_TOKEN:-dev-sync-token}
+      PROPERTY_ID: ${TALOS_PROPERTY_ID:-house-01}
+      SUPABASE_URL: ${SUPABASE_URL:-}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:-}
+      SYNC_INTERVAL_MS: ${SYNC_INTERVAL_MS:-5000}
+    depends_on:
+      - hub
+    restart: unless-stopped
+
+volumes:
+  talos-data:

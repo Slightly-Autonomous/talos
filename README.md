@@ -7,7 +7,7 @@ An open-source, **local-first spatial security and automation platform** for hou
 - A deterministic digital twin that runs the real production logic in CI.
 - A website (PWA first). Optional cloud and observability are never in the alarm path.
 
-> **Status: Phase 2 (deterministic digital twin).** Contracts, domain core and an L1 twin running 29 scenarios through the real hub engine. No hardware, server or UI yet. See [roadmap](#roadmap). Everything is experimental and is not a certified alarm or life-safety system.
+> **Status: Phase 3 (local hub server).** Contracts, domain core, an L1 twin (29 scenarios), and `talos_hub`: SQLite journal, HTTP API with live events, token auth, optional Supabase copy, Docker/Railway deploys. No UI or hardware yet. See [roadmap](#roadmap). Everything is experimental and is not a certified alarm or life-safety system.
 
 ## Quick start
 
@@ -22,12 +22,18 @@ bazel test --config=asan //...      # under AddressSanitizer (also: --config=ubs
 ```
 
 ```bash
-pnpm install && pnpm web:check      # proto codegen + web lint/typecheck/test/build
+pnpm install && pnpm ts:check       # proto codegen + all TS typecheck/tests + web lint/build
 ```
 
 ```bash
 pnpm proto:lint                     # buf lint on contracts/proto
 ```
+
+```bash
+bazel run //server:talos_hub -- --config $PWD/deploy/config/hub.dev.yaml   # then: curl localhost:8080/v1/health
+```
+
+See [`deploy/README.md`](deploy/README.md) for Docker Compose, Supabase and Railway.
 
 ```bash
 bazel run //simulation/runner:talos_sim -- $PWD/simulation/scenarios/scenarios/backyard_intrusion_at_2am.yaml --root $PWD/simulation/scenarios
@@ -41,16 +47,20 @@ bazel run //simulation/runner:talos_sim -- $PWD/simulation/scenarios/scenarios/b
 | `core/` | Pure C++20 domain core: journal, ingest/dedup, state/replay, commands, policy, rules, manifest validator |
 | `codec/` | Proto ↔ core mapping and the YAML loader |
 | `simulation/` | Digital twin: world, virtual devices/transport, scenario runner, scenario corpus |
+| `server/` | `talos_hub`: SQLite journal, HTTP API v1 + SSE, auth, config switches |
+| `packages/contracts` | Generated TypeScript contracts and typed `HubClient` |
+| `connectors/supabase_sync` | Optional read-only Supabase copy |
+| `deploy/` | Dev config, Docker Compose, Railway templates, Supabase migrations |
 | `web/` | React + TypeScript client (shell only for now) |
 | `docs/` | Architecture, ADRs, open decisions, security invariants, requirements, original spec |
-| `server/ firmware/ hardware/ …` | Placeholders for later phases |
+| `firmware/ hardware/ observability/` | Placeholders for later phases |
 
 Start with [`docs/architecture/overview.md`](docs/architecture/overview.md) and [`docs/decisions/`](docs/decisions/README.md).
 
 ## Roadmap
 0–1. Repo, contracts, deterministic core
-2. Deterministic L1 digital twin and scenario runner ← *here*
-3. Local hub: SQLite journal, API, auth
+2. Deterministic L1 digital twin and scenario runner
+3. Local hub: SQLite journal, API, auth ← *here*
 4. Website: property editor, live state, replay
 5. Portable firmware on virtual hardware, then ESP-IDF
 6. Thread/CoAP, OTA, observability, hardening

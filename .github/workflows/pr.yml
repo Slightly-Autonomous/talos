@@ -85,4 +85,26 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm web:check
+      - run: pnpm ts:check
+
+  deploy:
+    name: Deploy artifacts
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: Validate Compose (all profiles)
+        run: |
+          docker compose -f deploy/docker-compose.yml config --quiet
+          docker compose -f deploy/docker-compose.yml --profile supabase-sync config --quiet
+      - name: Build images
+        if: github.event_name == 'push'
+        run: |
+          docker build -f server/Dockerfile -t talos-hub .
+          docker build -f connectors/supabase_sync/Dockerfile -t talos-supabase-sync .
+      - name: Hub container smoke test
+        if: github.event_name == 'push'
+        run: |
+          docker run -d --name hub -p 127.0.0.1:8080:8080 -e TALOS_ALLOW_DEV_ON_NETWORK=1 talos-hub
+          for i in $(seq 1 30); do curl -fsS localhost:8080/v1/health && break; sleep 1; done
+          test "$(curl -s -o /dev/null -w '%{http_code}' localhost:8080/v1/state)" = 401
+          docker logs hub

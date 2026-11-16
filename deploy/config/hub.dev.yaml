@@ -1,0 +1,44 @@
+# Development hub config. DEV TOKENS ONLY: the raw tokens are documented in
+# deploy/README.md. Generate real ones with: talos_hub hash-token <random-token>
+role: HUB_ROLE_HUB
+dev_mode: true
+listen_host: 127.0.0.1
+port: 8080
+storage:
+  driver: STORAGE_DRIVER_SQLITE
+  sqlite_path: ../../.data/talos-journal.db   # override with TALOS_SQLITE_PATH
+sync:
+  target: SYNC_TARGET_NONE   # SYNC_TARGET_SUPABASE + run connectors/supabase_sync
+  supabase_url_env: SUPABASE_URL
+  supabase_service_key_env: SUPABASE_SERVICE_ROLE_KEY
+auth: AUTH_MODE_LOCAL
+property_file: ../../contracts/manifests/properties/sample_backyard.yaml
+freshness_max_age_ms: 900000
+utc_offset_minutes: -480
+tick_interval_ms: 250
+cors_origins: ["http://localhost:5173"]
+principals:
+  - {id: owner, kind: PRINCIPAL_KIND_HUMAN, max_risk: RISK_CLASS_SECURITY_CRITICAL, token_sha256: 8ac4afa44f3f01da2d47daaee53270af09cdf9b0482481377b750332904ddd94}
+  - {id: sync-worker, kind: PRINCIPAL_KIND_SYSTEM, max_risk: RISK_CLASS_INFORMATIONAL, token_sha256: a5272572495630914856ca946d2c9868fb9cfce8fc1a674e411989cdd4c5a1bc}
+devices:
+  - {device_id: node-07, token_sha256: 3a0c053a94f5d03270628729fd2f84ba52065698f1b95719409e93042df778a3}
+  - {device_id: node-12, token_sha256: 65060935b3f93197b2100a6d3137aefa655a8961fe06f9dbade7a5bc86cb988f}
+  - {device_id: patio_speaker, token_sha256: d53ebf5b31fe00c0381b5ec2dcd95a1981018ddde6064236be8eed5720fb720d}
+  - {device_id: lock-3, token_sha256: dd63e701464b4a0530f6b22693a920496c64086aab7ff8f045db279a1b28948f}
+rules:
+  - id: backyard_motion_warning
+    revision: 1
+    property_id: house-01
+    principal_id: "rule:backyard_motion_warning"
+    enabled: true
+    trigger_event_type: motion.detected
+    trigger_zone_id: backyard
+    armed_modes: [ARM_MODE_ARMED_AWAY]
+    schedule: {start_minute: 1320, end_minute: 360}
+    actions:
+      - operation: audio.speak
+        target: {device_id: patio_speaker, capability_id: audio.speak}
+        args: {audio_speak: {text: "This property is monitored.", volume_percent: 65}}
+        ttl_ms: 5000
+        verification_window_ms: 3000
+        expect: {source: {device_id: patio_speaker, capability_id: audio.speak}, payload: {audio_playback: {playing: true}}}

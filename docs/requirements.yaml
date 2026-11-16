@@ -67,3 +67,21 @@ requirements:
     test: //simulation/runner:scenario_test (stale_lock_state_blocks_command, agent_cannot_unlock_or_disarm)
     severity: critical
     status: verified_sim
+  - id: REQ-012
+    statement: The hub journal is durable across restarts and refuses to start on corrupt or newer-schema storage
+    subsystem: server.persistence
+    test: //server/persistence:sqlite_journal_test, //server:server_test (RestartRebuildsHistoryFromSqlite)
+    severity: critical
+    status: implemented
+  - id: REQ-013
+    statement: Devices may only report for themselves; people and devices use separate credentials and APIs
+    subsystem: server.auth
+    test: //server:server_test (HttpE2E.HealthIsPublic..., IntrusionRuleCommandAckAndVerificationOverHttp)
+    severity: critical
+    status: implemented
+  - id: REQ-014
+    statement: Supabase holds an idempotent, resumable, read-only copy; the hub stays authoritative
+    subsystem: connectors.supabase_sync
+    test: connectors/supabase_sync/src/sync.test.ts
+    severity: high
+    status: implemented

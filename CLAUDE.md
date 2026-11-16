@@ -4,7 +4,8 @@ Read `docs/architecture/overview.md` and the ADRs in `docs/decisions/` before ch
 
 ## Commands
 - `bazel test //...`: all C++ tests (also `--config=asan`, `--config=ubsan`).
-- `pnpm web:check`: proto codegen, then web lint/typecheck/test/build.
+- `pnpm ts:check`: proto codegen, then typecheck/tests for every TS package, plus web lint/build.
+- `bazel run //server:talos_hub -- --config $PWD/deploy/config/hub.dev.yaml`: local hub with dev tokens.
 - `pnpm proto:lint`: buf lint. CI also runs `buf breaking` against `main`.
 - Format C++ with clang-format 21 (`.clang-format`). Format web with `pnpm -C web format`.
 
@@ -17,4 +18,5 @@ Read `docs/architecture/overview.md` and the ADRs in `docs/decisions/` before ch
 - **Scope:** build what the current phase needs, with tests. No speculative frameworks for later phases.
 - **Core style:** exception-free (`Result`/`Status`), small value types, explicit units in names (`_ms`, `_mw`, `_ma`, `_milli_c`).
 - **Before claiming done:** run the tests and report the exact command and result, plus what remains simulated or unverified. Update ADRs, `docs/decisions/open-decisions.md` and `docs/requirements.yaml` when architecture changes.
-- Never commit secrets, keys, Wi-Fi/Thread credentials or real customer data.
+- Never commit secrets, keys, Wi-Fi/Thread credentials or real customer data. Configs hold token *hashes* only; cloud keys come from env vars.
+- Supabase/Railway are config switches around the same hub and API (ADR 0010). Never make them the authority for alarm behavior.

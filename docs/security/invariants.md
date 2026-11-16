@@ -12,7 +12,7 @@ From spec §45. Each invariant is mapped to the test that enforces it today, or 
 | 6 | A failed device cannot be misreported as having acted successfully | `Ledger.AckWithoutObservationIsCompletedUnverifiedNeverSuccess`, `Ledger.NoEvidenceInWindowIsUnknownNotSuccess`, `EngineTest.SpeakerSilenceEndsUnknownNotSuccess`; scenarios `speaker_offline`, `speaker_silent_ack`, `lock_jammed` plus the twin's always-on "verified implies physical effect" invariant; web `outcomeOf` test |
 | 7 | Only verified, signed, compatible OTA images are accepted | Phase 5/6 (OTA model) |
 | 8 | Untrusted firmware or module profiles cannot change wiring or current limits by remote manifest | Board manifests are build artifacts; nothing in core mutates them. Enforcement tests in Phase 5 |
-| 9 | No private credentials or signing keys in the repo, factory logs or client bundle | Process + secret scanning in CI (to add with release workflow) |
-| 10 | Users and agents act only within authorized property and capability scopes | `Policy.GrantForOtherPropertyDoesNotApply`, `IngestTest.RejectsForeignPropertyAndUnknownDevice`, `ValidateProperty.*CrossProperty*` |
+| 9 | No private credentials or signing keys in the repo, factory logs or client bundle | Configs hold only token hashes; cloud keys come from env vars; `dev_mode` configs refuse non-loopback (`server/main.cc`). Secret scanning still to add |
+| 10 | Users and agents act only within authorized property and capability scopes | Device credentials scoped to one device (`HttpE2E` tests); Supabase RLS by property membership;  `Policy.GrantForOtherPropertyDoesNotApply`, `IngestTest.RejectsForeignPropertyAndUnknownDevice`, `ValidateProperty.*CrossProperty*` |
 | 11 | A hardware safety interlock cannot be overridden by an automation rule | Hardware design (Phase 8); policy caps rule principals today |
 | 12 | Telemetry floods cannot exhaust critical event and control queues | Phase 3/6 (priority queues, rate limits) |
