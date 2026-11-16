@@ -1,0 +1,117 @@
+syntax = "proto3";
+
+package talos.api.v1;
+
+import "talos/v1/command.proto";
+import "talos/v1/common.proto";
+import "talos/v1/journal.proto";
+import "talos/v1/observation.proto";
+import "talos/v1/rule.proto";
+
+// Hub HTTP API v1 (ADR 0010). JSON over HTTP using the protobuf JSON mapping;
+// the same contract is served by a local hub or a cloud-hosted one.
+
+enum Freshness {
+  FRESHNESS_UNSPECIFIED = 0;
+  FRESHNESS_UNKNOWN = 1;
+  FRESHNESS_FRESH = 2;
+  FRESHNESS_STALE = 3;
+}
+
+enum CommandOutcome {
+  COMMAND_OUTCOME_UNSPECIFIED = 0;
+  COMMAND_OUTCOME_PENDING = 1;
+  // The only success.
+  COMMAND_OUTCOME_VERIFIED = 2;
+  COMMAND_OUTCOME_UNVERIFIED = 3;
+  COMMAND_OUTCOME_FAILED = 4;
+  COMMAND_OUTCOME_UNKNOWN = 5;
+}
+
+message HealthResponse {
+  string status = 1;
+  string version = 2;
+  string role = 3;
+  uint64 journal_seq = 4;
+  string property_id = 5;
+}
+
+message CapabilityView {
+  talos.v1.CapabilityRef ref = 1;
+  talos.v1.ObservationPayload value = 2;
+  string event_type = 3;
+  string last_event_id = 4;
+  int64 received_at_unix_ms = 5;
+  optional int64 observed_at_unix_ms = 6;
+  Freshness freshness = 7;
+  uint64 journal_seq = 8;
+}
+
+message CommandView {
+  talos.v1.Command command = 1;
+  talos.v1.CommandStatus status = 2;
+  CommandOutcome outcome = 3;
+  optional int64 dispatched_at_unix_ms = 4;
+  repeated talos.v1.CommandTransition history = 5;
+}
+
+message StateResponse {
+  string property_id = 1;
+  uint64 through_seq = 2;
+  talos.v1.ArmMode arm_mode = 3;
+  repeated CapabilityView capabilities = 4;
+  repeated CommandView commands = 5;
+  int64 server_time_unix_ms = 6;
+}
+
+message JournalPage {
+  repeated talos.v1.JournalEntry entries = 1;
+  // Pass as `after` to continue.
+  uint64 next_after = 2;
+  bool has_more = 3;
+}
+
+message SetArmModeRequest {
+  talos.v1.ArmMode mode = 1;
+}
+
+message SetArmModeResponse {
+  talos.v1.ArmMode mode = 1;
+}
+
+// The principal comes from authentication, and created/expiry times from the
+// hub clock; clients never set them.
+message CommandRequest {
+  string command_id = 1;
+  string idempotency_key = 2;
+  string operation = 3;
+  talos.v1.CapabilityRef target = 4;
+  talos.v1.CommandArgs args = 5;
+  uint32 ttl_ms = 6;
+  uint32 verification_window_ms = 7;
+  optional talos.v1.ExpectedObservation expect = 8;
+}
+
+message CommandResponse {
+  string command_id = 1;
+  bool duplicate = 2;
+  talos.v1.CommandStatus status = 3;
+  string reason = 4;
+}
+
+message IngestResponse {
+  // "accepted", "duplicate", "too_old" or "rejected".
+  string status = 1;
+  optional uint64 journal_seq = 2;
+  string error_code = 3;
+  string error_message = 4;
+}
+
+message PendingCommands {
+  repeated talos.v1.Command commands = 1;
+}
+
+message ErrorResponse {
+  string code = 1;
+  string message = 2;
+}

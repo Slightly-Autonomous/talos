@@ -1,0 +1,29 @@
+load("@rules_cc//cc:defs.bzl", "cc_library", "cc_test")
+load("//bazel:copts.bzl", "TALOS_PROTO_COPTS")
+
+cc_library(
+    name = "persistence",
+    srcs = ["sqlite_journal.cc"],
+    hdrs = ["sqlite_journal.h"],
+    copts = TALOS_PROTO_COPTS,
+    visibility = ["//server:__subpackages__"],
+    deps = [
+        "//codec",
+        "//core/base",
+        "//core/journal",
+        "@sqlite3",
+    ],
+)
+
+cc_test(
+    name = "sqlite_journal_test",
+    size = "small",
+    srcs = ["sqlite_journal_test.cc"],
+    copts = TALOS_PROTO_COPTS,
+    deps = [
+        ":persistence",
+        "//core/journal:conformance",
+        "@googletest//:gtest_main",
+        "@sqlite3",
+    ],
+)

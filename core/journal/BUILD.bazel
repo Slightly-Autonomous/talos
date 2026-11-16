@@ -26,3 +26,25 @@ cc_test(
         "@googletest//:gtest_main",
     ],
 )
+
+cc_library(
+    name = "conformance",
+    testonly = True,
+    hdrs = ["journal_conformance.h"],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":journal",
+        "@googletest//:gtest",
+    ],
+)
+
+cc_test(
+    name = "in_memory_conformance_test",
+    size = "small",
+    srcs = ["in_memory_conformance_test.cc"],
+    copts = TALOS_COPTS,
+    deps = [
+        ":conformance",
+        "@googletest//:gtest_main",
+    ],
+)

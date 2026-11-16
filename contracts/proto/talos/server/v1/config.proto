@@ -1,0 +1,102 @@
+syntax = "proto3";
+
+package talos.server.v1;
+
+import "talos/v1/command.proto";
+import "talos/v1/rule.proto";
+
+// Hub process configuration (ADR 0010). Loaded from YAML. Never contains
+// secrets: tokens are stored as SHA-256 hashes, and cloud credentials are read
+// from environment variables named here.
+
+enum HubRole {
+  HUB_ROLE_UNSPECIFIED = 0;
+  // Authoritative local hub (default).
+  HUB_ROLE_HUB = 1;
+  // Reserved: remote relay forwarding clients to a home hub (not yet built).
+  HUB_ROLE_RELAY = 2;
+}
+
+enum StorageDriver {
+  STORAGE_DRIVER_UNSPECIFIED = 0;
+  STORAGE_DRIVER_SQLITE = 1;
+  // Reserved: Postgres (self-hosted or Supabase) as the hub's own store.
+  STORAGE_DRIVER_POSTGRES = 2;
+}
+
+enum SyncTarget {
+  SYNC_TARGET_UNSPECIFIED = 0;
+  SYNC_TARGET_NONE = 1;
+  // Read-model copy pushed to Supabase by connectors/supabase_sync.
+  SYNC_TARGET_SUPABASE = 2;
+}
+
+enum AuthMode {
+  AUTH_MODE_UNSPECIFIED = 0;
+  AUTH_MODE_LOCAL = 1;
+  // Reserved: accept Supabase-issued JWTs (remote access phase).
+  AUTH_MODE_SUPABASE = 2;
+}
+
+enum PrincipalKind {
+  PRINCIPAL_KIND_UNSPECIFIED = 0;
+  PRINCIPAL_KIND_HUMAN = 1;
+  PRINCIPAL_KIND_AGENT = 2;
+  PRINCIPAL_KIND_RULE = 3;
+  PRINCIPAL_KIND_SYSTEM = 4;
+}
+
+message StorageConfig {
+  StorageDriver driver = 1;
+  string sqlite_path = 2;
+  // Name of the env var holding a Postgres URL (reserved driver).
+  string postgres_url_env = 3;
+}
+
+message SyncConfig {
+  SyncTarget target = 1;
+  // Env var names read by the sync worker; never the values themselves.
+  string supabase_url_env = 2;
+  string supabase_service_key_env = 3;
+  uint32 interval_ms = 4;
+}
+
+message PrincipalConfig {
+  string id = 1;
+  PrincipalKind kind = 2;
+  talos.v1.RiskClass max_risk = 3;
+  // Lowercase hex SHA-256 of the bearer token. Empty: cannot authenticate
+  // over the API (e.g. rule principals).
+  string token_sha256 = 4;
+}
+
+// A device or adapter allowed to post evidence for exactly one device id.
+message DeviceCredential {
+  string device_id = 1;
+  string token_sha256 = 2;
+}
+
+message HubConfig {
+  HubRole role = 1;
+  string listen_host = 2;
+  // Overridden by the PORT environment variable when set (Railway, etc).
+  uint32 port = 3;
+  StorageConfig storage = 4;
+  SyncConfig sync = 5;
+  AuthMode auth = 6;
+  // Property YAML (talos.v1.Property), relative to the config file.
+  string property_file = 7;
+  repeated talos.v1.Rule rules = 8;
+  repeated PrincipalConfig principals = 9;
+  repeated DeviceCredential devices = 10;
+  uint32 freshness_max_age_ms = 11;
+  // Fixed local-time offset for rule schedules (DST support is open).
+  int32 utc_offset_minutes = 12;
+  uint32 tick_interval_ms = 13;
+  // Browser origins allowed by CORS (the website, a hosted dashboard).
+  repeated string cors_origins = 14;
+  // Marks configs with well-known development tokens. The hub refuses to
+  // listen on a non-loopback address in dev mode unless
+  // TALOS_ALLOW_DEV_ON_NETWORK=1 (set by the local Compose file only).
+  bool dev_mode = 15;
+}

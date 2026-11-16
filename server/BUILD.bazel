@@ -1,0 +1,55 @@
+load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library", "cc_test")
+load("//bazel:copts.bzl", "TALOS_PROTO_COPTS")
+
+cc_library(
+    name = "server",
+    srcs = [
+        "auth.cc",
+        "config.cc",
+        "sha256.cc",
+        "http_server.cc",
+        "hub_service.cc",
+    ],
+    hdrs = [
+        "auth.h",
+        "config.h",
+        "http_server.h",
+        "hub_service.h",
+        "sha256.h",
+        "system_clock.h",
+    ],
+    copts = TALOS_PROTO_COPTS,
+    visibility = ["//visibility:public"],
+    deps = [
+        "//codec",
+        "//codec:yaml_loader",
+        "//contracts/proto/talos/api/v1:api_cc_proto",
+        "//contracts/proto/talos/server/v1:server_cc_proto",
+        "//core/engine",
+        "//server/persistence",
+        "@cpp-httplib",
+        "@protobuf//:json_util",
+    ],
+)
+
+cc_binary(
+    name = "talos_hub",
+    srcs = ["main.cc"],
+    copts = TALOS_PROTO_COPTS,
+    deps = [":server"],
+)
+
+cc_test(
+    name = "server_test",
+    size = "medium",
+    srcs = ["server_test.cc"],
+    copts = TALOS_PROTO_COPTS,
+    data = ["//contracts/manifests"],
+    deps = [
+        ":server",
+        "//codec:yaml_loader",
+        "@cpp-httplib",
+        "@googletest//:gtest_main",
+        "@protobuf//:json_util",
+    ],
+)
