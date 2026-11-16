@@ -5,11 +5,11 @@ From spec §45. Each invariant is mapped to the test that enforces it today, or 
 | # | Invariant | Enforced by |
 |---|---|---|
 | 1 | High-risk physical operations go through authenticated, authorized, time-bounded local policy | `//core/policy:policy_test` (deny by default, risk ceilings, human-only security-critical, freshness); `//core/execution:ledger_test` (TTL) |
-| 2 | Cloud outage cannot disable local sensing and alarms | Architectural: core has no network dependency. Scenario test in Phase 2/3 |
+| 2 | Cloud outage cannot disable local sensing and alarms | Architectural: core and the twin have no network dependency; every scenario runs fully offline |
 | 3 | Missing or stale telemetry never reports a sensor healthy or clear | `StateTest.FreshnessNeverReportsUnknownAsFresh`; `Policy.SecurityCriticalRequiresFreshTargetState` |
-| 4 | Replayed events and duplicate commands cannot cause repeated physical effects | `IngestTest.DuplicateDeliveryHasNoEffect`, `IngestTest.RefusesSequencesOlderThanWindow`, `Ledger.SameIdempotencyKeyYieldsOneCommand`, `Rules.ReEvaluatingSameEventYieldsSameIntentKey`, `Phase1Slice.DuplicateMotionDeliveryCausesOnePhysicalEffect` |
+| 4 | Replayed events and duplicate commands cannot cause repeated physical effects | `IngestTest.DuplicateDeliveryHasNoEffect`, `IngestTest.RefusesSequencesOlderThanWindow`, `Ledger.SameIdempotencyKeyYieldsOneCommand`, `Rules.ReEvaluatingSameEventYieldsSameIntentKey`, `EngineTest.DuplicateMotionDeliveryCausesOneDispatch`, scenario `duplicate_delivery` |
 | 5 | Security-critical remote actions expire and need fresh state and authorization | `Ledger.ExpiredCommandIsNeverDispatched`, `Policy.ExpiredRequestDenied`, `Policy.SecurityCriticalRequiresFreshTargetState` |
-| 6 | A failed device cannot be misreported as having acted successfully | `Ledger.AckWithoutObservationIsCompletedUnverifiedNeverSuccess`, `Ledger.NoEvidenceInWindowIsUnknownNotSuccess`, `Phase1Slice.SpeakerSilenceEndsUnknownNotSuccess`; web `outcomeOf` test |
+| 6 | A failed device cannot be misreported as having acted successfully | `Ledger.AckWithoutObservationIsCompletedUnverifiedNeverSuccess`, `Ledger.NoEvidenceInWindowIsUnknownNotSuccess`, `EngineTest.SpeakerSilenceEndsUnknownNotSuccess`; scenarios `speaker_offline`, `speaker_silent_ack`, `lock_jammed` plus the twin's always-on "verified implies physical effect" invariant; web `outcomeOf` test |
 | 7 | Only verified, signed, compatible OTA images are accepted | Phase 5/6 (OTA model) |
 | 8 | Untrusted firmware or module profiles cannot change wiring or current limits by remote manifest | Board manifests are build artifacts; nothing in core mutates them. Enforcement tests in Phase 5 |
 | 9 | No private credentials or signing keys in the repo, factory logs or client bundle | Process + secret scanning in CI (to add with release workflow) |

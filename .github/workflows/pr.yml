@@ -40,6 +40,13 @@ jobs:
           # Linux keeps the alignment check that .bazelrc disables for macOS.
           if [ "${{ matrix.config }}" = "ubsan" ]; then extra="$extra --copt=-fsanitize=alignment"; fi
           bazel test --config=ci $extra //...
+      - name: Upload scenario traces
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-outputs-${{ matrix.config }}
+          path: bazel-testlogs/**/test.outputs/
+          if-no-files-found: ignore
 
   format:
     name: clang-format

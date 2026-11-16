@@ -12,5 +12,6 @@ Short records of why each choice was made. A decision is changed by adding a new
 | [0006](0006-license.md) | Apache-2.0 for software | Accepted |
 | [0007](0007-rules-v0.md) | Rule engine v0 semantics | Accepted |
 | [0008](0008-journal-ordering-and-time.md) | Journal ordering, deduplication and time | Accepted |
+| [0009](0009-digital-twin-l1.md) | L1 digital twin and scenario runner | Accepted |
 
 Open questions live in [open-decisions.md](open-decisions.md).

@@ -4,9 +4,9 @@ requirements:
   - id: REQ-001
     statement: Local intrusion processing does not require cloud connectivity
     subsystem: core
-    test: //core:phase1_slice_test
+    test: //core/engine:engine_test, //simulation/runner:scenario_test
     severity: critical
-    status: implemented
+    status: verified_sim
   - id: REQ-002
     statement: Four sensor module ports are validated against wake, bus, rail and active power-source budgets
     subsystem: core.manifest
@@ -16,7 +16,7 @@ requirements:
   - id: REQ-003
     statement: No duplicate physical action from one retried command or redelivered event
     subsystem: core.execution
-    test: //core/execution:ledger_test, //core:phase1_slice_test
+    test: //core/execution:ledger_test, //simulation/runner:scenario_test (duplicate_delivery, hub_restart_mid_intrusion)
     severity: high
     status: implemented
   - id: REQ-004
@@ -49,3 +49,21 @@ requirements:
     test: //core/execution:ledger_test, web/src/contracts.test.ts
     severity: critical
     status: implemented
+  - id: REQ-009
+    statement: Scenarios are deterministic across runs and platforms (same seed, identical journal)
+    subsystem: simulation
+    test: //simulation/runner:scenario_test, //simulation/base:base_test
+    severity: high
+    status: implemented
+  - id: REQ-010
+    statement: A command is never reported verified unless the action physically happened (twin ground truth)
+    subsystem: core.execution, simulation
+    test: //simulation/runner:scenario_test (always-on invariant; speaker_silent_ack, lock_jammed, lock_with_door_open)
+    severity: critical
+    status: verified_sim
+  - id: REQ-011
+    statement: Security-critical commands are denied when target state is stale; agents cannot unlock or disarm
+    subsystem: core.policy, core.engine
+    test: //simulation/runner:scenario_test (stale_lock_state_blocks_command, agent_cannot_unlock_or_disarm)
+    severity: critical
+    status: verified_sim

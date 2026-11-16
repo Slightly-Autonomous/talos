@@ -32,6 +32,10 @@ The hub owns events, state, rules, commands and audit. Everything else is either
 | `core/policy` | grants, risk classes, `evaluate` | execution |
 | `core/rules` | rules → intents → commands | domain, events, execution |
 | `core/manifest` | board/module manifests, slot/power validator | domain |
+| `core/engine` | `HubEngine`: the production hub loop | all of core |
+| `simulation/base` | portable PRNG, geometry | — |
+| `simulation/twin` | world, virtual sensors/actuators, virtual transport | core types, sim protos |
+| `simulation/runner` | scenario runner, oracle, `talos_sim` CLI, corpus test | engine, twin, codec |
 | `codec` | proto ↔ core mapping, YAML loader | core, generated protos |
 | `contracts/proto` | `talos.v1` schemas | — |
 | `web` | React client | generated TS only |
@@ -44,6 +48,7 @@ The hub owns events, state, rules, commands and audit. Everything else is either
 - **Observability:** diagnostics are kept apart from the journal and dropped first. Lands in Phase 6.
 
 ## What is real vs provisional
-- **Real and tested:** everything under `core/`, `codec/` and `contracts/`, plus the web shell.
+- **Real and tested:** everything under `core/`, `codec/`, `contracts/` and `simulation/`, plus the web shell. The scenario corpus (`simulation/scenarios`) drives the real engine through the L1 twin.
 - **Provisional data:** every number in `contracts/manifests/`.
-- **Not started:** twin, server, UI, firmware, networking, OTA, cloud, hardware.
+- **Provisional behavior:** sensor and timing parameters in twin sites (ADR 0009).
+- **Not started:** server, UI, firmware, networking, OTA, cloud, hardware.

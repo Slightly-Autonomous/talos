@@ -7,7 +7,7 @@ An open-source, **local-first spatial security and automation platform** for hou
 - A deterministic digital twin that runs the real production logic in CI.
 - A website (PWA first). Optional cloud and observability are never in the alarm path.
 
-> **Status: Phase 1 (contracts + pure domain core).** No hardware, server, twin or UI yet. See [roadmap](#roadmap). Everything is experimental and is not a certified alarm or life-safety system.
+> **Status: Phase 2 (deterministic digital twin).** Contracts, domain core and an L1 twin running 29 scenarios through the real hub engine. No hardware, server or UI yet. See [roadmap](#roadmap). Everything is experimental and is not a certified alarm or life-safety system.
 
 ## Quick start
 
@@ -29,6 +29,10 @@ pnpm install && pnpm web:check      # proto codegen + web lint/typecheck/test/bu
 pnpm proto:lint                     # buf lint on contracts/proto
 ```
 
+```bash
+bazel run //simulation/runner:talos_sim -- $PWD/simulation/scenarios/scenarios/backyard_intrusion_at_2am.yaml --root $PWD/simulation/scenarios
+```
+
 ## Repository map
 | Path | What |
 |---|---|
@@ -36,15 +40,16 @@ pnpm proto:lint                     # buf lint on contracts/proto
 | `contracts/manifests` | Sample board/module/property YAML. **All numbers provisional** |
 | `core/` | Pure C++20 domain core: journal, ingest/dedup, state/replay, commands, policy, rules, manifest validator |
 | `codec/` | Proto ↔ core mapping and the YAML loader |
+| `simulation/` | Digital twin: world, virtual devices/transport, scenario runner, scenario corpus |
 | `web/` | React + TypeScript client (shell only for now) |
 | `docs/` | Architecture, ADRs, open decisions, security invariants, requirements, original spec |
-| `simulation/ server/ firmware/ hardware/ …` | Placeholders for later phases |
+| `server/ firmware/ hardware/ …` | Placeholders for later phases |
 
 Start with [`docs/architecture/overview.md`](docs/architecture/overview.md) and [`docs/decisions/`](docs/decisions/README.md).
 
 ## Roadmap
-0–1. Repo, contracts, deterministic core ← *here*
-2. Deterministic L1 digital twin and scenario runner
+0–1. Repo, contracts, deterministic core
+2. Deterministic L1 digital twin and scenario runner ← *here*
 3. Local hub: SQLite journal, API, auth
 4. Website: property editor, live state, replay
 5. Portable firmware on virtual hardware, then ESP-IDF
