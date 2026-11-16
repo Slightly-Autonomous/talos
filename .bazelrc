@@ -1,0 +1,17 @@
+# Language level for all host C++ (ours and third-party).
+common --enable_bzlmod
+build --cxxopt=-std=c++20 --host_cxxopt=-std=c++20
+build --incompatible_strict_action_env
+test --test_output=errors
+
+# Sanitizers: bazel test --config=asan //...
+build:asan --strip=never --copt=-fsanitize=address --copt=-fno-omit-frame-pointer --copt=-O1 --linkopt=-fsanitize=address
+build:ubsan --strip=never --copt=-fsanitize=undefined --copt=-fno-sanitize-recover=all --linkopt=-fsanitize=undefined
+# protobuf's thread-local arena cache trips -fsanitize=alignment on macOS (Darwin TLS
+# does not honor its 32-byte alignment). Off here; CI re-enables it on Linux.
+build:ubsan --copt=-fno-sanitize=alignment
+
+# CI uses a disk cache directory restored by actions/cache.
+build:ci --disk_cache=~/.cache/bazel-disk --color=yes --curses=no
+
+try-import %workspace%/.bazelrc.user

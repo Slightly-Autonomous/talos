@@ -1,0 +1,77 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  cpp:
+    name: C++ (${{ matrix.config }})
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        config: [default, asan, ubsan]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/bazel-disk
+          key: bazel-${{ matrix.config }}-${{ hashFiles('MODULE.bazel', 'MODULE.bazel.lock', '.bazelversion') }}-${{ github.sha }}
+          restore-keys: |
+            bazel-${{ matrix.config }}-${{ hashFiles('MODULE.bazel', 'MODULE.bazel.lock', '.bazelversion') }}-
+            bazel-${{ matrix.config }}-
+      - name: Test
+        run: |
+          extra=""
+          if [ "${{ matrix.config }}" != "default" ]; then extra="--config=${{ matrix.config }}"; fi
+          # Linux keeps the alignment check that .bazelrc disables for macOS.
+          if [ "${{ matrix.config }}" = "ubsan" ]; then extra="$extra --copt=-fsanitize=alignment"; fi
+          bazel test --config=ci $extra //...
+
+  format:
+    name: clang-format
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: pip install clang-format==21.1.8
+      - run: git ls-files '*.cc' '*.h' | xargs clang-format --dry-run --Werror
+
+  proto:
+    name: Protobuf (buf)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm proto:lint
+      - name: Breaking-change check
+        if: github.event_name == 'pull_request'
+        run: pnpm exec buf breaking --against ".git#branch=origin/${{ github.base_ref }}"
+
+  web:
+    name: Web
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm web:check
