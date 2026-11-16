@@ -42,7 +42,8 @@ The hub owns events, state, rules, commands and audit. Everything else is either
 | `connectors/supabase_sync` | read-only Supabase copy worker | contracts (HTTP only) |
 | `codec` | proto ↔ core mapping, YAML loader | core, generated protos |
 | `contracts/proto` | `talos.v1` schemas | — |
-| `web` | React client | generated TS only |
+| `web` | React website: live, replay, engineering, simulation | `packages/contracts` (HTTP only) |
+| `tools/devsim` | virtual devices over the device API (dev/E2E) | HTTP only |
 
 **Hard rule:** `core` never depends on protobuf, SQL, HTTP, simulation, drivers or UI. `simulation` (Phase 2) depends on `core`, never the reverse.
 
@@ -52,8 +53,8 @@ The hub owns events, state, rules, commands and audit. Everything else is either
 - **Observability:** diagnostics are kept apart from the journal and dropped first. Lands in Phase 6.
 
 ## What is real vs provisional
-- **Real and tested:** everything under `core/`, `codec/`, `contracts/`, `simulation/`, `server/`, `packages/` and `connectors/`, plus the web shell. The scenario corpus (`simulation/scenarios`) drives the real engine through the L1 twin.
+- **Real and tested:** everything under `core/`, `codec/`, `contracts/`, `simulation/`, `server/`, `packages/`, `connectors/`, `tools/` and `web/` (browser E2E against the real hub). The scenario corpus (`simulation/scenarios`) drives the real engine through the L1 twin.
 - **Provisional data:** every number in `contracts/manifests/`.
 - **Provisional behavior:** sensor and timing parameters in twin sites (ADR 0009).
 - **Reserved switches:** Postgres storage, Supabase auth, relay role (ADR 0010).
-- **Not started:** UI, firmware, networking, OTA, hardware.
+- **Not started:** property/rule editors (4b), firmware, networking, OTA, hardware.

@@ -14,5 +14,6 @@ Short records of why each choice was made. A decision is changed by adding a new
 | [0008](0008-journal-ordering-and-time.md) | Journal ordering, deduplication and time | Accepted |
 | [0009](0009-digital-twin-l1.md) | L1 digital twin and scenario runner | Accepted |
 | [0010](0010-hub-server-and-deployment.md) | Hub server, storage, API and deployment switches | Accepted |
+| [0011](0011-website-v1.md) | Website v1: live, replay, engineering, simulation | Accepted |
 
 Open questions live in [open-decisions.md](open-decisions.md).

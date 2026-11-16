@@ -1,27 +1,64 @@
-# Sample property for tests and the upcoming twin (spec §52).
+# Sample property for tests, the dev hub and the website (spec §52).
+# Geometry in meters; +y points toward the backyard. Coverage is nominal.
 id: house-01
 timezone: America/Los_Angeles
 zones:
-  - {id: backyard, name: Backyard, kind: ZONE_KIND_OUTDOOR}
-  - {id: patio, name: Patio, kind: ZONE_KIND_OUTDOOR}
-  - {id: hallway, name: Hallway, kind: ZONE_KIND_INDOOR}
+  - id: front_yard
+    name: Front yard
+    kind: ZONE_KIND_OUTDOOR
+    polygon: [{x: 0, y: -6}, {x: 12, y: -6}, {x: 12, y: 0}, {x: 0, y: 0}]
+  - id: hallway
+    name: Hallway
+    kind: ZONE_KIND_INDOOR
+    polygon: [{x: 0, y: 0}, {x: 4, y: 0}, {x: 4, y: 10}, {x: 0, y: 10}]
+  - id: living
+    name: Living room
+    kind: ZONE_KIND_INDOOR
+    polygon: [{x: 4, y: 0}, {x: 12, y: 0}, {x: 12, y: 10}, {x: 4, y: 10}]
+  - id: patio
+    name: Patio
+    kind: ZONE_KIND_OUTDOOR
+    polygon: [{x: 0, y: 10}, {x: 12, y: 10}, {x: 12, y: 13}, {x: 0, y: 13}]
+  - id: backyard
+    name: Backyard
+    kind: ZONE_KIND_OUTDOOR
+    polygon: [{x: 0, y: 13}, {x: 12, y: 13}, {x: 12, y: 25}, {x: 0, y: 25}]
+walls:
+  - {a: {x: 0, y: 0}, b: {x: 1.5, y: 0}}
+  - {a: {x: 3, y: 0}, b: {x: 12, y: 0}}
+  - {a: {x: 0, y: 10}, b: {x: 5, y: 10}}
+  - {a: {x: 7, y: 10}, b: {x: 12, y: 10}}
+  - {a: {x: 0, y: 0}, b: {x: 0, y: 10}}
+  - {a: {x: 12, y: 0}, b: {x: 12, y: 10}}
+  - {a: {x: 4, y: 0}, b: {x: 4, y: 4}}
+  - {a: {x: 4, y: 6}, b: {x: 4, y: 10}}
 devices:
   - id: node-07
     property_id: house-01
     board_id: universal_controller_v1
     slot_modules: [pir_ekmb_v1, vibration_lis2dw12_v1, smart_camera_s3_v1, environment_sht40_v1]
     zone_id: backyard
+    position: {x: 6, y: 21.5}
+    coverage:
+      - {slot: 0, capability_id: motion.detect, heading_deg: -90, half_angle_deg: 45, range_m: 12}
+      - {slot: 2, capability_id: camera.detection, heading_deg: -90, half_angle_deg: 40, range_m: 15}
   - id: node-12
     property_id: house-01
     board_id: universal_controller_v1
-    slot_modules: [pir_ekmb_v1]
+    slot_modules: [reed_contact_v1]
     zone_id: hallway
-  - {id: patio_speaker, property_id: house-01, zone_id: patio}
-  - {id: lock-3, property_id: house-01, zone_id: hallway}
+    position: {x: 2.2, y: 0.4}
+  - {id: patio_speaker, property_id: house-01, zone_id: patio, position: {x: 6, y: 10.6}}
+  - {id: lock-3, property_id: house-01, zone_id: hallway, position: {x: 2.6, y: 0.3}}
 assets:
   - id: front_door
     type: portal.door
     zone_id: hallway
+    segment: {a: {x: 1.5, y: 0}, b: {x: 3, y: 0}}
     attached:
       - {device_id: node-12, slot: 0, capability_id: contact.open_state}
       - {device_id: lock-3, capability_id: access.lock}
+  - id: back_door
+    type: portal.door
+    zone_id: living
+    segment: {a: {x: 5, y: 10}, b: {x: 7, y: 10}}

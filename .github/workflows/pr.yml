@@ -87,6 +87,41 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm ts:check
 
+  e2e:
+    name: Browser E2E
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/cache@v6
+        with:
+          path: ~/.cache/bazel-disk
+          key: bazel-e2e-${{ hashFiles('MODULE.bazel', 'MODULE.bazel.lock', '.bazelversion') }}-${{ github.sha }}
+          restore-keys: |
+            bazel-e2e-${{ hashFiles('MODULE.bazel', 'MODULE.bazel.lock', '.bazelversion') }}-
+            bazel-e2e-
+      - name: Build hub
+        run: bazel build --config=ci //server:talos_hub
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm proto:gen
+      - run: pnpm -C web exec playwright install --with-deps chromium
+      - run: pnpm -C web e2e
+        env:
+          CI: "1"
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-report
+          path: |
+            web/playwright-report/
+            web/test-results/
+          if-no-files-found: ignore
+
   deploy:
     name: Deploy artifacts
     runs-on: ubuntu-24.04

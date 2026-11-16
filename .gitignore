@@ -23,3 +23,7 @@ compile_commands.json
 *.db-shm
 .env
 web/src/gen/
+
+# Playwright
+web/test-results/
+web/playwright-report/

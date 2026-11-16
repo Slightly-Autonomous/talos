@@ -85,3 +85,15 @@ requirements:
     test: connectors/supabase_sync/src/sync.test.ts
     severity: high
     status: implemented
+  - id: REQ-015
+    statement: From the browser, a user sees simulated backyard motion trigger a verified speaker warning and can replay the full history
+    subsystem: web, tools.devsim
+    test: web/e2e/intrusion.spec.ts
+    severity: high
+    status: implemented
+  - id: REQ-016
+    statement: The UI never shows missing/stale data as clear or an unverified command as successful
+    subsystem: web
+    test: web/src/model/view.test.ts, web/e2e/intrusion.spec.ts (silent-ACK speaker)
+    severity: critical
+    status: implemented

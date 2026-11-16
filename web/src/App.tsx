@@ -1,14 +1,59 @@
-// Phase 0 shell. The real UI (property editor, live state, replay) arrives in
-// Phase 4 and talks only to the hub API.
+import { useState } from "react";
+import type { HubClient } from "@talos/contracts/client";
+import { HubProvider, useHub } from "./hub/HubProvider";
+import { Connect } from "./pages/Connect";
+import { Engineering } from "./pages/Engineering";
+import { Live } from "./pages/Live";
+import { Replay } from "./pages/Replay";
+import { Simulation } from "./pages/Simulation";
+
+const TABS = ["Live", "Replay", "Engineering", "Simulation"] as const;
+type Tab = (typeof TABS)[number];
+
 export function App() {
+  const [conn, setConn] = useState<{ client: HubClient; url: string }>();
+  if (!conn) return <Connect onConnected={(client, url) => setConn({ client, url })} />;
   return (
-    <main style={{ fontFamily: "system-ui, sans-serif", maxWidth: 720, margin: "3rem auto" }}>
-      <h1>Talos</h1>
-      <p>Local-first spatial security and automation platform.</p>
-      <p>
-        No hub is connected yet. This web app is a client of the property hub and never the
-        authority.
-      </p>
-    </main>
+    <HubProvider client={conn.client}>
+      <Shell url={conn.url} onDisconnect={() => setConn(undefined)} />
+    </HubProvider>
+  );
+}
+
+function Shell({ url, onDisconnect }: { url: string; onDisconnect: () => void }) {
+  const [tab, setTab] = useState<Tab>("Live");
+  const { status, error } = useHub();
+  return (
+    <div className="app">
+      <header className="topbar">
+        <strong>Talos</strong>
+        <nav role="tablist">
+          {TABS.map((t) => (
+            <button
+              key={t}
+              role="tab"
+              aria-selected={tab === t}
+              className={tab === t ? "tab active" : "tab"}
+              onClick={() => setTab(t)}
+            >
+              {t}
+            </button>
+          ))}
+        </nav>
+        <span className={`conn conn-${status}`} title={error} data-testid="connection">
+          {status === "live" ? "Live" : status === "connecting" ? "Connecting…" : "Reconnecting…"} ·{" "}
+          {url}
+        </span>
+        <button className="link" onClick={onDisconnect}>
+          Disconnect
+        </button>
+      </header>
+      <main>
+        {tab === "Live" && <Live />}
+        {tab === "Replay" && <Replay />}
+        {tab === "Engineering" && <Engineering />}
+        {tab === "Simulation" && <Simulation />}
+      </main>
+    </div>
   );
 }

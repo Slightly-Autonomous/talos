@@ -10,10 +10,33 @@ enum ZoneKind {
   ZONE_KIND_OUTDOOR = 2;
 }
 
+// Property coordinates in meters on a single 2D level (multi-level later).
+// Geometry is display and spatial-reasoning metadata: core decisions do not
+// depend on it, and nominal coverage is not a calibrated sensing guarantee.
+message Point {
+  double x = 1;
+  double y = 2;
+}
+
+message Segment {
+  Point a = 1;
+  Point b = 2;
+}
+
 message Zone {
   string id = 1;
   string name = 2;
   ZoneKind kind = 3;
+  repeated Point polygon = 4;
+}
+
+// Nominal field of view of one capability (PIR wedge, camera FOV).
+message Coverage {
+  optional uint32 slot = 1;
+  string capability_id = 2;
+  double heading_deg = 3;
+  double half_angle_deg = 4;
+  double range_m = 5;
 }
 
 // A physical thing (door, window, gate), distinct from the devices that
@@ -23,6 +46,8 @@ message Asset {
   string type = 2;
   optional string zone_id = 3;
   repeated CapabilityRef attached = 4;
+  // Door/window/gate opening line.
+  optional Segment segment = 5;
 }
 
 message Device {
@@ -32,6 +57,8 @@ message Device {
   // Module type per slot; empty string means the slot is empty.
   repeated string slot_modules = 4;
   optional string zone_id = 5;
+  optional Point position = 6;
+  repeated Coverage coverage = 7;
 }
 
 message Property {
@@ -41,4 +68,5 @@ message Property {
   repeated Zone zones = 3;
   repeated Asset assets = 4;
   repeated Device devices = 5;
+  repeated Segment walls = 6;
 }

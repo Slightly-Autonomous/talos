@@ -2,6 +2,7 @@ packages:
   - web
   - packages/*
   - connectors/*
+  - tools/*
 onlyBuiltDependencies:
   - "@bufbuild/buf"
   - esbuild

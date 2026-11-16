@@ -16,7 +16,7 @@ property_file: ../../contracts/manifests/properties/sample_backyard.yaml
 freshness_max_age_ms: 900000
 utc_offset_minutes: -480
 tick_interval_ms: 250
-cors_origins: ["http://localhost:5173"]
+cors_origins: ["http://localhost:5173", "http://localhost:4173"]
 principals:
   - {id: owner, kind: PRINCIPAL_KIND_HUMAN, max_risk: RISK_CLASS_SECURITY_CRITICAL, token_sha256: 8ac4afa44f3f01da2d47daaee53270af09cdf9b0482481377b750332904ddd94}
   - {id: sync-worker, kind: PRINCIPAL_KIND_SYSTEM, max_risk: RISK_CLASS_INFORMATIONAL, token_sha256: a5272572495630914856ca946d2c9868fb9cfce8fc1a674e411989cdd4c5a1bc}
@@ -34,7 +34,8 @@ rules:
     trigger_event_type: motion.detected
     trigger_zone_id: backyard
     armed_modes: [ARM_MODE_ARMED_AWAY]
-    schedule: {start_minute: 1320, end_minute: 360}
+    # No schedule in dev so the demo and browser E2E work at any hour; the twin
+    # covers schedule behavior (backyard_motion_daytime scenario).
     actions:
       - operation: audio.speak
         target: {device_id: patio_speaker, capability_id: audio.speak}

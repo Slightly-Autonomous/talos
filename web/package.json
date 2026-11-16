@@ -11,17 +11,20 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint . && prettier --check .",
     "format": "prettier --write .",
-    "test": "vitest run"
+    "test": "vitest run",
+    "e2e": "playwright test"
   },
   "dependencies": {
     "@bufbuild/protobuf": "^2.9.0",
+    "@talos/contracts": "workspace:*",
     "react": "^19.1.0",
-    "react-dom": "^19.1.0",
-    "@talos/contracts": "workspace:*"
+    "react-dom": "^19.1.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.35.0",
+    "@playwright/test": "^1.65.1",
     "@testing-library/react": "^16.3.0",
+    "@types/node": "^22.20.5",
     "@types/react": "^19.1.0",
     "@types/react-dom": "^19.1.0",
     "@vitejs/plugin-react": "^5.0.0",
