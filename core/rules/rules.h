@@ -22,8 +22,6 @@
 
 namespace talos {
 
-enum class ArmMode : std::uint8_t { kDisarmed, kArmedHome, kArmedAway };
-
 // Local minutes of day, [start, end). Wraps past midnight when start > end.
 struct TimeWindow {
   std::uint16_t start_minute = 0;

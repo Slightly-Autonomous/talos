@@ -30,6 +30,17 @@ message AudioPlayback {
   bool playing = 1;
 }
 
+// Camera/vision detection metadata (never pixels).
+message ObjectDetected {
+  string label = 1;
+  uint32 confidence_permille = 2;
+}
+
+// Periodic device supervision report.
+message Heartbeat {
+  uint32 battery_mv = 1;
+}
+
 message ObservationPayload {
   oneof kind {
     ContactState contact = 1;
@@ -38,6 +49,8 @@ message ObservationPayload {
     TemperatureHumidity temperature_humidity = 4;
     LockState lock = 5;
     AudioPlayback audio_playback = 6;
+    ObjectDetected object_detected = 7;
+    Heartbeat heartbeat = 8;
   }
 }
 

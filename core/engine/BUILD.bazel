@@ -1,0 +1,34 @@
+load("@rules_cc//cc:defs.bzl", "cc_library", "cc_test")
+load("//bazel:copts.bzl", "TALOS_COPTS")
+
+cc_library(
+    name = "engine",
+    srcs = ["engine.cc"],
+    hdrs = ["engine.h"],
+    copts = TALOS_COPTS,
+    visibility = ["//visibility:public"],
+    deps = [
+        "//core/base",
+        "//core/domain",
+        "//core/execution",
+        "//core/ingest",
+        "//core/journal",
+        "//core/policy",
+        "//core/rules",
+        "//core/state",
+        "//core/time",
+    ],
+)
+
+# Phase 1 exit criteria, now against the production engine.
+cc_test(
+    name = "engine_test",
+    size = "small",
+    srcs = ["engine_test.cc"],
+    copts = TALOS_COPTS,
+    deps = [
+        ":engine",
+        "//core/testing:fixtures",
+        "@googletest//:gtest_main",
+    ],
+)

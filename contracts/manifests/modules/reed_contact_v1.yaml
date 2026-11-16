@@ -1,0 +1,9 @@
+# PROVISIONAL. Reed (or Hall) magnetic contact with wake interrupt (candidate).
+id: reed_contact_v1
+revision: a
+provisional: true
+needs_wake: true
+loads: [{rail: v3v3_aon, active_ma: 0}]
+average_mw: 0
+peak_mw: 1
+capabilities: [contact.open_state]

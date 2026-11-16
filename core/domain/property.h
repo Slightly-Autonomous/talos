@@ -6,6 +6,7 @@
 #pragma once
 
 #include <array>
+#include <cstdint>
 #include <optional>
 #include <string>
 #include <vector>
@@ -17,6 +18,8 @@
 namespace talos {
 
 enum class ZoneKind { kIndoor, kOutdoor };
+
+enum class ArmMode : std::uint8_t { kDisarmed, kArmedHome, kArmedAway };
 
 struct Zone {
   ZoneId id;

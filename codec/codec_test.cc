@@ -36,10 +36,14 @@ TEST(Codec, ObservationRoundTripsKnownFields) {
 }
 
 TEST(Codec, AllPayloadKindsRoundTrip) {
-  std::vector<ObservationPayload> payloads = {
-      ContactState{true},       MotionState{true},
-      ImpactDetected{-840, 12}, TemperatureHumidity{21500, 455},
-      LockState{true},          AudioPlayback{true}};
+  std::vector<ObservationPayload> payloads = {ContactState{true},
+                                              MotionState{true},
+                                              ImpactDetected{-840, 12},
+                                              TemperatureHumidity{21500, 455},
+                                              LockState{true},
+                                              AudioPlayback{true},
+                                              ObjectDetected{"person", 870},
+                                              Heartbeat{3700}};
   for (const auto& p : payloads) {
     auto e = testing::motion("node-07", 1, 1);
     e.payload = p;
@@ -71,6 +75,9 @@ TEST(Codec, JournalEntryRoundTrip) {
   t.to = CommandStatus::kVerified;
   JournalEntry cmd{5, Timestamp{100}, false, t};
   EXPECT_EQ(from_proto(to_proto(cmd)).value(), cmd);
+  JournalEntry arm{6, Timestamp{101}, false,
+                   ArmModeChanged{ArmMode::kArmedAway, PrincipalId("user-33")}};
+  EXPECT_EQ(from_proto(to_proto(arm)).value(), arm);
 }
 
 TEST(Codec, RejectsOutOfRangeAndInvalidEnums) {
@@ -88,6 +95,35 @@ TEST(Codec, RejectsOutOfRangeAndInvalidEnums) {
 
   talos::v1::JournalEntry empty;
   EXPECT_EQ(from_proto(empty).error().code, "invalid_journal_entry");
+}
+
+TEST(Codec, RuleFromProto) {
+  talos::v1::Rule p;
+  p.set_id("r1");
+  p.set_revision(2);
+  p.set_property_id("house-01");
+  p.set_principal_id("rule:r1");
+  p.set_enabled(true);
+  p.set_trigger_event_type("motion.detected");
+  p.set_trigger_zone_id("backyard");
+  p.add_armed_modes(talos::v1::ARM_MODE_ARMED_AWAY);
+  p.mutable_schedule()->set_start_minute(1320);
+  p.mutable_schedule()->set_end_minute(360);
+  auto* a = p.add_actions();
+  a->set_operation("audio.speak");
+  a->mutable_target()->set_device_id("patio_speaker");
+  a->mutable_target()->set_capability_id("audio.speak");
+  a->mutable_args()->mutable_audio_speak()->set_text("hi");
+  a->set_ttl_ms(4000);
+  auto r = from_proto(p);
+  ASSERT_TRUE(r.ok()) << r.error().message;
+  EXPECT_EQ(r.value().trigger.zone, ZoneId("backyard"));
+  EXPECT_EQ(r.value().conditions.armed_modes.at(0), ArmMode::kArmedAway);
+  EXPECT_EQ(r.value().actions.at(0).ttl, Millis{4000});
+  EXPECT_EQ(r.value().actions.at(0).verification, VerificationMode::kObservedState);
+
+  p.mutable_schedule()->set_start_minute(5000);
+  EXPECT_EQ(from_proto(p).error().code, "out_of_range");
 }
 
 TEST(Codec, CodecDoesNotJudgeOwnership) {

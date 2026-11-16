@@ -39,6 +39,7 @@ struct PropertyState {
   std::uint64_t through_seq = 0;
   std::map<CapabilityRef, CapabilityState> capabilities;
   CommandLedger commands;
+  ArmMode arm_mode = ArmMode::kDisarmed;
   bool operator==(const PropertyState&) const = default;
 };
 

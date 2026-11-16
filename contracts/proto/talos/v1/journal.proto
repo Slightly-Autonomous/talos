@@ -4,6 +4,7 @@ package talos.v1;
 
 import "talos/v1/command.proto";
 import "talos/v1/observation.proto";
+import "talos/v1/rule.proto";
 
 // Relation of an observation's source position to what the hub had seen.
 enum SourceOrder {
@@ -19,6 +20,11 @@ message ObservationRecorded {
   SourceOrder order = 2;
 }
 
+message ArmModeChanged {
+  ArmMode mode = 1;
+  string principal_id = 2;
+}
+
 // Journal entry (ADR 0008). journal_seq is the only cross-device ordering
 // authority. received_at is non-decreasing in journal order.
 message JournalEntry {
@@ -28,5 +34,6 @@ message JournalEntry {
   oneof event {
     ObservationRecorded observation = 4;
     CommandTransition command_transition = 5;
+    ArmModeChanged arm_mode_changed = 6;
   }
 }

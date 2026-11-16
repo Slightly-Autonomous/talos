@@ -17,6 +17,7 @@
 #include <vector>
 
 #include "core/base/result.h"
+#include "core/domain/property.h"
 #include "core/events/observation.h"
 #include "core/execution/command.h"
 #include "core/time/time.h"
@@ -38,7 +39,14 @@ struct ObservationRecorded {
   bool operator==(const ObservationRecorded&) const = default;
 };
 
-using DomainEvent = std::variant<ObservationRecorded, CommandTransition>;
+// Arming changes are journaled so replay reproduces rule behavior.
+struct ArmModeChanged {
+  ArmMode mode = ArmMode::kDisarmed;
+  PrincipalId principal;
+  bool operator==(const ArmModeChanged&) const = default;
+};
+
+using DomainEvent = std::variant<ObservationRecorded, CommandTransition, ArmModeChanged>;
 
 struct JournalEntry {
   std::uint64_t journal_seq = 0;  // 1-based, strictly increasing

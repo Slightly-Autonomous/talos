@@ -41,8 +41,21 @@ struct AudioPlayback {
   auto operator<=>(const AudioPlayback&) const = default;
 };
 
-using ObservationPayload = std::variant<std::monostate, ContactState, MotionState, ImpactDetected,
-                                        TemperatureHumidity, LockState, AudioPlayback>;
+// Camera/vision detection metadata (never pixels).
+struct ObjectDetected {
+  std::string label;  // e.g. "person"
+  std::uint16_t confidence_permille = 0;
+  auto operator<=>(const ObjectDetected&) const = default;
+};
+// Periodic device supervision report.
+struct Heartbeat {
+  std::uint32_t battery_mv = 0;
+  auto operator<=>(const Heartbeat&) const = default;
+};
+
+using ObservationPayload =
+    std::variant<std::monostate, ContactState, MotionState, ImpactDetected, TemperatureHumidity,
+                 LockState, AudioPlayback, ObjectDetected, Heartbeat>;
 
 // Per-device source position. `boot_epoch` is a persistent counter the device
 // increments on every boot; `sequence` restarts at each boot. Together they

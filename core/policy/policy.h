@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "core/domain/ids.h"
+#include "core/domain/property.h"
 #include "core/execution/command.h"
 #include "core/time/time.h"
 
@@ -43,5 +44,10 @@ inline constexpr RiskClass kMaxNonHumanRisk = RiskClass::kDisruptiveOutput;
 
 Authorization evaluate(const Principal& principal, const Command& command,
                        const PolicyContext& context);
+
+// Arming needs a grant of at least benign_output on the property. Disarming
+// is security-critical: human principals only, with a security_critical grant.
+Authorization authorize_arm_change(const Principal& principal, const PropertyId& property,
+                                   ArmMode target);
 
 }  // namespace talos

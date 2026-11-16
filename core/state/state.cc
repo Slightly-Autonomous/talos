@@ -20,6 +20,7 @@ struct Reducer {
   }
 
   void operator()(const CommandTransition& t) const { s.commands.apply(t); }
+  void operator()(const ArmModeChanged& m) const { s.arm_mode = m.mode; }
 };
 
 }  // namespace

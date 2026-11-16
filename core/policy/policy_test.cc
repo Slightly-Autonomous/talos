@@ -72,6 +72,18 @@ TEST(Policy, UnknownOperationFailsClosed) {
   EXPECT_FALSE(evaluate(p, cmd("robot.do_anything"), {kNow, true}).allowed);
 }
 
+TEST(Policy, ArmingAndDisarming) {
+  Principal agent{PrincipalId("agent-1"),
+                  PrincipalKind::kAgent,
+                  {{PropertyId("house-01"), RiskClass::kSecurityCritical}}};
+  EXPECT_TRUE(authorize_arm_change(agent, PropertyId("house-01"), ArmMode::kArmedAway).allowed);
+  EXPECT_EQ(authorize_arm_change(agent, PropertyId("house-01"), ArmMode::kDisarmed).reason,
+            "requires_human_authorization");
+  EXPECT_TRUE(authorize_arm_change(owner(), PropertyId("house-01"), ArmMode::kDisarmed).allowed);
+  EXPECT_EQ(authorize_arm_change(owner(), PropertyId("house-02"), ArmMode::kArmedAway).reason,
+            "no_grant_for_property");
+}
+
 TEST(Policy, ExpiredRequestDenied) {
   EXPECT_EQ(evaluate(owner(), cmd("notify"), {kNow + Millis{5'000}, true}).reason, "expired");
 }

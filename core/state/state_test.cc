@@ -129,6 +129,12 @@ TEST_F(StateTest, CommandTransitionsReplayIntoLedger) {
   EXPECT_EQ(replay({}, journal).commands.find(CommandId("cmd-1"))->status, CommandStatus::kDenied);
 }
 
+TEST_F(StateTest, ArmModeIsJournaledState) {
+  (void)journal.append(Timestamp{1}, ArmModeChanged{ArmMode::kArmedAway, PrincipalId("u")});
+  EXPECT_EQ(replay({}, journal).arm_mode, ArmMode::kArmedAway);
+  EXPECT_EQ(PropertyState{}.arm_mode, ArmMode::kDisarmed);
+}
+
 // Metamorphic: reordering deliveries across independent devices (each device's
 // own order preserved) yields the same final capability state.
 TEST(StateMetamorphic, IndependentDeviceInterleavingDoesNotChangeFinalState) {

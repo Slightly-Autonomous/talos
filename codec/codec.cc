@@ -54,6 +54,13 @@ ObservationPayload payload_from(const v1::ObservationPayload& p) {
       return LockState{p.lock().locked()};
     case v1::ObservationPayload::kAudioPlayback:
       return AudioPlayback{p.audio_playback().playing()};
+    case v1::ObservationPayload::kObjectDetected: {
+      const auto conf = p.object_detected().confidence_permille();
+      return ObjectDetected{p.object_detected().label(),
+                            static_cast<std::uint16_t>(conf > 1000 ? 1000 : conf)};
+    }
+    case v1::ObservationPayload::kHeartbeat:
+      return Heartbeat{p.heartbeat().battery_mv()};
     case v1::ObservationPayload::KIND_NOT_SET:
       break;
   }
@@ -77,6 +84,11 @@ struct PayloadTo {
   void operator()(const AudioPlayback& v) const {
     p.mutable_audio_playback()->set_playing(v.playing);
   }
+  void operator()(const ObjectDetected& v) const {
+    p.mutable_object_detected()->set_label(v.label);
+    p.mutable_object_detected()->set_confidence_permille(v.confidence_permille);
+  }
+  void operator()(const Heartbeat& v) const { p.mutable_heartbeat()->set_battery_mv(v.battery_mv); }
 };
 
 v1::ObservationPayload payload_to(const ObservationPayload& v) {
@@ -206,6 +218,32 @@ v1::SourceOrder order_to(SourceOrder o) {
       return v1::SOURCE_ORDER_NEW_BOOT;
   }
   return v1::SOURCE_ORDER_UNSPECIFIED;
+}
+
+Result<ArmMode> arm_from(v1::ArmMode m) {
+  switch (m) {
+    case v1::ARM_MODE_DISARMED:
+      return ArmMode::kDisarmed;
+    case v1::ARM_MODE_ARMED_HOME:
+      return ArmMode::kArmedHome;
+    case v1::ARM_MODE_ARMED_AWAY:
+      return ArmMode::kArmedAway;
+    default:
+      break;
+  }
+  return Error{"invalid_enum", "arm mode"};
+}
+
+v1::ArmMode arm_to(ArmMode m) {
+  switch (m) {
+    case ArmMode::kDisarmed:
+      return v1::ARM_MODE_DISARMED;
+    case ArmMode::kArmedHome:
+      return v1::ARM_MODE_ARMED_HOME;
+    case ArmMode::kArmedAway:
+      return v1::ARM_MODE_ARMED_AWAY;
+  }
+  return v1::ARM_MODE_UNSPECIFIED;
 }
 
 Result<PowerSource> source_from(v1::PowerSource s) {
@@ -371,6 +409,12 @@ Result<JournalEntry> from_proto(const v1::JournalEntry& p) {
       e.event = t.value();
       break;
     }
+    case v1::JournalEntry::kArmModeChanged: {
+      auto mode = arm_from(p.arm_mode_changed().mode());
+      if (!mode) return mode.error();
+      e.event = ArmModeChanged{mode.value(), PrincipalId(p.arm_mode_changed().principal_id())};
+      break;
+    }
     case v1::JournalEntry::EVENT_NOT_SET:
       return Error{"invalid_journal_entry", "no event"};
   }
@@ -385,8 +429,12 @@ v1::JournalEntry to_proto(const JournalEntry& e) {
   if (const auto* obs = std::get_if<ObservationRecorded>(&e.event)) {
     *p.mutable_observation()->mutable_envelope() = to_proto(obs->envelope);
     p.mutable_observation()->set_order(order_to(obs->order));
+  } else if (const auto* t = std::get_if<CommandTransition>(&e.event)) {
+    *p.mutable_command_transition() = to_proto(*t);
   } else {
-    *p.mutable_command_transition() = to_proto(std::get<CommandTransition>(e.event));
+    const auto& m = std::get<ArmModeChanged>(e.event);
+    p.mutable_arm_mode_changed()->set_mode(arm_to(m.mode));
+    p.mutable_arm_mode_changed()->set_principal_id(m.principal.str());
   }
   return p;
 }
@@ -482,6 +530,67 @@ Result<ModuleManifest> from_proto(const v1::ModuleManifest& p) {
   m.peak_mw = p.peak_mw();
   for (const auto& c : p.capabilities()) m.capabilities.emplace_back(c);
   return m;
+}
+
+// ---- Public helpers -------------------------------------------------------------------
+
+Result<CapabilityRef> from_proto(const v1::CapabilityRef& p) { return ref_from(p); }
+ObservationPayload from_proto(const v1::ObservationPayload& p) { return payload_from(p); }
+Result<CommandArgs> from_proto(const v1::CommandArgs& p) { return args_from(p); }
+Result<ArmMode> from_proto(v1::ArmMode m) { return arm_from(m); }
+
+Result<Rule> from_proto(const v1::Rule& p) {
+  Rule r;
+  r.id = RuleId(p.id());
+  r.revision = p.revision();
+  r.property = PropertyId(p.property_id());
+  r.principal = PrincipalId(p.principal_id());
+  r.enabled = p.enabled();
+  r.trigger.event_type = p.trigger_event_type();
+  if (p.has_trigger_zone_id()) r.trigger.zone = ZoneId(p.trigger_zone_id());
+  for (int m : p.armed_modes()) {
+    auto mode = arm_from(static_cast<v1::ArmMode>(m));
+    if (!mode) return mode.error();
+    r.conditions.armed_modes.push_back(mode.value());
+  }
+  if (p.has_schedule()) {
+    if (p.schedule().start_minute() >= 1440 || p.schedule().end_minute() >= 1440) {
+      return range_error("schedule minute");
+    }
+    r.conditions.schedule = TimeWindow{static_cast<std::uint16_t>(p.schedule().start_minute()),
+                                       static_cast<std::uint16_t>(p.schedule().end_minute())};
+  }
+  for (const auto& a : p.actions()) {
+    RuleAction action;
+    action.operation = a.operation();
+    auto target = ref_from(a.target());
+    if (!target) return target.error();
+    action.target = target.value();
+    auto args = args_from(a.args());
+    if (!args) return args.error();
+    action.args = args.value();
+    if (a.ttl_ms() > 0) action.ttl = Millis{a.ttl_ms()};
+    if (a.verification_window_ms() > 0)
+      action.verification_window = Millis{a.verification_window_ms()};
+    switch (a.verification()) {
+      case v1::VERIFICATION_MODE_ACK_ONLY:
+        action.verification = VerificationMode::kAckOnly;
+        break;
+      case v1::VERIFICATION_MODE_OBSERVED_STATE:
+      case v1::VERIFICATION_MODE_UNSPECIFIED:
+        action.verification = VerificationMode::kObservedState;
+        break;
+      default:
+        return Error{"invalid_enum", "verification mode"};
+    }
+    if (a.has_expect()) {
+      auto src = ref_from(a.expect().source());
+      if (!src) return src.error();
+      action.expect = ExpectedObservation{src.value(), payload_from(a.expect().payload())};
+    }
+    r.actions.push_back(std::move(action));
+  }
+  return r;
 }
 
 }  // namespace talos::codec
