@@ -15,7 +15,7 @@ Status at H3 (2026-11-16). Owner for every row is "EE reviewer" unless it says "
 | HD-007 | Charger and source priority | **Proposed:** TPS2121 + BQ25186 + TPS63900 (HW-0003) | EE review of PR1/CP2 divider and ILIM/SS values (marked TBD in schematic) | yes |
 | HD-008 | Low-sun reserve | Calculated in results/power-budget.md | Weather traces in the twin; field measurement | no |
 | HD-009 | Layer count/side | Not started | H4 | – |
-| HD-010..014 | Vision Node | Not started (HW-0004) | H5 benchmark | – |
+| HD-010..014 | Vision Node | Desk study done ([vision-compute-study.md](../architecture/vision-compute-study.md)): CM4 is the low-risk default; RV1106 class is the power option; CM5 has no hardware H.264 encode | Owner approval to buy dev kits; run VB-01..06 | – |
 | HD-015 | Manufacturer | Not started | H4 quotes (owner approval) | – |
 | HD-016 | Secure provisioning | eFuses untouched (HW-0005) | Owner signing/recovery design | no |
 | HD-017 | Certification | Not started | Before sale | no |
