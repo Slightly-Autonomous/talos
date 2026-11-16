@@ -132,8 +132,12 @@ TEST(CoapIngress, DebouncedDoorReachesTheJournalOnceAndHealthIsProjected) {
 
   auto health = f.hub->device_health();
   for (const auto& h : health.devices()) {
-    if (h.device_id() == "node-12") EXPECT_EQ(h.status(), talos::v1::HEALTH_STATUS_HEALTHY);
-    if (h.device_id() == "patio_speaker") EXPECT_EQ(h.status(), talos::v1::HEALTH_STATUS_OFFLINE);
+    if (h.device_id() == "node-12") {
+      EXPECT_EQ(h.status(), talos::v1::HEALTH_STATUS_HEALTHY);
+    }
+    if (h.device_id() == "patio_speaker") {
+      EXPECT_EQ(h.status(), talos::v1::HEALTH_STATUS_OFFLINE);
+    }
   }
   EXPECT_FALSE(f.hub->diagnostics(DeviceId("node-12")).diagnostics().empty());
   EXPECT_GT(f.hub->metrics().coap_frames_ok.load(), 0u);
