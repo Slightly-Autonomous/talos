@@ -2,14 +2,14 @@
 
 #include <sqlite3.h>
 
-#include "server/sha256.h"
+#include "common/sha256/sha256.h"
 
 namespace talos::server {
 
 namespace {
 
 std::string hex(std::string_view data) {
-  const auto d = sha256(data);
+  const auto d = talos::sha256(data);
   static constexpr char kHex[] = "0123456789abcdef";
   std::string out;
   for (unsigned char b : d) {

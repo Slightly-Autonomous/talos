@@ -1,0 +1,49 @@
+load("@rules_cc//cc:defs.bzl", "cc_library", "cc_test")
+load("//bazel:copts.bzl", "TALOS_COPTS")
+
+cc_library(
+    name = "sim",
+    srcs = ["virtual_board.cc"],
+    hdrs = ["virtual_board.h"],
+    copts = TALOS_COPTS,
+    visibility = ["//visibility:public"],
+    deps = ["//firmware/portable"],
+)
+
+cc_test(
+    name = "node_test",
+    size = "small",
+    srcs = ["node_test.cc"],
+    copts = TALOS_COPTS,
+    deps = [
+        ":sim",
+        "//common/sha256",
+        "@googletest//:gtest_main",
+    ],
+)
+
+cc_library(
+    name = "hub_bridge",
+    srcs = ["hub_bridge.cc"],
+    hdrs = ["hub_bridge.h"],
+    copts = TALOS_COPTS,
+    visibility = ["//visibility:public"],
+    deps = [
+        "//core/events",
+        "//firmware/portable",
+    ],
+)
+
+cc_test(
+    name = "node_hub_test",
+    size = "small",
+    srcs = ["node_hub_test.cc"],
+    copts = TALOS_COPTS,
+    deps = [
+        ":hub_bridge",
+        ":sim",
+        "//core/engine",
+        "//core/testing:fixtures",
+        "@googletest//:gtest_main",
+    ],
+)

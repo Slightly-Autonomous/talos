@@ -1,0 +1,12 @@
+load("@rules_cc//cc:defs.bzl", "cc_library")
+load("//bazel:copts.bzl", "TALOS_COPTS")
+
+# Portable (no heap in the hash core aside from the padded copy, no
+# exceptions): shared by the hub and the device firmware.
+cc_library(
+    name = "sha256",
+    srcs = ["sha256.cc"],
+    hdrs = ["sha256.h"],
+    copts = TALOS_COPTS,
+    visibility = ["//visibility:public"],
+)

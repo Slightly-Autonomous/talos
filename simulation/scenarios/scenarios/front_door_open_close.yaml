@@ -13,8 +13,10 @@ stimuli:
 expect:
   - name: opened once
     observation: {event_type: contact.opened, device_id: node_front, min_count: 1, max_count: 1}
-  - name: closed reported at boot and after closing
-    observation: {event_type: contact.closed, device_id: node_front, min_count: 2, max_count: 2}
+  - name: closed once (the boot report is contact.state, not a transition)
+    observation: {event_type: contact.closed, device_id: node_front, min_count: 1, max_count: 1}
+  - name: boot state reported
+    observation: {event_type: contact.state, device_id: node_front, min_count: 1, max_count: 1}
   - name: slam is not an impact
     observation: {event_type: impact.detected, device_id: node_front, min_count: 0, max_count: 0}
   - name: belief is closed

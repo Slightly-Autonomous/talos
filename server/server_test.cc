@@ -8,13 +8,13 @@
 #include <thread>
 
 #include "codec/yaml_loader.h"
+#include "common/sha256/sha256.h"
 #include "server/auth.h"
 #include "server/config.h"
 #include "server/http_server.h"
 #include "server/hub_service.h"
 #include "server/persistence/config_store.h"
 #include "server/persistence/sqlite_journal.h"
-#include "server/sha256.h"
 
 namespace talos::server {
 namespace {

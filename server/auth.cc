@@ -1,11 +1,11 @@
 #include "server/auth.h"
 
-#include "server/sha256.h"
+#include "common/sha256/sha256.h"
 
 namespace talos::server {
 
 std::string sha256_hex(std::string_view data) {
-  const auto digest = sha256(data);
+  const auto digest = talos::sha256(data);
   static constexpr char kHex[] = "0123456789abcdef";
   std::string out;
   out.reserve(64);

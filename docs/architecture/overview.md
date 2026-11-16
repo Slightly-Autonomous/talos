@@ -44,6 +44,10 @@ The hub owns events, state, rules, commands and audit. Everything else is either
 | `contracts/proto` | `talos.v1` schemas | — |
 | `web` | React website: live, replay, engineering, simulation | `packages/contracts` (HTTP only) |
 | `tools/devsim` | virtual devices over the device API (dev/E2E) | HTTP only |
+| `common/sha256` | streaming SHA-256 (hub tokens, firmware OTA) | — |
+| `firmware/portable` | NodeRuntime, drivers, OTA, bounded queue (host + ESP32-H2) | common |
+| `firmware/sim` | virtual board + hub bridge (L2 twin) | portable, core (bridge/tests) |
+| `firmware/esp_idf` | ESP32-H2 project, HAL adapters (skeleton) | portable, ESP-IDF |
 
 **Hard rule:** `core` never depends on protobuf, SQL, HTTP, simulation, drivers or UI. `simulation` (Phase 2) depends on `core`, never the reverse.
 
@@ -53,8 +57,9 @@ The hub owns events, state, rules, commands and audit. Everything else is either
 - **Observability:** diagnostics are kept apart from the journal and dropped first. Lands in Phase 6.
 
 ## What is real vs provisional
-- **Real and tested:** everything under `core/`, `codec/`, `contracts/`, `simulation/`, `server/`, `packages/`, `connectors/`, `tools/` and `web/` (browser E2E against the real hub). The scenario corpus (`simulation/scenarios`) drives the real engine through the L1 twin.
+- **Real and tested:** everything under `core/`, `codec/`, `contracts/`, `simulation/`, `server/`, `packages/`, `connectors/`, `tools/`, `web/` (browser E2E against the real hub) and `firmware/portable` + `firmware/sim`. The scenario corpus (`simulation/scenarios`) drives the real engine through the L1 twin.
 - **Provisional data:** every number in `contracts/manifests/`.
 - **Provisional behavior:** sensor and timing parameters in twin sites (ADR 0009).
 - **Reserved switches:** Postgres storage, Supabase auth, relay role (ADR 0010).
-- **Not started:** firmware, networking, OTA, hardware.
+- **Compile-only:** the ESP-IDF build (no silicon yet; pins provisional).
+- **Not started:** Thread/CoAP networking, OTA delivery from the hub, hardware.

@@ -1,0 +1,73 @@
+// ESP-IDF implementations of the portable HAL (skeleton). Clock, GPIO, I2C
+// and NVS are real; battery sensing, the OTA flash binding and the Thread
+// link land with hardware bring-up and Phase 6.
+#pragma once
+
+#include <array>
+
+#include "driver/i2c_master.h"
+#include "firmware/portable/hal.h"
+#include "nvs.h"
+
+namespace talos::fw::esp {
+
+class Clock final : public IClock {
+ public:
+  TimeMs now_ms() const override;
+};
+
+class Gpio final : public IGpio {
+ public:
+  explicit Gpio(const BoardSupport& b);
+  bool read(std::uint8_t line) override;
+};
+
+class I2c final : public II2c {
+ public:
+  I2c(int sda, int scl);
+  bool write(std::uint8_t addr, const std::uint8_t* data, std::size_t n) override;
+  bool write_read(std::uint8_t addr, const std::uint8_t* w, std::size_t wn, std::uint8_t* r,
+                  std::size_t rn) override;
+
+ private:
+  i2c_master_dev_handle_t device(std::uint8_t addr);
+  i2c_master_bus_handle_t bus_ = nullptr;
+  std::array<i2c_master_dev_handle_t, 128> devices_{};
+};
+
+class Power final : public IPower {
+ public:
+  void set_rail(std::uint8_t slot, Rail rail, bool on) override;
+  std::uint32_t battery_mv() override;
+  PowerSource source() override { return PowerSource::kUsb; }  // until charger telemetry exists
+};
+
+class Store final : public IStore {
+ public:
+  Store();
+  std::optional<std::size_t> get(StoreKey key, std::uint8_t* buf, std::size_t cap) override;
+  bool put(StoreKey key, const std::uint8_t* data, std::size_t n) override;
+
+ private:
+  nvs_handle_t handle_ = 0;
+};
+
+// Not wired to esp_ota_* yet: offers are refused, so OTA cannot half-apply.
+class Flash final : public IFlash {
+ public:
+  std::uint32_t slot_capacity() const override { return 0; }
+  bool erase(std::uint8_t) override { return false; }
+  bool write(std::uint8_t, std::uint32_t, const std::uint8_t*, std::size_t) override {
+    return false;
+  }
+  bool read(std::uint8_t, std::uint32_t, std::uint8_t*, std::size_t) override { return false; }
+};
+
+// Thread/CoAP transport arrives in Phase 6; until then events stay queued.
+class Link final : public ILink {
+ public:
+  bool send(const DeviceEvent&) override { return false; }
+  std::optional<Downlink> receive() override { return std::nullopt; }
+};
+
+}  // namespace talos::fw::esp

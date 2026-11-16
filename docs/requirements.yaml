@@ -10,7 +10,7 @@ requirements:
   - id: REQ-002
     statement: Four sensor module ports are validated against wake, bus, rail and active power-source budgets
     subsystem: core.manifest
-    test: //core/manifest:manifest_test, //codec:yaml_loader_test
+    test: //core/manifest:manifest_test, //codec:yaml_loader_test, //firmware/sim:node_test (Discovery.*)
     severity: critical
     status: implemented
   - id: REQ-003
@@ -22,9 +22,9 @@ requirements:
   - id: REQ-004
     statement: Firmware can be factory flashed, OTA updated and recovered
     subsystem: firmware.ota
-    test: hil/update_rollback_sequence
+    test: //firmware/sim:node_test (Ota.*, incl. power cut at every store write); hil/update_rollback_sequence pending
     severity: critical
-    status: requested
+    status: verified_sim
   - id: REQ-005
     statement: Replay from the journal reproduces state exactly; snapshot plus tail equals full replay
     subsystem: core.state
@@ -109,3 +109,21 @@ requirements:
     test: //core/engine:engine_test (PreviewMatchesWhatTheEngineDid), //server:server_test (RulePreviewDryRunsAgainstHistory)
     severity: high
     status: implemented
+  - id: REQ-019
+    statement: Contact bounce never produces more than one transition; reboots never look like door openings
+    subsystem: firmware.portable
+    test: //firmware/sim:node_test (Contact.*), //firmware/sim:node_hub_test
+    severity: high
+    status: verified_sim
+  - id: REQ-020
+    statement: Unacknowledged critical events survive link outages and resets and are delivered once
+    subsystem: firmware.portable
+    test: //firmware/sim:node_test (Delivery.*, Persistence.*), //firmware/sim:node_hub_test
+    severity: critical
+    status: verified_sim
+  - id: REQ-021
+    statement: Optional high-power modules never starve critical sensing; low battery degrades optional work first
+    subsystem: firmware.portable
+    test: //firmware/sim:node_test (Discovery.CameraDisabledOnBattery..., Power.*)
+    severity: critical
+    status: verified_sim

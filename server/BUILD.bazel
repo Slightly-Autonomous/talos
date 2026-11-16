@@ -24,19 +24,11 @@ cc_library(
         "//contracts/proto/talos/api/v1:api_cc_proto",
         "//contracts/proto/talos/server/v1:server_cc_proto",
         "//core/engine",
-        ":sha256",
+        "//common/sha256",
         "//server/persistence",
         "@cpp-httplib",
         "@protobuf//:json_util",
     ],
-)
-
-cc_library(
-    name = "sha256",
-    srcs = ["sha256.cc"],
-    hdrs = ["sha256.h"],
-    copts = TALOS_PROTO_COPTS,
-    visibility = ["//server:__subpackages__"],
 )
 
 cc_binary(

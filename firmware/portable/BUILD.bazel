@@ -1,0 +1,24 @@
+load("@rules_cc//cc:defs.bzl", "cc_library", "cc_test")
+load("//bazel:copts.bzl", "TALOS_COPTS")
+
+# Portable device firmware: host (tests, twin) and ESP32-H2 (ESP-IDF) build
+# the same sources. No heap in hot paths, no exceptions, no RTTI.
+cc_library(
+    name = "portable",
+    srcs = [
+        "modules.cc",
+        "ota.cc",
+        "runtime.cc",
+    ],
+    hdrs = [
+        "event_queue.h",
+        "hal.h",
+        "modules.h",
+        "ota.h",
+        "runtime.h",
+        "types.h",
+    ],
+    copts = TALOS_COPTS,
+    visibility = ["//visibility:public"],
+    deps = ["//common/sha256"],
+)

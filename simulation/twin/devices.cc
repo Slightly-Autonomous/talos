@@ -69,8 +69,9 @@ void VirtualDevice::report_initial_state(Timestamp now, const World& world,
   for (auto& c : contacts_) {
     if (const Portal* p = world.portal(c.portal)) {
       c.last = p->open;
-      emit(out, envelope(now, c.slot, "contact.open_state",
-                         p->open ? "contact.opened" : "contact.closed", ContactState{p->open}));
+      // Boot state report, not a transition: rules must not fire on it.
+      emit(out,
+           envelope(now, c.slot, "contact.open_state", "contact.state", ContactState{p->open}));
     }
   }
   if (lock_) {

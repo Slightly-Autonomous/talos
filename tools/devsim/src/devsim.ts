@@ -120,7 +120,11 @@ export class DevSim {
 
   async boot() {
     for (const d of this.devices.values()) {
-      if (d.kind === "contact") await this.contact(d.id, false);
+      if (d.kind === "contact") {
+        // Boot state report, not a transition: rules must not fire on it.
+        d.state.open = false;
+        await this.observe(d, "contact.state", { contact: { open: false } });
+      }
       if (d.kind === "lock") {
         d.state.locked = false;
         await this.observe(d, "lock.state", { lock: { locked: false } });

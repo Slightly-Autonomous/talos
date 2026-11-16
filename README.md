@@ -7,7 +7,7 @@ An open-source, **local-first spatial security and automation platform** for hou
 - A deterministic digital twin that runs the real production logic in CI.
 - A website (PWA first). Optional cloud and observability are never in the alarm path.
 
-> **Status: Phase 4b (versioned configuration + editors).** Contracts, domain core, an L1 twin (29 scenarios), `talos_hub` (SQLite journal, HTTP API with live events, token auth, optional Supabase copy, Docker/Railway deploys), and a website with live floor plan, replay, engineering, simulation, plus layout and rule editors over versioned, journaled configuration, backed by browser E2E. No hardware yet. See [roadmap](#roadmap). Everything is experimental and is not a certified alarm or life-safety system.
+> **Status: Phase 5 (portable firmware).** Contracts, domain core, an L1 twin (29 scenarios), `talos_hub` (SQLite journal, HTTP API with live events, token auth, optional Supabase copy, Docker/Railway deploys), and a website with live floor plan, replay, engineering, simulation, plus layout and rule editors over versioned, journaled configuration, backed by browser E2E; portable device firmware (drivers, debounce, retry, power admission, A/B OTA) tested on a register-level virtual board against the real hub, and compiled for ESP32-H2 in CI. Nothing has run on real hardware yet. See [roadmap](#roadmap). Everything is experimental and is not a certified alarm or life-safety system.
 
 ## Quick start
 
@@ -68,7 +68,9 @@ bazel run //simulation/runner:talos_sim -- $PWD/simulation/scenarios/scenarios/b
 | `web/` | React + TypeScript website: live floor plan, replay, engineering, simulation (Playwright E2E) |
 | `tools/devsim` | Virtual devices for the dev property, over the hub's device API |
 | `docs/` | Architecture, ADRs, open decisions, security invariants, requirements, original spec |
-| `firmware/ hardware/ observability/` | Placeholders for later phases |
+| `firmware/` | Portable device firmware, virtual board (L2 twin), ESP32-H2 project |
+| `common/` | Shared portable code (SHA-256) |
+| `hardware/ observability/` | Placeholders for later phases |
 
 Start with [`docs/architecture/overview.md`](docs/architecture/overview.md) and [`docs/decisions/`](docs/decisions/README.md).
 
@@ -76,8 +78,8 @@ Start with [`docs/architecture/overview.md`](docs/architecture/overview.md) and 
 0–1. Repo, contracts, deterministic core
 2. Deterministic L1 digital twin and scenario runner
 3. Local hub: SQLite journal, API, auth
-4. Website: live state, replay; 4b: versioned config, layout and rule editors ← *here*
-5. Portable firmware on virtual hardware, then ESP-IDF
+4. Website: live state, replay; 4b: versioned config, layout and rule editors
+5. Portable firmware on virtual hardware, then ESP-IDF ← *here*
 6. Thread/CoAP, OTA, observability, hardening
 7. Optional Supabase/Railway, MCP connector
 8. Dev-board validation, custom PCB, manufacturing

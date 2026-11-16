@@ -18,7 +18,7 @@ cc_library(
         "//core/base",
         "//contracts/proto/talos/server/v1:server_cc_proto",
         "//core/journal",
-        "//server:sha256",
+        "//common/sha256",
         "@sqlite3",
     ],
 )

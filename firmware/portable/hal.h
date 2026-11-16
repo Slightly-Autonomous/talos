@@ -1,0 +1,104 @@
+// Hardware abstraction (spec §32 "firmware class boundaries"). The portable
+// runtime only sees these interfaces; ESP-IDF adapters and the virtual board
+// implement them. Board wiring comes from a BoardSupport table generated from
+// the board manifest; nothing here is a hard-coded pin.
+#pragma once
+
+#include <array>
+#include <cstddef>
+#include <cstdint>
+#include <optional>
+
+#include "firmware/portable/types.h"
+
+namespace talos::fw {
+
+class IClock {
+ public:
+  virtual ~IClock() = default;
+  virtual TimeMs now_ms() const = 0;
+};
+
+class IGpio {
+ public:
+  virtual ~IGpio() = default;
+  virtual bool read(std::uint8_t line) = 0;
+};
+
+class II2c {
+ public:
+  virtual ~II2c() = default;
+  virtual bool write(std::uint8_t addr, const std::uint8_t* data, std::size_t n) = 0;
+  virtual bool write_read(std::uint8_t addr, const std::uint8_t* w, std::size_t wn, std::uint8_t* r,
+                          std::size_t rn) = 0;
+};
+
+enum class Rail : std::uint8_t { kAlwaysOn3v3 = 0, kSwitched3v3 = 1, kSwitched5v = 2 };
+
+class IPower {
+ public:
+  virtual ~IPower() = default;
+  virtual void set_rail(std::uint8_t slot, Rail rail, bool on) = 0;
+  virtual std::uint32_t battery_mv() = 0;
+  virtual PowerSource source() = 0;
+};
+
+// Small atomic key/value store (NVS on ESP32). put() is all-or-nothing.
+enum class StoreKey : std::uint8_t { kBootEpoch = 0, kConfig = 1, kOta = 2, kPendingCritical = 3 };
+
+class IStore {
+ public:
+  virtual ~IStore() = default;
+  // Returns bytes read, or nullopt if absent.
+  virtual std::optional<std::size_t> get(StoreKey key, std::uint8_t* buf, std::size_t cap) = 0;
+  virtual bool put(StoreKey key, const std::uint8_t* data, std::size_t n) = 0;
+};
+
+// Two application image slots (A/B OTA partitions).
+class IFlash {
+ public:
+  virtual ~IFlash() = default;
+  virtual std::uint32_t slot_capacity() const = 0;
+  virtual bool erase(std::uint8_t slot) = 0;
+  virtual bool write(std::uint8_t slot, std::uint32_t offset, const std::uint8_t* data,
+                     std::size_t n) = 0;
+  virtual bool read(std::uint8_t slot, std::uint32_t offset, std::uint8_t* out, std::size_t n) = 0;
+};
+
+// Uplink/downlink to the hub (Thread/CoAP in Phase 6, loopback in tests).
+class ILink {
+ public:
+  virtual ~ILink() = default;
+  // True when handed to the radio; delivery is confirmed only by an Ack.
+  virtual bool send(const DeviceEvent& event) = 0;
+  virtual std::optional<Downlink> receive() = 0;
+};
+
+struct SlotWiring {
+  bool present = false;            // connector populated on this board revision
+  std::uint8_t wake_line = 0xFF;   // GPIO index, 0xFF = none
+  std::uint8_t i2c_branch = 0xFF;  // mux branch, 0xFF = none
+  bool has_5v = false;
+};
+
+struct BoardSupport {
+  std::array<SlotWiring, kSlots> slots{};
+  std::uint8_t mux_address = 0x70;  // TCA9546A-style mux (provisional)
+  std::uint8_t id_eeprom_address = 0x50;
+  std::uint32_t battery_sustained_mw = 15;  // provisional budgets per source
+  std::uint32_t usb_sustained_mw = 2500;
+  std::uint32_t solar_sustained_mw = 300;
+};
+
+struct Platform {
+  IClock& clock;
+  IGpio& gpio;
+  II2c& i2c;
+  IPower& power;
+  IStore& store;
+  IFlash& flash;
+  ILink& link;
+  const BoardSupport& board;
+};
+
+}  // namespace talos::fw

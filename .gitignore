@@ -27,3 +27,9 @@ web/src/gen/
 # Playwright
 web/test-results/
 web/playwright-report/
+
+# ESP-IDF
+firmware/esp_idf/build/
+firmware/esp_idf/sdkconfig
+firmware/esp_idf/sdkconfig.old
+firmware/esp_idf/managed_components/
