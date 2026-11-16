@@ -35,4 +35,11 @@
 		(options "")
 		(descr "")
 	)
+	(lib
+		(name "talos")
+		(type "KiCad")
+		(uri "${KIPRJMOD}/../libraries/talos-footprints.pretty")
+		(options "")
+		(descr "")
+	)
 )

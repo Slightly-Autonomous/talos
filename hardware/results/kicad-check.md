@@ -2,14 +2,14 @@
 
 `hardware/scripts/check_kicad.py`, kicad-cli **10.0.8**, 2026-11-16. This shows the schematics are self-consistent. **It is not an electrical design review.**
 
-| Board | Parts | ERC errors | ERC warnings | Waived | Netlist round-trip | Safe defaults |
-|---|---:|---:|---:|---:|---|---|
-| TL-SN-001 | 134 | 0 | 0 | 0 | match | ok |
-| TL-MOD-001 | 7 | 0 | 0 | 0 | match | ok |
-| TL-MOD-002 | 7 | 0 | 0 | 0 | match | ok |
-| TL-MOD-003 | 8 | 0 | 0 | 1 | match | ok |
-| TL-MOD-004 | 7 | 0 | 0 | 0 | match | ok |
-| TL-TEST-001 | 14 | 0 | 0 | 0 | match | ok |
+| Board | Parts | ERC errors | ERC warnings | Waived | Netlist round-trip | Safe defaults | PCB DRC errors | PCB DRC warnings |
+|---|---:|---:|---:|---:|---|---|---:|---:|
+| TL-SN-001 | 134 | 0 | 0 | 0 | match | ok | 109 | 133 |
+| TL-MOD-001 | 7 | 0 | 0 | 0 | match | ok | 0 | 3 |
+| TL-MOD-002 | 7 | 0 | 0 | 0 | match | ok | 0 | 3 |
+| TL-MOD-003 | 8 | 0 | 0 | 1 | match | ok | 0 | 16 |
+| TL-MOD-004 | 7 | 0 | 0 | 0 | match | ok | 0 | 3 |
+| TL-TEST-001 | 14 | 0 | 0 | 0 | match | ok | 0 | 12 |
 
 ## Cross-board connector check (sensor_edge_v1)
 
@@ -19,48 +19,42 @@
 
 - ERC: no violations
 - Netlist: KiCad export equals the intended netlist
+- PCB DRC (with schematic parity): unconnected_items 109, silk_edge_clearance 6, silk_over_copper 58, silk_overlap 44, via_dangling 25
+- **Routing incomplete** (109 unconnected items): Placed and partially autorouted (Freerouting 2.5.0, 300 passes: ~147 connections unrouted). Needs a layout engineer or a better router before any order. Only unconnected_items are tolerated; every other DRC error still fails.
 - Footprints still to draw (H4):
-  - J4 (sensor_edge_v1 slot 0): Samtec MEC8-110-02-L-D-EM2 candidate; footprint TBD (HD-002)
-  - J5 (sensor_edge_v1 slot 1): Samtec MEC8-110-02-L-D-EM2 candidate; footprint TBD (HD-002)
-  - J6 (sensor_edge_v1 slot 2): Samtec MEC8-110-02-L-D-EM2 candidate; footprint TBD (HD-002)
-  - J7 (sensor_edge_v1 slot 3): Samtec MEC8-110-02-L-D-EM2 candidate; footprint TBD (HD-002)
-  - U1 (ESP32-H2-MINI-1-H4S): footprint TBD from datasheet §11 land pattern; antenna keepout
-  - U4 (BQ25186DLHR): footprint TBD: DLH WSON-10 2.2x2.0 (SLUSF69 §12)
+  - J4 (sensor_edge_v1 slot 0): placeholder land pattern talos:Samtec_MEC8-110-02-L-D-EM2_PLACEHOLDER
+  - J5 (sensor_edge_v1 slot 1): placeholder land pattern talos:Samtec_MEC8-110-02-L-D-EM2_PLACEHOLDER
+  - J6 (sensor_edge_v1 slot 2): placeholder land pattern talos:Samtec_MEC8-110-02-L-D-EM2_PLACEHOLDER
+  - J7 (sensor_edge_v1 slot 3): placeholder land pattern talos:Samtec_MEC8-110-02-L-D-EM2_PLACEHOLDER
 
 ## TL-MOD-001
 
 - ERC: no violations
 - Netlist: KiCad export equals the intended netlist
-- Footprints still to draw (H4):
-  - J1 (sensor_edge_v1 card fingers): finger footprint TBD (H4): 1.60 mm card, 0.80 mm pitch, mates MEC8-EM2
+- PCB DRC (with schematic parity): silk_over_copper 1, silk_overlap 2
 
 ## TL-MOD-002
 
 - ERC: no violations
 - Netlist: KiCad export equals the intended netlist
-- Footprints still to draw (H4):
-  - J1 (sensor_edge_v1 card fingers): finger footprint TBD (H4): 1.60 mm card, 0.80 mm pitch, mates MEC8-EM2
-  - U2 (EKMB1101111): TO-5 3-pin, footprint TBD from Panasonic drawing (PCD 5.08 mm)
+- PCB DRC (with schematic parity): silk_over_copper 1, silk_overlap 2
 
 ## TL-MOD-003
 
   - waived `pin_to_pin`: Pins of type Bidirectional and Power output are connected (Symbol U2 Pin 3 [SDO/SA0, Bidirectional, Line]; Symbol #FLG02 Pin 1 [Power output, Line]). Justification: LIS2DW12 SDO/SA0 is strapped to V3V3_AON to select I2C address 0x19; in I2C mode it is an address input, not a driver (DS11811 §6). Its internal pull-up cannot be disabled, so strapping low would waste current.
 - Netlist: KiCad export equals the intended netlist
-- Footprints still to draw (H4):
-  - J1 (sensor_edge_v1 card fingers): finger footprint TBD (H4): 1.60 mm card, 0.80 mm pitch, mates MEC8-EM2
+- PCB DRC (with schematic parity): silk_over_copper 10, silk_overlap 6
 
 ## TL-MOD-004
 
 - ERC: no violations
 - Netlist: KiCad export equals the intended netlist
-- Footprints still to draw (H4):
-  - J1 (sensor_edge_v1 card fingers): finger footprint TBD (H4): 1.60 mm card, 0.80 mm pitch, mates MEC8-EM2
+- PCB DRC (with schematic parity): silk_over_copper 3
 
 ## TL-TEST-001
 
 - ERC: no violations
 - Netlist: KiCad export equals the intended netlist
-- Footprints still to draw (H4):
-  - J1 (sensor_edge_v1 card fingers): finger footprint TBD (H4): 1.60 mm card, 0.80 mm pitch, mates MEC8-EM2
+- PCB DRC (with schematic parity): silk_edge_clearance 1, silk_over_copper 7, silk_overlap 4
 
 **Overall: PASS**

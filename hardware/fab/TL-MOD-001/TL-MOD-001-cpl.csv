@@ -1,0 +1,6 @@
+Ref,Val,Package,PosX,PosY,Rot,Side
+"C1","100n","C_0402_1005Metric",7.250500,5.579200,0.000000,top
+"C2","100n","C_0402_1005Metric",8.520900,15.045600,0.000000,top
+"J1","sensor_edge_v1 card fingers","CardEdge_sensor_edge_v1_2x10_P0.8mm",8.000000,1.650000,0.000000,top
+"U1","24AA025E48T-I/OT","SOT-23-6",11.145800,6.759200,0.000000,top
+"U2","DRV5032FBDBZR","SOT-23",8.000000,18.000000,0.000000,top

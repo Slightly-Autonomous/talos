@@ -1,0 +1,11 @@
+{
+  "TL-SN-001": {
+    "routing": "partial",
+    "note": "Placed and partially autorouted (Freerouting 2.5.0, 300 passes: ~147 connections unrouted). Needs a layout engineer or a better router before any order. Only unconnected_items are tolerated; every other DRC error still fails."
+  },
+  "TL-MOD-001": {"routing": "complete"},
+  "TL-MOD-002": {"routing": "complete"},
+  "TL-MOD-003": {"routing": "complete"},
+  "TL-MOD-004": {"routing": "complete"},
+  "TL-TEST-001": {"routing": "complete"}
+}

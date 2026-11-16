@@ -1,7 +1,7 @@
 qty,refs,value,symbol,footprint
 2,C1 C2,100n,Device:C,Capacitor_SMD:C_0402_1005Metric
 1,C3,10u,Device:C,Capacitor_SMD:C_0805_2012Metric
-1,J1,sensor_edge_v1 card fingers,Connector_Generic:Conn_02x10_Odd_Even,TBD
+1,J1,sensor_edge_v1 card fingers,Connector_Generic:Conn_02x10_Odd_Even,talos:CardEdge_sensor_edge_v1_2x10_P0.8mm
 1,TP1,V3V3_AON,Connector:TestPoint,TestPoint:TestPoint_Pad_D1.0mm
 1,TP2,GND,Connector:TestPoint,TestPoint:TestPoint_Pad_D1.0mm
 1,U1,24AA025E48T-I/OT,Memory_EEPROM:24AA025E-OT,Package_TO_SOT_SMD:SOT-23-6

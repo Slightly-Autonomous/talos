@@ -2,19 +2,19 @@
 
 The Talos custom-hardware workstream. It follows `TALOS_CUSTOM_HARDWARE_HANDOFF_v0_1` (milestones H0–H7). Root ADRs in `docs/decisions/` still win over anything here (ADR 0017 links the two).
 
-> **Nothing in this folder is a validated design.** The schematics open in KiCad and pass ERC, but they have not been reviewed by an electrical engineer, laid out, built or measured. Every value is `provisional: true` until a bench measurement says otherwise.
+> **Nothing in this folder is a validated design.** The schematics pass ERC and the autorouted layouts pass DRC, but no electrical engineer has reviewed them, and nothing has been built or measured. **Do not order boards** until the review items in [layout/README.md](layout/README.md) are closed (HW-0005). Every value is `provisional: true` until a bench measurement says otherwise.
 
 ## Boards
 
 | ID | What | Bespoke? | State |
 |---|---|---|---|
 | TL-HUB-REF | Hub: Pi 5 / mini-PC + USB 802.15.4 RCP | No, bought | `bom/devkit_rig_v0.csv` |
-| TL-SN-001 | Four-slot Thread Sensor Node (ESP32-H2-MINI-1) | Yes | H3 schematic ([kicad/TL-SN-001](kicad/TL-SN-001)) |
-| TL-MOD-001 | Magnetic contact card (DRV5032FB Hall) | Yes | H3 schematic |
-| TL-MOD-002 | PIR card (Panasonic EKMB 1 µA) | Yes | H3 schematic |
-| TL-MOD-003 | Vibration/impact card (ST LIS2DW12) | Yes | H3 schematic |
-| TL-MOD-004 | Temperature/humidity card (Sensirion SHT4x) | Yes | H3 schematic |
-| TL-TEST-001 | Slot test cartridge | Yes | H3 schematic |
+| TL-SN-001 | Four-slot Thread Sensor Node (ESP32-H2-MINI-1) | Yes | H3 schematic + H4 placed, **partially routed** 4-layer layout ([layout](layout/README.md)) |
+| TL-MOD-001 | Magnetic contact card (DRV5032FB Hall) | Yes | H3 schematic + H4 routed 2-layer layout |
+| TL-MOD-002 | PIR card (Panasonic EKMB 1 µA) | Yes | H3 schematic + H4 routed 2-layer layout |
+| TL-MOD-003 | Vibration/impact card (ST LIS2DW12) | Yes | H3 schematic + H4 routed 2-layer layout |
+| TL-MOD-004 | Temperature/humidity card (Sensirion SHT4x) | Yes | H3 schematic + H4 routed 2-layer layout |
+| TL-TEST-001 | Slot test cartridge | Yes | H3 schematic + H4 routed 2-layer layout |
 | TL-VN-001 | Vision Node (separate board, CM4/CM5/video SoC) | Yes | H5 study not started; manifest only |
 
 The camera **slot** module (`smart_camera_s3_v1`) is superseded by TL-VN-001 ([ADR HW-0001](architecture/decisions/0001-hardware-family.md)).
@@ -32,7 +32,9 @@ The camera **slot** module (`smart_camera_s3_v1`) is superseded by TL-VN-001 ([A
 | `mechanical/` | Connector shortlist and mechanical notes |
 | `kicad/` | KiCad 10 projects, all **generated** by `scripts/gen_schematics.py`; project-local symbols in `kicad/libraries/` |
 | `scripts/` | Schematic generator, ERC/netlist checks, power-budget calculator |
-| `results/` | Captured tool output (ERC reports, netlist comparison, power report), dated and versioned |
+| `results/` | Captured tool output (ERC/DRC summary, netlist comparison, power report), dated and versioned |
+| `layout/` | H4 layout method, board summary and the pre-order review list |
+| `fab/` | Prototype fabrication packages (Gerbers, drill, CPL, BOM, renders), for quotes and DFM only |
 | `templates/` | Component evaluation template |
 | `bom/` | Dev-kit rig BOM (bring-up path, ADR 0016) |
 

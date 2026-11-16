@@ -24,6 +24,7 @@ from dataclasses import dataclass, field
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from kicad_sexpr import SymbolLibraries, dump, pin_end, q, stub_dir  # noqa: E402
+from talos_footprints import write_library  # noqa: E402
 from talos_symbols import SYMBOLS, library_node  # noqa: E402
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
@@ -107,8 +108,8 @@ def card_edge(used: set[str]) -> Part:
             pins[str(c)] = {"AON": "V3V3_AON", "SW": "V3V3_SW"}.get(role, role)
         else:
             pins[str(c)] = None
-    return Part("J1", "Connector_Generic:Conn_02x10_Odd_Even", "sensor_edge_v1 card fingers", pins, "",
-                "finger footprint TBD (H4): 1.60 mm card, 0.80 mm pitch, mates MEC8-EM2")
+    return Part("J1", "Connector_Generic:Conn_02x10_Odd_Even", "sensor_edge_v1 card fingers", pins,
+                "talos:CardEdge_sensor_edge_v1_2x10_P0.8mm", "gold fingers, 1.60 mm card, 0.80 mm pitch")
 
 
 def id_eeprom(ref="U1", cap="C1") -> list[Part]:
@@ -139,8 +140,8 @@ def sensor_node() -> Board:
     for n in ["1", "2", "11", "14"] + [str(i) for i in range(36, 54)]:
         mcu[n] = "GND"
     b.add(
-        Part("U1", "talos:ESP32-H2-MINI-1", "ESP32-H2-MINI-1-H4S", mcu, "",
-             "footprint TBD from datasheet §11 land pattern; antenna keepout"),
+        Part("U1", "talos:ESP32-H2-MINI-1", "ESP32-H2-MINI-1-H4S", mcu, None,
+             "land pattern = datasheet Fig. 11; antenna keepout at board edge"),
         C("C1", "10u", core, bulk=True), C("C2", "100n", core),
         R("R1", "10k", core, "CHIP_EN", "EN RC per datasheet §9"), C("C3", "1u", "CHIP_EN"),
         Part("SW1", "Switch:SW_Push", "RESET", {"1": "CHIP_EN", "2": "GND"}, "Button_Switch_SMD:SW_SPST_PTS810"),
@@ -184,8 +185,8 @@ def sensor_node() -> Board:
         C("C8", "4.7u/25V", "CHG_IN", bulk=True),
         Part("U4", "talos:BQ25186", "BQ25186DLHR",
              {"10": "CHG_IN", "1": "SYS_PATH", "2": "VBAT", "3": "CHG_PG_N", "4": "GND", "5": "GND",
-              "6": "BAT_NTC", "7": "I2C_SDA", "8": "I2C_SCL", "9": "CHG_INT_N"}, "",
-             "footprint TBD: DLH WSON-10 2.2x2.0 (SLUSF69 §12)"),
+              "6": "BAT_NTC", "7": "I2C_SDA", "8": "I2C_SCL", "9": "CHG_INT_N", "11": "GND"}, None,
+             "DLH0010A land pattern from SLUSF69 §12"),
         C("C9", "10u", "SYS_PATH", bulk=True), C("C10", "1u", "VBAT"),
         R("R16", "100k", core, "CHG_PG_N"), R("R17", "10k", core, "CHG_INT_N"),
         Part("J3", "Connector_Generic:Conn_01x03", "1S pack (BAT+, NTC, GND)",
@@ -198,7 +199,8 @@ def sensor_node() -> Board:
     b.add(
         Part("U5", "Regulator_Switching:TPS63900", "TPS63900DSKR",
              {"10": "SYS_PATH", "1": "SYS_PATH", "2": "GND", "3": "REG_CFG1", "4": "REG_CFG2",
-              "5": "REG_CFG3", "6": core, "9": "REG_LX1", "7": "REG_LX2", "8": "GND", "11": "GND"}),
+              "5": "REG_CFG3", "6": core, "9": "REG_LX1", "7": "REG_LX2", "8": "GND", "11": "GND"},
+             "Package_SON:WSON-10-1EP_2.5x2.5mm_P0.5mm_EP1.2x2mm"),
         R("R18", "36.5k 1%", "REG_CFG1", "GND", "SEL-high 3.3 V, unlimited ILIM (Table 7-2)"),
         R("R19", "0R", "REG_CFG2", "GND", "SEL-high 3.3 V, unlimited ILIM (Table 7-2)"),
         R("R20", "16.2k 1%", "REG_CFG3", "GND", "SEL-low 3.3 V (Table 7-3)"),
@@ -266,8 +268,9 @@ def sensor_node() -> Board:
         pins = {str(c): main_slot_net(n, role) for c, role in EDGE.items()}
         aon = f"V3V3_AON_{n}"
         b.add(
-            Part(f"J{4 + n}", "Connector_Generic:Conn_02x10_Odd_Even", f"sensor_edge_v1 slot {n}", pins, "",
-                 "Samtec MEC8-110-02-L-D-EM2 candidate; footprint TBD (HD-002)"),
+            Part(f"J{4 + n}", "Connector_Generic:Conn_02x10_Odd_Even", f"sensor_edge_v1 slot {n}", pins,
+                 "talos:Samtec_MEC8-110-02-L-D-EM2_PLACEHOLDER",
+                 "MEC8-110-02-L-D-EM2 candidate; PLACEHOLDER land pattern until the Samtec drawing is obtained (HD-002)"),
             R(f"R{45 + 5 * n}", "1M", f"SLOT_WAKE{n}", "GND", "empty slot never wakes"),
             R(f"R{46 + 5 * n}", "100k", aon, f"SLOT{n}_ALERT_N"),
             R(f"R{47 + 5 * n}", "100k", aon, f"SLOT{n}_CS_N"),
@@ -302,8 +305,8 @@ def boards() -> list[Board]:
         C("C2", "100n", "V3V3_AON"),
     ]))
     out.append(card("TL-MOD-002", "TL-MOD-002 PIR card Rev A", i2c | {"WAKE"}, [
-        Part("U2", "talos:EKMB", "EKMB1101111", {"1": "V3V3_AON", "2": "WAKE", "3": "GND"}, "",
-             "TO-5 3-pin, footprint TBD from Panasonic drawing (PCD 5.08 mm)"),
+        Part("U2", "talos:EKMB", "EKMB1101111", {"1": "V3V3_AON", "2": "WAKE", "3": "GND"}, None,
+             "TO-5 3-pin on PCD 5.08 mm; pin positions from bottom-view drawing, verify"),
         C("C2", "100n", "V3V3_AON"),
     ]))
     out.append(card("TL-MOD-003", "TL-MOD-003 Vibration/impact card Rev A", i2c | {"WAKE"}, [
@@ -314,7 +317,8 @@ def boards() -> list[Board]:
         C("C2", "100n", "V3V3_AON"), C("C3", "10u", "V3V3_AON", bulk=True),
     ]))
     out.append(card("TL-MOD-004", "TL-MOD-004 Temperature/humidity card Rev A", i2c, [
-        Part("U2", "Sensor_Humidity:SHT4x", "SHT40-AD1B", {"1": "SDA", "2": "SCL", "3": "V3V3_AON", "4": "GND"}),
+        Part("U2", "Sensor_Humidity:SHT4x", "SHT40-AD1B", {"1": "SDA", "2": "SCL", "3": "V3V3_AON", "4": "GND"},
+             "talos:Sensirion_DFN-4_1.5x1.5mm_P0.8mm_SHT4x_CentralKeepout", "no copper under the sensor die"),
         C("C2", "100n", "V3V3_AON"),
     ]))
     used = {"AON", "SW", "SDA", "SCL", "WAKE", "ALERT_N", "SCK", "MOSI", "MISO", "CS_N", "UART_TX",
@@ -359,6 +363,7 @@ def place(board: Board, root: str, p: Part, sym, unit: int, upins, sx: float, sy
     items: list = []
     tag = p.ref if unit == 1 else f"{p.ref}#u{unit}"
     is_flag = p.ref.startswith("#")
+    in_bom = not is_flag and not p.ref.startswith("TP")  # test pads are bare copper, not purchased
     props = [
         ["property", q("Reference"), q(p.ref), ["at", f"{sx:g}", f"{sy - 3 * G:g}", "0"], effects(hide=is_flag)],
         ["property", q("Value"), q(p.value), ["at", f"{sx:g}", f"{sy + 3 * G:g}", "0"], effects()],
@@ -371,7 +376,7 @@ def place(board: Board, root: str, p: Part, sym, unit: int, upins, sx: float, sy
         props.append(["property", q("Talos_Note"), q(p.note), ["at", f"{sx:g}", f"{sy:g}", "0"],
                       effects(hide=True)])
     inst = ["symbol", ["lib_id", q(p.lib_id)], ["at", f"{sx:g}", f"{sy:g}", "0"], ["unit", str(unit)],
-            ["exclude_from_sim", "no"], ["in_bom", "no" if is_flag else "yes"],
+            ["exclude_from_sim", "no"], ["in_bom", "yes" if in_bom else "no"],
             ["on_board", "no" if is_flag else "yes"], ["dnp", "no"],
             ["uuid", q(uid(board.name, tag))], *props]
     for pin in upins:
@@ -403,6 +408,32 @@ def place(board: Board, root: str, p: Part, sym, unit: int, upins, sx: float, sy
                       ["uuid", q(uid(board.name, p.ref, pin.number, "l"))]])
     return items
 
+
+
+def project_file(name: str) -> dict:
+    """Project file with fab-oriented design rules (typical 4-layer/2-layer prototype service limits)."""
+    return {
+        "meta": {"filename": f"{name}.kicad_pro", "version": 3},
+        "board": {"design_settings": {"rules": {
+            "min_clearance": 0.15, "min_track_width": 0.1, "min_via_diameter": 0.5, "min_via_annular_width": 0.1,
+            "min_through_hole_diameter": 0.3, "min_hole_clearance": 0.15, "min_hole_to_hole": 0.2,
+            "min_copper_edge_clearance": 0.3, "min_silk_clearance": 0.0, "min_resolved_spokes": 1,
+            "max_error": 0.005}}},
+        "net_settings": {"classes": [{
+            "name": "Default", "clearance": 0.15, "track_width": 0.15, "via_diameter": 0.6, "via_drill": 0.3,
+            "microvia_diameter": 0.3, "microvia_drill": 0.1, "diff_pair_gap": 0.2, "diff_pair_width": 0.2,
+            "diff_pair_via_gap": 0.25, "wire_width": 6, "bus_width": 12, "line_style": 0, "priority": 2147483647,
+            "pcb_color": "rgba(0, 0, 0, 0.000)", "schematic_color": "rgba(0, 0, 0, 0.000)"},
+            {"name": "Power", "clearance": 0.15, "track_width": 0.4, "via_diameter": 0.6, "via_drill": 0.3,
+             "microvia_diameter": 0.3, "microvia_drill": 0.1, "diff_pair_gap": 0.2, "diff_pair_width": 0.2,
+             "diff_pair_via_gap": 0.25, "wire_width": 6, "bus_width": 12, "line_style": 0, "priority": 0,
+             "pcb_color": "rgba(0, 0, 0, 0.000)", "schematic_color": "rgba(0, 0, 0, 0.000)"}],
+            "netclass_patterns": [{"netclass": "Power", "pattern": pat} for pat in (
+                "/GND", "/V3V3_*", "/SYS_PATH", "/VBAT", "/USB_VBUS", "/CHG_IN", "/PV_IN", "/PV_RAW",
+                "/REG_LX1", "/REG_LX2")],
+            "meta": {"version": 4}},
+        "schematic": {"page_layout_descr_file": ""},
+    }
 
 
 def write_board(board: Board, libs: SymbolLibraries) -> dict:
@@ -470,9 +501,8 @@ def write_board(board: Board, libs: SymbolLibraries) -> dict:
     out_dir = KICAD_DIR / board.name
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / f"{board.name}.kicad_sch").write_text(dump(sch) + "\n", encoding="utf-8")
-    (out_dir / f"{board.name}.kicad_pro").write_text(json.dumps(
-        {"meta": {"filename": f"{board.name}.kicad_pro", "version": 3},
-         "schematic": {"page_layout_descr_file": ""}}, indent=2) + "\n", encoding="utf-8")
+    (out_dir / f"{board.name}.kicad_pro").write_text(json.dumps(project_file(board.name), indent=2) + "\n",
+                                                       encoding="utf-8")
     libs_used = sorted({lib.split(":")[0] for lib in syms} - {"talos"})
     sym_table = ["sym_lib_table", ["version", "7"],
                  ["lib", ["name", q("talos")], ["type", q("KiCad")],
@@ -486,15 +516,19 @@ def write_board(board: Board, libs: SymbolLibraries) -> dict:
                       for p in board.parts} - {""})
     fp_table = ["fp_lib_table", ["version", "7"]]
     for lib in fp_libs:
-        fp_table.append(["lib", ["name", q(lib)], ["type", q("KiCad")],
-                         ["uri", q(f"${{KICAD10_FOOTPRINT_DIR}}/{lib}.pretty")], ["options", q("")], ["descr", q("")]])
+        uri = ("${KIPRJMOD}/../libraries/talos-footprints.pretty" if lib == "talos"
+               else f"${{KICAD10_FOOTPRINT_DIR}}/{lib}.pretty")
+        fp_table.append(["lib", ["name", q(lib)], ["type", q("KiCad")], ["uri", q(uri)], ["options", q("")],
+                         ["descr", q("")]])
     (out_dir / "fp-lib-table").write_text(dump(fp_table) + "\n", encoding="utf-8")
 
     intended = {
         "board": board.name,
         "parts": {p.ref: {"lib_id": p.lib_id, "value": p.value,
                           "footprint": p.footprint if p.footprint is not None else syms[p.lib_id].prop("Footprint"),
-                          "note": p.note, "pins": p.pins} for p in board.parts},
+                          "note": p.note, "pins": p.pins,
+                          "datasheet": syms[p.lib_id].prop("Datasheet") or "~",
+                          "pin_names": {pin.number: pin.name for pin in syms[p.lib_id].pins}} for p in board.parts},
     }
     (out_dir / "intended-netlist.json").write_text(json.dumps(intended, indent=1, sort_keys=True) + "\n")
     return {"board": board.name, "parts": len(board.parts), "nets": len(members)}
@@ -503,11 +537,13 @@ def write_board(board: Board, libs: SymbolLibraries) -> dict:
 def main() -> int:
     LIB_DIR.mkdir(parents=True, exist_ok=True)
     TALOS_LIB.write_text(dump(library_node()) + "\n", encoding="utf-8")
+    fps = write_library(LIB_DIR / "talos-footprints.pretty")
     libs = SymbolLibraries(STOCK, {"talos": str(TALOS_LIB)})
     for b in boards():
         info = write_board(b, libs)
         print(f"{info['board']}: {info['parts']} parts, {info['nets']} nets")
     print(f"symbols: {', '.join(SYMBOLS)} -> {TALOS_LIB.relative_to(ROOT)}")
+    print(f"footprints: {', '.join(fps)}")
     return 0
 
 

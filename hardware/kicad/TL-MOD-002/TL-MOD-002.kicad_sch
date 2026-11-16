@@ -1317,7 +1317,7 @@
 					)
 				)
 			)
-			(property "Footprint" ""
+			(property "Footprint" "talos:PIR_Panasonic_EKMB_TO-5"
 				(at 0 -10.16 0)
 				(effects
 					(font
@@ -1441,7 +1441,7 @@
 				)
 			)
 		)
-		(property "Footprint" ""
+		(property "Footprint" "talos:CardEdge_sensor_edge_v1_2x10_P0.8mm"
 			(at 43.18 45.72 0)
 			(effects
 				(font
@@ -1459,7 +1459,7 @@
 				(hide yes)
 			)
 		)
-		(property "Talos_Note" "finger footprint TBD (H4): 1.60 mm card, 0.80 mm pitch, mates MEC8-EM2"
+		(property "Talos_Note" "gold fingers, 1.60 mm card, 0.80 mm pitch"
 			(at 43.18 45.72 0)
 			(effects
 				(font
@@ -2100,7 +2100,7 @@
 				)
 			)
 		)
-		(property "Footprint" ""
+		(property "Footprint" "talos:PIR_Panasonic_EKMB_TO-5"
 			(at 160.02 35.56 0)
 			(effects
 				(font
@@ -2118,7 +2118,7 @@
 				(hide yes)
 			)
 		)
-		(property "Talos_Note" "TO-5 3-pin, footprint TBD from Panasonic drawing (PCD 5.08 mm)"
+		(property "Talos_Note" "TO-5 3-pin on PCD 5.08 mm; pin positions from bottom-view drawing, verify"
 			(at 160.02 35.56 0)
 			(effects
 				(font
@@ -2313,7 +2313,7 @@
 		(at 210.82 35.56 0)
 		(unit 1)
 		(exclude_from_sim no)
-		(in_bom yes)
+		(in_bom no)
 		(on_board yes)
 		(dnp no)
 		(uuid "c9d64424-cf26-5138-a9c5-bd422546c1f6")
@@ -2389,7 +2389,7 @@
 		(at 226.06 35.56 0)
 		(unit 1)
 		(exclude_from_sim no)
-		(in_bom yes)
+		(in_bom no)
 		(on_board yes)
 		(dnp no)
 		(uuid "68e86179-ff29-59b6-b52b-4276015d610b")

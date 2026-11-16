@@ -82,3 +82,8 @@ requirements:
     board: TL-SN-001, TL-MOD-001..004, TL-TEST-001
     status: verified_tool
     test: hardware/scripts/check_kicad.py -> hardware/results/
+  - id: HWR-017
+    statement: Every routed PCB passes kicad-cli DRC with schematic parity at zero errors under the project fab rules (TL-SN-001 routing incomplete; only unconnected items tolerated)
+    board: TL-MOD-001..004, TL-TEST-001 (TL-SN-001 partial)
+    status: verified_tool
+    test: hardware/scripts/check_kicad.py -> hardware/results/kicad-check.md (PCB DRC columns)

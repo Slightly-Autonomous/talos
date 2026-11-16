@@ -1495,7 +1495,7 @@
 				)
 			)
 		)
-		(property "Footprint" ""
+		(property "Footprint" "talos:CardEdge_sensor_edge_v1_2x10_P0.8mm"
 			(at 43.18 45.72 0)
 			(effects
 				(font
@@ -1513,7 +1513,7 @@
 				(hide yes)
 			)
 		)
-		(property "Talos_Note" "finger footprint TBD (H4): 1.60 mm card, 0.80 mm pitch, mates MEC8-EM2"
+		(property "Talos_Note" "gold fingers, 1.60 mm card, 0.80 mm pitch"
 			(at 43.18 45.72 0)
 			(effects
 				(font
@@ -2137,7 +2137,7 @@
 				)
 			)
 		)
-		(property "Footprint" "Sensor_Humidity:Sensirion_DFN-4_1.5x1.5mm_P0.8mm_SHT4x_NoCentralPad"
+		(property "Footprint" "talos:Sensirion_DFN-4_1.5x1.5mm_P0.8mm_SHT4x_CentralKeepout"
 			(at 147.32 53.34 0)
 			(effects
 				(font
@@ -2147,6 +2147,15 @@
 			)
 		)
 		(property "Datasheet" "https://sensirion.com/media/documents/33FD6951/624C4357/Datasheet_SHT4x.pdf"
+			(at 147.32 53.34 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Talos_Note" "no copper under the sensor die"
 			(at 147.32 53.34 0)
 			(effects
 				(font
@@ -2365,7 +2374,7 @@
 		(at 180.34 35.56 0)
 		(unit 1)
 		(exclude_from_sim no)
-		(in_bom yes)
+		(in_bom no)
 		(on_board yes)
 		(dnp no)
 		(uuid "d694e976-fcdb-54a1-9029-98f313d535f0")
@@ -2441,7 +2450,7 @@
 		(at 195.58 35.56 0)
 		(unit 1)
 		(exclude_from_sim no)
-		(in_bom yes)
+		(in_bom no)
 		(on_board yes)
 		(dnp no)
 		(uuid "0f142639-da21-572b-b28b-44ab0e730792")

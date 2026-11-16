@@ -13,7 +13,7 @@ SYMBOLS = {
     "ESP32-H2-MINI-1": {
         "ref": "U",
         "source": "Espressif ESP32-H2-MINI-1 & MINI-1U datasheet v1.6, Table 3 (53 pads)",
-        "footprint": "",
+        "footprint": "talos:ESP32-H2-MINI-1",
         "pins": [
             ("3", "3V3", "power_in", "L"),
             ("15", "VBAT", "power_in", "L"),
@@ -44,8 +44,8 @@ SYMBOLS = {
     },
     "BQ25186": {
         "ref": "U",
-        "source": "TI SLUSF69A Table 4-1 (DLH WSON-10)",
-        "footprint": "",
+        "source": "TI SLUSF69A Table 4-1 + package drawing DLH0010A (pad 11 = thermal pad)",
+        "footprint": "talos:Texas_DLH0010A_WSON-10-1EP_2.2x2mm_P0.4mm",
         "pins": [
             ("10", "IN", "power_in", "L"),
             ("4", "~{CE}", "input", "L"),
@@ -57,6 +57,7 @@ SYMBOLS = {
             ("3", "~{PG}/GPO", "open_collector", "R"),
             ("9", "~{INT}", "open_collector", "R"),
             ("5", "GND", "power_in", "B"),
+            ("11", "EP", "passive", "B"),  # thermal pad (package drawing DLH0010A); must be soldered
         ],
     },
     "TPS2121": {
@@ -111,7 +112,7 @@ SYMBOLS = {
         "ref": "U",
         "source": "Panasonic PaPIRs WL EKMB110111x reference spec rev 7.1 (bottom view: Vdd, OUT, GND; "
         "numbering is Talos convention, footprint must follow the drawing)",
-        "footprint": "",
+        "footprint": "talos:PIR_Panasonic_EKMB_TO-5",
         "pins": [
             ("1", "Vdd", "power_in", "L"),
             ("2", "OUT", "output", "R"),

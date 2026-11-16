@@ -130,14 +130,15 @@ jobs:
       options: --user root
     steps:
       - uses: actions/checkout@v7
-      - name: Generated schematics are up to date
+      - name: Generated schematics and libraries are up to date
         env:
           KICAD_SYMBOL_DIR: /usr/share/kicad/symbols
+          KICAD_FOOTPRINT_DIR: /usr/share/kicad/footprints
         run: |
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
           python3 hardware/scripts/gen_schematics.py
           git diff --exit-code -- hardware/kicad
-      - name: ERC, netlist round-trip, cross-board and safe-default checks
+      - name: ERC, netlist round-trip, cross-board, safe-default and PCB DRC checks
         env:
           KICAD_FOOTPRINT_DIR: /usr/share/kicad/footprints
         run: python3 hardware/scripts/check_kicad.py

@@ -2,9 +2,14 @@
  "board": "TL-TEST-001",
  "parts": {
   "C1": {
+   "datasheet": "~",
    "footprint": "Capacitor_SMD:C_0402_1005Metric",
    "lib_id": "Device:C",
    "note": "",
+   "pin_names": {
+    "1": "",
+    "2": ""
+   },
    "pins": {
     "1": "V3V3_AON",
     "2": "GND"
@@ -12,9 +17,14 @@
    "value": "100n"
   },
   "C2": {
+   "datasheet": "~",
    "footprint": "Capacitor_SMD:C_0402_1005Metric",
    "lib_id": "Device:C",
    "note": "",
+   "pin_names": {
+    "1": "",
+    "2": ""
+   },
    "pins": {
     "1": "V3V3_AON",
     "2": "GND"
@@ -22,9 +32,32 @@
    "value": "100n"
   },
   "J1": {
-   "footprint": "",
+   "datasheet": "~",
+   "footprint": "talos:CardEdge_sensor_edge_v1_2x10_P0.8mm",
    "lib_id": "Connector_Generic:Conn_02x10_Odd_Even",
-   "note": "finger footprint TBD (H4): 1.60 mm card, 0.80 mm pitch, mates MEC8-EM2",
+   "note": "gold fingers, 1.60 mm card, 0.80 mm pitch",
+   "pin_names": {
+    "1": "Pin_1",
+    "10": "Pin_10",
+    "11": "Pin_11",
+    "12": "Pin_12",
+    "13": "Pin_13",
+    "14": "Pin_14",
+    "15": "Pin_15",
+    "16": "Pin_16",
+    "17": "Pin_17",
+    "18": "Pin_18",
+    "19": "Pin_19",
+    "2": "Pin_2",
+    "20": "Pin_20",
+    "3": "Pin_3",
+    "4": "Pin_4",
+    "5": "Pin_5",
+    "6": "Pin_6",
+    "7": "Pin_7",
+    "8": "Pin_8",
+    "9": "Pin_9"
+   },
    "pins": {
     "1": "GND",
     "10": "ALERT_N",
@@ -50,9 +83,14 @@
    "value": "sensor_edge_v1 card fingers"
   },
   "R1": {
+   "datasheet": "~",
    "footprint": "Resistor_SMD:R_0402_1005Metric",
    "lib_id": "Device:R",
    "note": "",
+   "pin_names": {
+    "1": "",
+    "2": ""
+   },
    "pins": {
     "1": "DRV_WAKE",
     "2": "WAKE"
@@ -60,9 +98,14 @@
    "value": "1k"
   },
   "R2": {
+   "datasheet": "~",
    "footprint": "Resistor_SMD:R_0402_1005Metric",
    "lib_id": "Device:R",
    "note": "test only; ALERT_N is open-drain",
+   "pin_names": {
+    "1": "",
+    "2": ""
+   },
    "pins": {
     "1": "DRV_ALERT",
     "2": "ALERT_N"
@@ -70,9 +113,14 @@
    "value": "1k"
   },
   "R3": {
+   "datasheet": "~",
    "footprint": "Resistor_SMD:R_0402_1005Metric",
    "lib_id": "Device:R",
    "note": "",
+   "pin_names": {
+    "1": "",
+    "2": ""
+   },
    "pins": {
     "1": "DRV_MISO",
     "2": "MISO"
@@ -80,9 +128,14 @@
    "value": "1k"
   },
   "R4": {
+   "datasheet": "~",
    "footprint": "Resistor_SMD:R_0402_1005Metric",
    "lib_id": "Device:R",
    "note": "",
+   "pin_names": {
+    "1": "",
+    "2": ""
+   },
    "pins": {
     "1": "DRV_UART_RX",
     "2": "UART_RX"
@@ -90,9 +143,14 @@
    "value": "1k"
   },
   "R5": {
+   "datasheet": "~",
    "footprint": "Resistor_SMD:R_0402_1005Metric",
    "lib_id": "Device:R",
    "note": "~10 mA switched-rail load",
+   "pin_names": {
+    "1": "",
+    "2": ""
+   },
    "pins": {
     "1": "V3V3_SW",
     "2": "GND"
@@ -100,45 +158,70 @@
    "value": "330"
   },
   "TP1": {
+   "datasheet": "~",
    "footprint": "TestPoint:TestPoint_Pad_D1.0mm",
    "lib_id": "Connector:TestPoint",
    "note": "",
+   "pin_names": {
+    "1": "1"
+   },
    "pins": {
     "1": "V3V3_AON"
    },
    "value": "V3V3_AON"
   },
   "TP2": {
+   "datasheet": "~",
    "footprint": "TestPoint:TestPoint_Pad_D1.0mm",
    "lib_id": "Connector:TestPoint",
    "note": "",
+   "pin_names": {
+    "1": "1"
+   },
    "pins": {
     "1": "GND"
    },
    "value": "GND"
   },
   "TP3": {
+   "datasheet": "~",
    "footprint": "TestPoint:TestPoint_Pad_D1.0mm",
    "lib_id": "Connector:TestPoint",
    "note": "",
+   "pin_names": {
+    "1": "1"
+   },
    "pins": {
     "1": "V3V3_SW"
    },
    "value": "V3V3_SW"
   },
   "TP4": {
+   "datasheet": "~",
    "footprint": "TestPoint:TestPoint_Pad_D1.0mm",
    "lib_id": "Connector:TestPoint",
    "note": "",
+   "pin_names": {
+    "1": "1"
+   },
    "pins": {
     "1": "WAKE"
    },
    "value": "WAKE"
   },
   "U1": {
+   "datasheet": "https://ww1.microchip.com/downloads/aemDocuments/documents/MPD/ProductDocuments/DataSheets/2-Kbit-I2C-Serial-EEPROMs-+EUI-48-or-EUI-64-Node-20002124.pdf",
    "footprint": "Package_TO_SOT_SMD:SOT-23-6",
    "lib_id": "Memory_EEPROM:24AA025E-OT",
    "note": "ID EEPROM 0x50 with factory EUI-48 (S-1)",
+   "pin_names": {
+    "1": "SCL",
+    "2": "V_{SS}",
+    "3": "SDA",
+    "4": "A1",
+    "5": "A0",
+    "6": "V_{CC}"
+   },
    "pins": {
     "1": "SCL",
     "2": "GND",
@@ -150,9 +233,36 @@
    "value": "24AA025E48T-I/OT"
   },
   "U2": {
+   "datasheet": "http://www.ti.com/lit/ds/symlink/tca9535.pdf",
    "footprint": "Package_SO:TSSOP-24_4.4x7.8mm_P0.65mm",
    "lib_id": "Interface_Expansion:TCA9535PWR",
    "note": "branch address 0x27",
+   "pin_names": {
+    "1": "~{INT}",
+    "10": "P06",
+    "11": "P07",
+    "12": "GND",
+    "13": "P10",
+    "14": "P11",
+    "15": "P12",
+    "16": "P13",
+    "17": "P14",
+    "18": "P15",
+    "19": "P16",
+    "2": "A1",
+    "20": "P17",
+    "21": "A0",
+    "22": "SCL",
+    "23": "SDA",
+    "24": "VCC",
+    "3": "A2",
+    "4": "P00",
+    "5": "P01",
+    "6": "P02",
+    "7": "P03",
+    "8": "P04",
+    "9": "P05"
+   },
    "pins": {
     "1": null,
     "10": null,

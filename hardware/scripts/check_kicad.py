@@ -85,6 +85,39 @@ def erc(cli: str, board: str, tmp: str, waivers: list[dict]) -> tuple[bool, list
     return ok, lines, counts
 
 
+def layout_status() -> dict:
+    path = KICAD / "layout-status.json"
+    return json.load(open(path)) if path.exists() else {}
+
+
+def pcb_drc(cli: str, board: str, tmp: str) -> tuple[bool, dict, list[str]]:
+    """DRC with schematic parity on the PCB. Errors fail; warnings are counted and reported.
+    A board whose layout-status says routing is "partial" may have unconnected items (reported, not fatal)."""
+    partial = layout_status().get(board, {}).get("routing") == "partial"
+    pcb = KICAD / board / f"{board}.kicad_pcb"
+    if not pcb.exists():
+        return True, {}, ["- PCB: not generated"]
+    out = os.path.join(tmp, f"{board}-drc.json")
+    run([cli, "pcb", "drc", "--schematic-parity", "--refill-zones", "--format", "json", "--severity-all",
+         "-o", out, str(pcb)])
+    data = json.load(open(out))
+    counts: dict[str, int] = {}
+    errors = []
+    for key in ("violations", "unconnected_items", "schematic_parity"):
+        for v in data.get(key, []):
+            counts[f"{v['severity']}:{v['type']}"] = counts.get(f"{v['severity']}:{v['type']}", 0) + 1
+            if v["severity"] == "error" and not (partial and v["type"] == "unconnected_items"):
+                errors.append(f"  - **{v['type']}**: {v['description']} "
+                              f"({'; '.join(i['description'] for i in v['items'])})")
+    summary = ", ".join(f"{k.split(':')[1]} {n}" for k, n in sorted(counts.items())) or "none"
+    lines = [f"- PCB DRC (with schematic parity): {summary}"]
+    if partial:
+        lines.append(f"- **Routing incomplete** ({counts.get('error:unconnected_items', 0)} unconnected items): "
+                     f"{layout_status()[board].get('note', '')}")
+    lines += errors[:30]
+    return not errors, counts, lines
+
+
 def exported_netlist(cli: str, board: str, tmp: str) -> dict[tuple[str, str], str]:
     out = os.path.join(tmp, f"{board}.net")
     run([cli, "sch", "export", "netlist", "--format", "kicadsexpr", "-o", out,
@@ -184,9 +217,12 @@ def footprints(intended: dict, fpdir: pathlib.Path | None) -> tuple[list[str], l
         if not fp:
             tbd.append(f"{ref} ({p['value']}): {p['note'] or 'footprint not assigned'}")
             continue
-        if fpdir:
-            lib, name = fp.split(":", 1)
-            if not (fpdir / f"{lib}.pretty" / f"{name}.kicad_mod").exists():
+        lib, name = fp.split(":", 1)
+        if "PLACEHOLDER" in name:
+            tbd.append(f"{ref} ({p['value']}): placeholder land pattern {fp}")
+        base = KICAD / "libraries" / "talos-footprints.pretty" if lib == "talos" else (fpdir / f"{lib}.pretty" if fpdir else None)
+        if base is not None:
+            if not (base / f"{name}.kicad_mod").exists():
                 missing.append(f"{ref}: {fp} not found in KiCad library")
     return missing, tbd
 
@@ -234,8 +270,8 @@ def main() -> int:
     report = ["# KiCad check results (generated)\n",
               f"`hardware/scripts/check_kicad.py`, kicad-cli **{version}**, {datetime.date.today().isoformat()}. "
               "This shows the schematics are self-consistent. **It is not an electrical design review.**\n",
-              "| Board | Parts | ERC errors | ERC warnings | Waived | Netlist round-trip | Safe defaults |",
-              "|---|---:|---:|---:|---:|---|---|"]
+              "| Board | Parts | ERC errors | ERC warnings | Waived | Netlist round-trip | Safe defaults | PCB DRC errors | PCB DRC warnings |",
+              "|---|---:|---:|---:|---:|---|---|---:|---:|"]
     details, all_ok = [], True
     with tempfile.TemporaryDirectory() as tmp:
         for b in BOARDS:
@@ -245,16 +281,20 @@ def main() -> int:
             missing, tbd = footprints(intended[b], fpdir)
             write_bom(b, intended[b])
             write_pin_net(b, intended[b])
-            ok = ok_erc and not diffs and not safe and not missing
+            ok_drc, drc_counts, drc_lines = pcb_drc(cli, b, tmp)
+            drc_err = sum(n for k, n in drc_counts.items() if k.startswith("error:"))
+            drc_warn = sum(n for k, n in drc_counts.items() if k.startswith("warning:"))
+            ok = ok_erc and not diffs and not safe and not missing and ok_drc
             all_ok &= ok
             report.append(f"| {b} | {len(intended[b]['parts'])} | {counts['error']} | {counts['warning']} | "
                           f"{counts['waived']} | {'match' if not diffs else f'{len(diffs)} differences'} | "
-                          f"{'ok' if not safe else f'{len(safe)} missing'} |")
+                          f"{'ok' if not safe else f'{len(safe)} missing'} | {drc_err} | {drc_warn} |")
             details.append(f"\n## {b}\n")
             details += lines or ["- ERC: no violations"]
             details += [f"- netlist: {d}" for d in diffs[:50]] or ["- Netlist: KiCad export equals the intended netlist"]
             details += [f"- safe default: {s}" for s in safe]
             details += [f"- footprint missing: {m}" for m in missing]
+            details += drc_lines
             if tbd:
                 details.append("- Footprints still to draw (H4):")
                 details += [f"  - {t}" for t in tbd]

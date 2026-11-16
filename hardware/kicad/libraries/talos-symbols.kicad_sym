@@ -22,7 +22,7 @@
 				)
 			)
 		)
-		(property "Footprint" ""
+		(property "Footprint" "talos:ESP32-H2-MINI-1"
 			(at 0 -29.21 0)
 			(effects
 				(font
@@ -1040,7 +1040,7 @@
 				)
 			)
 		)
-		(property "Footprint" ""
+		(property "Footprint" "talos:Texas_DLH0010A_WSON-10-1EP_2.2x2mm_P0.4mm"
 			(at 0 -15.24 0)
 			(effects
 				(font
@@ -1058,7 +1058,7 @@
 				(hide yes)
 			)
 		)
-		(property "Description" "TI SLUSF69A Table 4-1 (DLH WSON-10)"
+		(property "Description" "TI SLUSF69A Table 4-1 + package drawing DLH0010A (pad 11 = thermal pad)"
 			(at 0 -20.32 0)
 			(effects
 				(font
@@ -1244,7 +1244,7 @@
 				)
 			)
 			(pin power_in line
-				(at 0 -10.16 90)
+				(at -1.27 -10.16 90)
 				(length 2.54)
 				(name "GND"
 					(effects
@@ -1254,6 +1254,24 @@
 					)
 				)
 				(number "5"
+					(effects
+						(font
+							(size 1.016 1.016)
+						)
+					)
+				)
+			)
+			(pin passive line
+				(at 1.27 -10.16 90)
+				(length 2.54)
+				(name "EP"
+					(effects
+						(font
+							(size 1.016 1.016)
+						)
+					)
+				)
+				(number "11"
 					(effects
 						(font
 							(size 1.016 1.016)
@@ -1962,7 +1980,7 @@
 				)
 			)
 		)
-		(property "Footprint" ""
+		(property "Footprint" "talos:PIR_Panasonic_EKMB_TO-5"
 			(at 0 -10.16 0)
 			(effects
 				(font

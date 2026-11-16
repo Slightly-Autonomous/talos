@@ -14,10 +14,10 @@ qty,refs,value,symbol,footprint
 1,J1,USB-C sink,Connector:USB_C_Receptacle_USB2.0_16P,Connector_USB:USB_C_Receptacle_GCT_USB4105-xx-A_16P_TopMnt_Horizontal
 1,J2,PV in,Connector_Generic:Conn_01x02,Connector_JST:JST_PH_S2B-PH-SM4-TB_1x02-1MP_P2.00mm_Horizontal
 1,J3,"1S pack (BAT+, NTC, GND)",Connector_Generic:Conn_01x03,Connector_JST:JST_PH_S3B-PH-SM4-TB_1x03-1MP_P2.00mm_Horizontal
-1,J4,sensor_edge_v1 slot 0,Connector_Generic:Conn_02x10_Odd_Even,TBD
-1,J5,sensor_edge_v1 slot 1,Connector_Generic:Conn_02x10_Odd_Even,TBD
-1,J6,sensor_edge_v1 slot 2,Connector_Generic:Conn_02x10_Odd_Even,TBD
-1,J7,sensor_edge_v1 slot 3,Connector_Generic:Conn_02x10_Odd_Even,TBD
+1,J4,sensor_edge_v1 slot 0,Connector_Generic:Conn_02x10_Odd_Even,talos:Samtec_MEC8-110-02-L-D-EM2_PLACEHOLDER
+1,J5,sensor_edge_v1 slot 1,Connector_Generic:Conn_02x10_Odd_Even,talos:Samtec_MEC8-110-02-L-D-EM2_PLACEHOLDER
+1,J6,sensor_edge_v1 slot 2,Connector_Generic:Conn_02x10_Odd_Even,talos:Samtec_MEC8-110-02-L-D-EM2_PLACEHOLDER
+1,J7,sensor_edge_v1 slot 3,Connector_Generic:Conn_02x10_Odd_Even,talos:Samtec_MEC8-110-02-L-D-EM2_PLACEHOLDER
 1,L1,2.2u DFE252012F-2R2M,Device:L,Inductor_SMD:L_1008_2520Metric
 4,R1 R2 R3 R17,10k,Device:R,Resistor_SMD:R_0402_1005Metric
 2,R10 R11,5.1k,Device:R,Resistor_SMD:R_0402_1005Metric
@@ -46,12 +46,12 @@ qty,refs,value,symbol,footprint
 1,TP7,VBAT,Connector:TestPoint,TestPoint:TestPoint_Pad_D1.0mm
 1,TP8,SYS_PATH,Connector:TestPoint,TestPoint:TestPoint_Pad_D1.0mm
 1,TP9,I2C_SDA,Connector:TestPoint,TestPoint:TestPoint_Pad_D1.0mm
-1,U1,ESP32-H2-MINI-1-H4S,talos:ESP32-H2-MINI-1,TBD
+1,U1,ESP32-H2-MINI-1-H4S,talos:ESP32-H2-MINI-1,talos:ESP32-H2-MINI-1
 8,U6 U7 U8 U9 U10 U11 U12 U13,TPS22917DBVR,Power_Management:TPS22917DBV,Package_TO_SOT_SMD:SOT-23-6
 1,U14,TCA9546APWR,Interface_Expansion:TCA9546APW,Package_SO:TSSOP-16_4.4x5mm_P0.65mm
 2,U15 U16,TCA9535PWR,Interface_Expansion:TCA9535PWR,Package_SO:TSSOP-24_4.4x7.8mm_P0.65mm
 1,U17,TS3A5017RSVR,Analog_Switch:TS3A5017RSV,Package_DFN_QFN:UQFN-16_1.8x2.6mm_P0.4mm
 1,U2,USBLC6-2SC6,Power_Protection:USBLC6-2SC6,Package_TO_SOT_SMD:SOT-23-6
 1,U3,TPS2121RUXR,talos:TPS2121,Package_DFN_QFN:Texas_VQFN-HR-12_2x2.5mm_P0.5mm
-1,U4,BQ25186DLHR,talos:BQ25186,TBD
-1,U5,TPS63900DSKR,Regulator_Switching:TPS63900,Package_SON:WSON-10-1EP_2.5x2.5mm_P0.5mm_EP1.2x2mm_ThermalVias
+1,U4,BQ25186DLHR,talos:BQ25186,talos:Texas_DLH0010A_WSON-10-1EP_2.2x2mm_P0.4mm
+1,U5,TPS63900DSKR,Regulator_Switching:TPS63900,Package_SON:WSON-10-1EP_2.5x2.5mm_P0.5mm_EP1.2x2mm

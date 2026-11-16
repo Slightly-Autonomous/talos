@@ -2,9 +2,14 @@
  "board": "TL-MOD-004",
  "parts": {
   "C1": {
+   "datasheet": "~",
    "footprint": "Capacitor_SMD:C_0402_1005Metric",
    "lib_id": "Device:C",
    "note": "",
+   "pin_names": {
+    "1": "",
+    "2": ""
+   },
    "pins": {
     "1": "V3V3_AON",
     "2": "GND"
@@ -12,9 +17,14 @@
    "value": "100n"
   },
   "C2": {
+   "datasheet": "~",
    "footprint": "Capacitor_SMD:C_0402_1005Metric",
    "lib_id": "Device:C",
    "note": "",
+   "pin_names": {
+    "1": "",
+    "2": ""
+   },
    "pins": {
     "1": "V3V3_AON",
     "2": "GND"
@@ -22,9 +32,32 @@
    "value": "100n"
   },
   "J1": {
-   "footprint": "",
+   "datasheet": "~",
+   "footprint": "talos:CardEdge_sensor_edge_v1_2x10_P0.8mm",
    "lib_id": "Connector_Generic:Conn_02x10_Odd_Even",
-   "note": "finger footprint TBD (H4): 1.60 mm card, 0.80 mm pitch, mates MEC8-EM2",
+   "note": "gold fingers, 1.60 mm card, 0.80 mm pitch",
+   "pin_names": {
+    "1": "Pin_1",
+    "10": "Pin_10",
+    "11": "Pin_11",
+    "12": "Pin_12",
+    "13": "Pin_13",
+    "14": "Pin_14",
+    "15": "Pin_15",
+    "16": "Pin_16",
+    "17": "Pin_17",
+    "18": "Pin_18",
+    "19": "Pin_19",
+    "2": "Pin_2",
+    "20": "Pin_20",
+    "3": "Pin_3",
+    "4": "Pin_4",
+    "5": "Pin_5",
+    "6": "Pin_6",
+    "7": "Pin_7",
+    "8": "Pin_8",
+    "9": "Pin_9"
+   },
    "pins": {
     "1": "GND",
     "10": null,
@@ -50,27 +83,44 @@
    "value": "sensor_edge_v1 card fingers"
   },
   "TP1": {
+   "datasheet": "~",
    "footprint": "TestPoint:TestPoint_Pad_D1.0mm",
    "lib_id": "Connector:TestPoint",
    "note": "",
+   "pin_names": {
+    "1": "1"
+   },
    "pins": {
     "1": "V3V3_AON"
    },
    "value": "V3V3_AON"
   },
   "TP2": {
+   "datasheet": "~",
    "footprint": "TestPoint:TestPoint_Pad_D1.0mm",
    "lib_id": "Connector:TestPoint",
    "note": "",
+   "pin_names": {
+    "1": "1"
+   },
    "pins": {
     "1": "GND"
    },
    "value": "GND"
   },
   "U1": {
+   "datasheet": "https://ww1.microchip.com/downloads/aemDocuments/documents/MPD/ProductDocuments/DataSheets/2-Kbit-I2C-Serial-EEPROMs-+EUI-48-or-EUI-64-Node-20002124.pdf",
    "footprint": "Package_TO_SOT_SMD:SOT-23-6",
    "lib_id": "Memory_EEPROM:24AA025E-OT",
    "note": "ID EEPROM 0x50 with factory EUI-48 (S-1)",
+   "pin_names": {
+    "1": "SCL",
+    "2": "V_{SS}",
+    "3": "SDA",
+    "4": "A1",
+    "5": "A0",
+    "6": "V_{CC}"
+   },
    "pins": {
     "1": "SCL",
     "2": "GND",
@@ -82,9 +132,16 @@
    "value": "24AA025E48T-I/OT"
   },
   "U2": {
-   "footprint": "Sensor_Humidity:Sensirion_DFN-4_1.5x1.5mm_P0.8mm_SHT4x_NoCentralPad",
+   "datasheet": "https://sensirion.com/media/documents/33FD6951/624C4357/Datasheet_SHT4x.pdf",
+   "footprint": "talos:Sensirion_DFN-4_1.5x1.5mm_P0.8mm_SHT4x_CentralKeepout",
    "lib_id": "Sensor_Humidity:SHT4x",
-   "note": "",
+   "note": "no copper under the sensor die",
+   "pin_names": {
+    "1": "SDA",
+    "2": "SCL",
+    "3": "VDD",
+    "4": "VSS"
+   },
    "pins": {
     "1": "SDA",
     "2": "SCL",

@@ -14,7 +14,7 @@ Status at H3 (2026-11-16). Owner for every row is "EE reviewer" unless it says "
 | HD-006 | Battery pack/chemistry | Protected 1S Li-ion + 10 k NTC assumed | Pick pack; check NTC curve against BQ25186 TS thresholds | yes |
 | HD-007 | Charger and source priority | **Proposed:** TPS2121 + BQ25186 + TPS63900 (HW-0003) | EE review of PR1/CP2 divider and ILIM/SS values (marked TBD in schematic) | yes |
 | HD-008 | Low-sun reserve | Calculated in results/power-budget.md | Weather traces in the twin; field measurement | no |
-| HD-009 | Layer count/side | Not started | H4 | – |
+| HD-009 | Layer count/side | **First pass:** SN 4-layer (GND/3V3 planes), cards 2-layer, single-sided assembly | Fab DFM review and quote (owner approval) | yes |
 | HD-010..014 | Vision Node | Desk study done ([vision-compute-study.md](../architecture/vision-compute-study.md)): CM4 is the low-risk default; RV1106 class is the power option; CM5 has no hardware H.264 encode | Owner approval to buy dev kits; run VB-01..06 | – |
 | HD-015 | Manufacturer | Not started | H4 quotes (owner approval) | – |
 | HD-016 | Secure provisioning | eFuses untouched (HW-0005) | Owner signing/recovery design | no |
@@ -32,7 +32,8 @@ Status at H3 (2026-11-16). Owner for every row is "EE reviewer" unless it says "
 6. **VBAT pin 15 of the MINI-1** is tied to V3V3_CORE. The module default says it is internally tied to 3V3, so confirm against the module schematic (datasheet §8).
 7. **TVS arrays on slot lines:** check PESD3V3L5UV leakage against the sleep budget.
 8. **The SPI/UART lines are bused to unpowered cards.** Firmware must hold SCK/MOSI low and the UART mux disabled whenever a slot is unpowered (interface rule S-3).
-9. **No footprints for three parts** (MINI-1 module, MEC8-EM2 socket, EKMB can) and no card-edge finger footprint. They must be drawn from vendor drawings in H4. They are listed in results/footprint-audit.txt.
+9. **Footprints:** the MINI-1, DLH0010A, EKMB and card-finger footprints are now drawn from their drawings. The **MEC8-EM2 socket footprint is still a placeholder** (no Samtec drawing obtained), and the EKMB pin mapping needs a physical check.
+13. **The H4 layout is autorouted and unreviewed.** It has no impedance control, and nobody has reviewed the RF or power-loop placement. The full list is in `layout/README.md`.
 10. **SHT4x idle and 24AA025E standby currents are not yet sourced.** The budget uses conservative 1 µA placeholders.
 11. **Floating expander inputs.** `PRESENT_PROBE` floats until firmware drives it, so EXP_B P13 must default to an output driven low. SLOTn_ALERT_N floats while that slot's AON switch is off, because AON has no QOD. Floating CMOS inputs raise TCA9535 current. Options: enable QOD on the AON switches too, or have firmware mask the slot. Decide at review.
 12. **C6 and C8 (10 µF/25 V and 4.7 µF/25 V in 0805)** lose most of their capacitance under DC bias at PV voltages. Size them from the vendor's DC-bias curves.

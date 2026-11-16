@@ -37,3 +37,9 @@ firmware/esp_idf/managed_components/
 # Python
 __pycache__/
 *.pyc
+
+# KiCad per-user state and routing temp files
+*.kicad_prl
+*.placed
+fp-info-cache
+*-backups/

@@ -1996,7 +1996,7 @@
 				)
 			)
 		)
-		(property "Footprint" ""
+		(property "Footprint" "talos:CardEdge_sensor_edge_v1_2x10_P0.8mm"
 			(at 43.18 45.72 0)
 			(effects
 				(font
@@ -2014,7 +2014,7 @@
 				(hide yes)
 			)
 		)
-		(property "Talos_Note" "finger footprint TBD (H4): 1.60 mm card, 0.80 mm pitch, mates MEC8-EM2"
+		(property "Talos_Note" "gold fingers, 1.60 mm card, 0.80 mm pitch"
 			(at 43.18 45.72 0)
 			(effects
 				(font
@@ -3907,7 +3907,7 @@
 		(at 304.8 35.56 0)
 		(unit 1)
 		(exclude_from_sim no)
-		(in_bom yes)
+		(in_bom no)
 		(on_board yes)
 		(dnp no)
 		(uuid "b7966a0b-0b33-59f9-90f0-444120f7e4b7")
@@ -3983,7 +3983,7 @@
 		(at 320.04 35.56 0)
 		(unit 1)
 		(exclude_from_sim no)
-		(in_bom yes)
+		(in_bom no)
 		(on_board yes)
 		(dnp no)
 		(uuid "eec0d472-a70d-501d-ae2e-b6482441dcc9")
@@ -4059,7 +4059,7 @@
 		(at 335.28 35.56 0)
 		(unit 1)
 		(exclude_from_sim no)
-		(in_bom yes)
+		(in_bom no)
 		(on_board yes)
 		(dnp no)
 		(uuid "697c8874-c00d-52ad-848e-0d84c66efe0b")
@@ -4135,7 +4135,7 @@
 		(at 350.52 35.56 0)
 		(unit 1)
 		(exclude_from_sim no)
-		(in_bom yes)
+		(in_bom no)
 		(on_board yes)
 		(dnp no)
 		(uuid "ea31a10c-17fd-53fd-8457-01bcc80e5b95")

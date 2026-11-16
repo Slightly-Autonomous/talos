@@ -2,9 +2,14 @@
  "board": "TL-MOD-003",
  "parts": {
   "C1": {
+   "datasheet": "~",
    "footprint": "Capacitor_SMD:C_0402_1005Metric",
    "lib_id": "Device:C",
    "note": "",
+   "pin_names": {
+    "1": "",
+    "2": ""
+   },
    "pins": {
     "1": "V3V3_AON",
     "2": "GND"
@@ -12,9 +17,14 @@
    "value": "100n"
   },
   "C2": {
+   "datasheet": "~",
    "footprint": "Capacitor_SMD:C_0402_1005Metric",
    "lib_id": "Device:C",
    "note": "",
+   "pin_names": {
+    "1": "",
+    "2": ""
+   },
    "pins": {
     "1": "V3V3_AON",
     "2": "GND"
@@ -22,9 +32,14 @@
    "value": "100n"
   },
   "C3": {
+   "datasheet": "~",
    "footprint": "Capacitor_SMD:C_0805_2012Metric",
    "lib_id": "Device:C",
    "note": "",
+   "pin_names": {
+    "1": "",
+    "2": ""
+   },
    "pins": {
     "1": "V3V3_AON",
     "2": "GND"
@@ -32,9 +47,32 @@
    "value": "10u"
   },
   "J1": {
-   "footprint": "",
+   "datasheet": "~",
+   "footprint": "talos:CardEdge_sensor_edge_v1_2x10_P0.8mm",
    "lib_id": "Connector_Generic:Conn_02x10_Odd_Even",
-   "note": "finger footprint TBD (H4): 1.60 mm card, 0.80 mm pitch, mates MEC8-EM2",
+   "note": "gold fingers, 1.60 mm card, 0.80 mm pitch",
+   "pin_names": {
+    "1": "Pin_1",
+    "10": "Pin_10",
+    "11": "Pin_11",
+    "12": "Pin_12",
+    "13": "Pin_13",
+    "14": "Pin_14",
+    "15": "Pin_15",
+    "16": "Pin_16",
+    "17": "Pin_17",
+    "18": "Pin_18",
+    "19": "Pin_19",
+    "2": "Pin_2",
+    "20": "Pin_20",
+    "3": "Pin_3",
+    "4": "Pin_4",
+    "5": "Pin_5",
+    "6": "Pin_6",
+    "7": "Pin_7",
+    "8": "Pin_8",
+    "9": "Pin_9"
+   },
    "pins": {
     "1": "GND",
     "10": null,
@@ -60,27 +98,44 @@
    "value": "sensor_edge_v1 card fingers"
   },
   "TP1": {
+   "datasheet": "~",
    "footprint": "TestPoint:TestPoint_Pad_D1.0mm",
    "lib_id": "Connector:TestPoint",
    "note": "",
+   "pin_names": {
+    "1": "1"
+   },
    "pins": {
     "1": "V3V3_AON"
    },
    "value": "V3V3_AON"
   },
   "TP2": {
+   "datasheet": "~",
    "footprint": "TestPoint:TestPoint_Pad_D1.0mm",
    "lib_id": "Connector:TestPoint",
    "note": "",
+   "pin_names": {
+    "1": "1"
+   },
    "pins": {
     "1": "GND"
    },
    "value": "GND"
   },
   "U1": {
+   "datasheet": "https://ww1.microchip.com/downloads/aemDocuments/documents/MPD/ProductDocuments/DataSheets/2-Kbit-I2C-Serial-EEPROMs-+EUI-48-or-EUI-64-Node-20002124.pdf",
    "footprint": "Package_TO_SOT_SMD:SOT-23-6",
    "lib_id": "Memory_EEPROM:24AA025E-OT",
    "note": "ID EEPROM 0x50 with factory EUI-48 (S-1)",
+   "pin_names": {
+    "1": "SCL",
+    "2": "V_{SS}",
+    "3": "SDA",
+    "4": "A1",
+    "5": "A0",
+    "6": "V_{CC}"
+   },
    "pins": {
     "1": "SCL",
     "2": "GND",
@@ -92,9 +147,24 @@
    "value": "24AA025E48T-I/OT"
   },
   "U2": {
+   "datasheet": "~",
    "footprint": "Package_LGA:LGA-12_2x2mm_P0.5mm",
    "lib_id": "talos:LIS2DW12",
    "note": "CS high = I2C; SA0 high = 0x19 (internal pull-up cannot be disabled)",
+   "pin_names": {
+    "1": "SCL/SPC",
+    "10": "VDD_IO",
+    "11": "INT2",
+    "12": "INT1",
+    "2": "CS",
+    "3": "SDO/SA0",
+    "4": "SDA/SDI/SDO",
+    "5": "NC",
+    "6": "GND",
+    "7": "RES",
+    "8": "GND",
+    "9": "VDD"
+   },
    "pins": {
     "1": "SCL",
     "10": "V3V3_AON",
