@@ -7,6 +7,8 @@ test --test_output=errors
 # Sanitizers: bazel test --config=asan //...
 build:asan --strip=never --copt=-fsanitize=address --copt=-fno-omit-frame-pointer --copt=-O1 --linkopt=-fsanitize=address
 build:ubsan --strip=never --copt=-fsanitize=undefined --copt=-fno-sanitize-recover=all --linkopt=-fsanitize=undefined
+# Bazel links via the C driver; pull in the C++ half of the UBSan runtime (vptr checks).
+build:ubsan --linkopt=-fsanitize-link-c++-runtime
 # protobuf's thread-local arena cache trips -fsanitize=alignment on macOS (Darwin TLS
 # does not honor its 32-byte alignment). Off here; CI re-enables it on Linux.
 build:ubsan --copt=-fno-sanitize=alignment
