@@ -9,6 +9,7 @@ cc_library(
         "modules.cc",
         "ota.cc",
         "runtime.cc",
+        "wire.cc",
     ],
     hdrs = [
         "event_queue.h",
@@ -17,8 +18,21 @@ cc_library(
         "ota.h",
         "runtime.h",
         "types.h",
+        "wire.h",
     ],
     copts = TALOS_COPTS,
     visibility = ["//visibility:public"],
     deps = ["//common/sha256"],
+)
+
+cc_test(
+    name = "wire_test",
+    size = "small",
+    srcs = ["wire_test.cc"],
+    copts = TALOS_COPTS,
+    deps = [
+        ":portable",
+        "//common/sha256",
+        "@googletest//:gtest_main",
+    ],
 )

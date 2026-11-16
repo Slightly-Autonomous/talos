@@ -1,0 +1,21 @@
+load("@rules_cc//cc:defs.bzl", "cc_library", "cc_test")
+load("//bazel:copts.bzl", "TALOS_COPTS")
+
+cc_library(
+    name = "coap",
+    srcs = ["coap.cc"],
+    hdrs = ["coap.h"],
+    copts = TALOS_COPTS,
+    visibility = ["//visibility:public"],
+)
+
+cc_test(
+    name = "coap_test",
+    size = "small",
+    srcs = ["coap_test.cc"],
+    copts = TALOS_COPTS,
+    deps = [
+        ":coap",
+        "@googletest//:gtest_main",
+    ],
+)

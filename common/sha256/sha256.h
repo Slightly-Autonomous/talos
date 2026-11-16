@@ -29,4 +29,19 @@ class Sha256 {
 
 std::array<std::uint8_t, 32> sha256(std::string_view data);
 
+// HMAC-SHA256 (RFC 2104). Streaming; keys longer than 64 bytes are hashed.
+class HmacSha256 {
+ public:
+  HmacSha256(const std::uint8_t* key, std::size_t key_len);
+  void update(const std::uint8_t* data, std::size_t n) { inner_.update(data, n); }
+  std::array<std::uint8_t, 32> finish();
+
+ private:
+  Sha256 inner_;
+  std::uint8_t opad_[64];
+};
+
+// Constant-time comparison of equal-length byte strings.
+bool constant_time_equal(const std::uint8_t* a, const std::uint8_t* b, std::size_t n);
+
 }  // namespace talos

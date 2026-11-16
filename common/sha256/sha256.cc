@@ -99,4 +99,36 @@ std::array<std::uint8_t, 32> sha256(std::string_view data) {
   return h.finish();
 }
 
+HmacSha256::HmacSha256(const std::uint8_t* key, std::size_t key_len) : opad_{} {
+  std::uint8_t k[64] = {};
+  if (key_len > 64) {
+    Sha256 h;
+    h.update(key, key_len);
+    const auto d = h.finish();
+    for (std::size_t i = 0; i < d.size(); ++i) k[i] = d[i];
+  } else {
+    for (std::size_t i = 0; i < key_len; ++i) k[i] = key[i];
+  }
+  std::uint8_t ipad[64];
+  for (int i = 0; i < 64; ++i) {
+    ipad[i] = static_cast<std::uint8_t>(k[i] ^ 0x36);
+    opad_[i] = static_cast<std::uint8_t>(k[i] ^ 0x5c);
+  }
+  inner_.update(ipad, 64);
+}
+
+std::array<std::uint8_t, 32> HmacSha256::finish() {
+  const auto inner = inner_.finish();
+  Sha256 outer;
+  outer.update(opad_, 64);
+  outer.update(inner.data(), inner.size());
+  return outer.finish();
+}
+
+bool constant_time_equal(const std::uint8_t* a, const std::uint8_t* b, std::size_t n) {
+  std::uint8_t diff = 0;
+  for (std::size_t i = 0; i < n; ++i) diff = static_cast<std::uint8_t>(diff | (a[i] ^ b[i]));
+  return diff == 0;
+}
+
 }  // namespace talos

@@ -9,6 +9,7 @@ bazel_dep(name = "rules_cc", version = "0.2.28")
 bazel_dep(name = "protobuf", version = "36.2")
 bazel_dep(name = "yaml-cpp", version = "0.9.0.bcr.1")
 bazel_dep(name = "sqlite3", version = "3.53.4")
+bazel_dep(name = "libsodium", version = "1.0.19")
 bazel_dep(name = "googletest", version = "1.18.0.bcr.1", dev_dependency = True)
 
 # cpp-httplib as plain HTTP: the registry module forces BoringSSL TLS support,
