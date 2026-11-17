@@ -4,7 +4,8 @@
     python3 hardware/scripts/export_fab.py [BOARD ...]
 
 Writes hardware/fab/<board>/: Gerbers + Excellon drill (zipped), pick-and-place CSV, BOM CSV (from
-hardware/results/bom), and top/bottom 3D renders. This is a *prototype* package for quoting and DFM
+hardware/results/bom), JLCPCB-format BOM/CPL plus a not-assembled list (jlc_sourcing.py), and
+top/bottom 3D renders. This is a *prototype* package for quoting and DFM
 review only. Nothing is ordered (HW-0005): ordering needs explicit owner approval.
 """
 
@@ -19,6 +20,7 @@ import tempfile
 import zipfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import jlc_sourcing  # noqa: E402
 from check_kicad import BOARDS, KICAD, RESULTS, ROOT, kicad_cli  # noqa: E402
 
 FAB = ROOT / "hardware" / "fab"
@@ -52,6 +54,7 @@ def export(cli: str, board: str) -> list[str]:
     run([cli, "pcb", "export", "pos", "--format", "csv", "--units", "mm", "--side", "both", "--use-drill-file-origin",
          "--exclude-dnp", "-o", str(out / f"{board}-cpl.csv"), str(pcb)])
     shutil.copy(RESULTS / "bom" / f"{board}.csv", out / f"{board}-bom.csv")
+    jlc_sourcing.export([board])  # JLCPCB-format BOM/CPL + not-assembled list
     for side in ("top", "bottom"):
         run([cli, "pcb", "render", "--side", side, "--width", "1200", "--height", "900", "--quality", "basic",
              "-o", str(out / f"{board}-{side}.png"), str(pcb)])

@@ -276,7 +276,7 @@ def sensor_node() -> Board:
             R(f"R{47 + 5 * n}", "100k", aon, f"SLOT{n}_CS_N"),
             R(f"R{48 + 5 * n}", "100k", aon, f"SLOT{n}_RESET_N"),
             R(f"R{49 + 5 * n}", "100k", "PRESENT_PROBE", f"SLOT{n}_PRESENT_N", "biased only while probing"),
-            Part(f"D{4 + n}", "Power_Protection:PESD3V3L5UV", "PESD3V3L5UV",
+            Part(f"D{4 + n}", "Power_Protection:PESD3V3L5UV", "PESD5V0L5UV",  # PESD3V3L5UV symbol: same pinout
                  {"1": f"SLOT_WAKE{n}", "3": f"SLOT{n}_SDA", "4": f"SLOT{n}_SCL", "5": f"SLOT{n}_ALERT_N",
                   "6": f"SLOT{n}_RESET_N", "2": "GND"}),
         )

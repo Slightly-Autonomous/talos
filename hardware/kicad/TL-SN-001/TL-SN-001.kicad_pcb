@@ -4297,7 +4297,7 @@
 				)
 			)
 		)
-		(property "Value" "PESD3V3L5UV"
+		(property "Value" "PESD5V0L5UV"
 			(at 0 1.75 180)
 			(layer "F.Fab")
 			(uuid "381cc249-c3d5-4d6c-b28a-da91b974b6e0")
@@ -11053,7 +11053,7 @@
 				)
 			)
 		)
-		(property "Value" "PESD3V3L5UV"
+		(property "Value" "PESD5V0L5UV"
 			(at 0 1.75 0)
 			(layer "F.Fab")
 			(uuid "3f554839-f17c-41e5-b4b1-3abe40fbde73")
@@ -11770,7 +11770,7 @@
 				)
 			)
 		)
-		(property "Value" "PESD3V3L5UV"
+		(property "Value" "PESD5V0L5UV"
 			(at 0 1.75 90)
 			(layer "F.Fab")
 			(uuid "33e53b88-a142-4ebd-9d44-95221c77a34d")
@@ -13269,7 +13269,7 @@
 				)
 			)
 		)
-		(property "Value" "PESD3V3L5UV"
+		(property "Value" "PESD5V0L5UV"
 			(at 0 1.75 0)
 			(layer "F.Fab")
 			(uuid "a901c677-5234-4b15-8a0b-4b6737405ee5")

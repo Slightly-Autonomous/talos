@@ -7,7 +7,7 @@ Status at H3 (2026-11-16). Owner for every row is "EE reviewer" unless it says "
 | ID | Decision | State / evidence | Next action | Blocking H4? |
 |---|---|---|---|---|
 | HD-001 | MCU variant | **Proposed:** ESP32-H2-MINI-1-H4S (4 MB). Pad ledger complete from datasheet v1.6 | EE review; confirm 4 MB fits A/B OTA (ADR 0013) | yes |
-| HD-002 | Coplanar connector | **Proposed:** Samtec MEC8-110-02-L-D-EM2; alternates in mechanical/connector-shortlist.md | Owner approval to request samples and a quote; check the EM2 drawing for host-board thickness | yes |
+| HD-002 | Coplanar connector | **Proposed:** Samtec MEC8-110-02-L-D-EM2; alternates in mechanical/connector-shortlist.md. **JLCPCB does not stock any edge-mount MEC8** (2026-11-17); only the vertical MEC8-110-02-L-DV-A(-K-TR) is stocked (30/50 pcs) | Owner decision: vertical socket JLCPCB places, or keep EM2 and consign/hand-solder; then draw the footprint from Samtec's drawing | yes |
 | HD-003 | ADC vs smart analog | **Decided for Rev A:** no slot ADC; contact 19 reserved | Revisit with the leak/piezo card | no |
 | HD-004 | Four wake sources | **Proposed:** GPIO10–13 direct, GPIO14 = expander INT. All Rev A cards now wake active-high (HW-0006 removed the contact card's level-following WAKE), so mixed per-pin levels are no longer needed; four-pin ext1 ANY_HIGH on H2 is still unverified | Dev-kit test: four wake pins, active-high, from deep sleep | yes |
 | HD-005 | Slot current budgets | AON 20 mA/slot, SW 150 mA/slot *(est)*; TPS22917 2 A max *(src)* | Measure card inrush; set CT capacitors | no |
@@ -22,6 +22,8 @@ Status at H3 (2026-11-16). Owner for every row is "EE reviewer" unless it says "
 | HD-018 | No 32 kHz crystal | GPIO13/14 used for wake, so no XTAL_32K | Measure Thread SED timing drift on the RC slow clock; if bad, move the slot-3 wake to the expander | yes |
 | HD-019 | PV panel spec | Assumed "6 V nominal", Voc ≤ 9 V, ≤ 2 W | Owner product decision; it drives the TVS and charger-current policy | no |
 | HD-020 | Magnetic card: 3-axis Hall behaviour | TMAG5273 (HW-0006) removes the orientation dependence. New costs: ~2.9 µA W&S at 100 ms (EST, vs 0.69 µA), 100 ms detection latency, 0.45 mA standby after every event until the host re-arms, volatile config after every power-up, fixed 1.5/3.0 mT open/close thresholds | Bench: measure W&S current at 100 ms; confirm thresholds with the chosen magnet and gap at all angles; confirm firmware re-arms within ms of each event and after rail cycles | yes |
+| HD-022 | PIR sensor not stocked by JLCPCB | Every low-power Panasonic EKMB is at 0 stock (2026-11-17). The stocked EKMC1601111 draws ~170 µA and breaks the battery budget; Murata IRA-S210ST01 is analog (needs an amplifier) with 20 pcs | Owner decision: hand-solder EKMB (it is through-hole), or redesign the PIR card | yes for TL-MOD-002 assembly |
+| HD-023 | JLCPCB stock is thin for some parts | ESP32-H2-MINI-1-H4S 27 pcs, PESD5V0L5UV 149 pcs, TS3A5017RSVR 211 pcs (2026-11-17) | Run `jlc_sourcing.py refresh` and `check` right before ordering; pre-order parts if needed | no |
 | HD-021 | BQ25186 land pattern modified | Pads at ±0.825 mm and EP 0.75 × 1.5 mm (TI example: ±0.8, 0.9 × 1.5) to get 0.2 mm pad-to-EP copper | EE review vs TI SLUSF69 §12; confirm thermal pad solder coverage | yes |
 
 ## Risks found while drawing the schematic (need a reviewer)
@@ -32,7 +34,7 @@ Status at H3 (2026-11-16). Owner for every row is "EE reviewer" unless it says "
 4. **SMAJ12A polarity:** the library symbol is two-anode (A1/A2), so confirm the unidirectional orientation at review.
 5. **The linear charger dissipates heat on PV:** (VIN − VBAT) × ICHG. Keep ICHG ≤ 300 mA on PV (power study §3).
 6. **VBAT pin 15 of the MINI-1** is tied to V3V3_CORE. The module default says it is internally tied to 3V3, so confirm against the module schematic (datasheet §8).
-7. **TVS arrays on slot lines:** check PESD3V3L5UV leakage against the sleep budget.
+7. **TVS arrays on slot lines:** PESD3V3L5UV went out of stock at JLCPCB, so the slots use PESD5V0L5UV (same Nexperia family and SOT-666 package). JLCPCB lists 5 nA leakage at 5 V (vs 75 nA) and 16 pF. The Nexperia datasheet could not be fetched automatically: **verify the pinout (I/O 1, 3–6; GND 2) and leakage against the datasheet.**
 8. **The SPI/UART lines are bused to unpowered cards.** Firmware must hold SCK/MOSI low and the UART mux disabled whenever a slot is unpowered (interface rule S-3).
 9. **Footprints:** the MINI-1, DLH0010A, EKMB and card-finger footprints are now drawn from their drawings. The **MEC8-EM2 socket footprint is still a placeholder** (no Samtec drawing obtained), and the EKMB pin mapping needs a physical check.
 13. **The H4 layout is autorouted and unreviewed.** It has no impedance control, and nobody has reviewed the RF or power-loop placement. The full list is in `layout/README.md`.

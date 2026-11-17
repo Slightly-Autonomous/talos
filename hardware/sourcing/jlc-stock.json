@@ -1,0 +1,307 @@
+{
+ "checked": "2026-11-17",
+ "parts": {
+  "C112339": {
+   "library": "extended",
+   "manufacturer": "Texas Instruments",
+   "mpn": "TS3A5017RSVR",
+   "package": "UQFN-16(1.8x2.6)",
+   "stock": 211
+  },
+  "C113957": {
+   "library": "extended",
+   "manufacturer": "MDD(Microdiode Semiconductor)",
+   "mpn": "SMAJ12A",
+   "package": "DO-214AC(SMA)",
+   "stock": 64026
+  },
+  "C11702": {
+   "library": "basic",
+   "manufacturer": "UNI-ROYAL(Uniroyal Elec)",
+   "mpn": "0402WGF1001TCE",
+   "package": "0402",
+   "stock": 30670657
+  },
+  "C129895": {
+   "library": "extended",
+   "manufacturer": "Microchip Tech",
+   "mpn": "24AA025E48T-I/OT",
+   "package": "SOT-23-6",
+   "stock": 1684
+  },
+  "C130204": {
+   "library": "extended",
+   "manufacturer": "Texas Instruments",
+   "mpn": "TCA9535PWR",
+   "package": "TSSOP-24",
+   "stock": 14013
+  },
+  "C1518762": {
+   "library": "extended",
+   "manufacturer": "Texas Instruments",
+   "mpn": "TPS63900DSKR",
+   "package": "WSON-10-EP(2.5x2.5)",
+   "stock": 11051
+  },
+  "C1525": {
+   "library": "basic",
+   "manufacturer": "Samsung Electro-Mechanics",
+   "mpn": "CL05B104KO5NNNC",
+   "package": "0402",
+   "stock": 35711744
+  },
+  "C15850": {
+   "library": "basic",
+   "manufacturer": "Samsung Electro-Mechanics",
+   "mpn": "CL21A106KAYNNNE",
+   "package": "0805",
+   "stock": 9008195
+  },
+  "C17168": {
+   "library": "basic",
+   "manufacturer": "UNI-ROYAL(Uniroyal Elec)",
+   "mpn": "0402WGF0000TCE",
+   "package": "0402",
+   "stock": 14786646
+  },
+  "C1779": {
+   "library": "basic",
+   "manufacturer": "Samsung Electro-Mechanics",
+   "mpn": "CL21A475KAQNNNE",
+   "package": "0805",
+   "stock": 2014684
+  },
+  "C189624": {
+   "library": "extended",
+   "manufacturer": "STMicroelectronics",
+   "mpn": "LIS2DW12TR",
+   "package": "LGA-12(2x2)",
+   "stock": 5486
+  },
+  "C201653": {
+   "library": "extended",
+   "manufacturer": "Texas Instruments",
+   "mpn": "TCA9546APWR",
+   "package": "TSSOP-16",
+   "stock": 15025
+  },
+  "C221895": {
+   "library": "extended",
+   "manufacturer": "C&K",
+   "mpn": "PTS810SJG250SMTRLFS",
+   "package": "SMD-4P,4.2x3.2mm",
+   "stock": 14684
+  },
+  "C2286": {
+   "library": "basic",
+   "manufacturer": "Hubei KENTO Elec",
+   "mpn": "KT-0603R",
+   "package": "0603",
+   "stock": 8689179
+  },
+  "C25104": {
+   "library": "basic",
+   "manufacturer": "UNI-ROYAL(Uniroyal Elec)",
+   "mpn": "0402WGF3300TCE",
+   "package": "0402",
+   "stock": 1406525
+  },
+  "C25741": {
+   "library": "basic",
+   "manufacturer": "UNI-ROYAL(Uniroyal Elec)",
+   "mpn": "0402WGF1003TCE",
+   "package": "0402",
+   "stock": 9752199
+  },
+  "C25744": {
+   "library": "basic",
+   "manufacturer": "UNI-ROYAL(Uniroyal Elec)",
+   "mpn": "0402WGF1002TCE",
+   "package": "0402",
+   "stock": 26199908
+  },
+  "C25779": {
+   "library": "basic",
+   "manufacturer": "UNI-ROYAL(Uniroyal Elec)",
+   "mpn": "0402WGF3302TCE",
+   "package": "0402",
+   "stock": 2084514
+  },
+  "C25792": {
+   "library": "basic",
+   "manufacturer": "UNI-ROYAL(Uniroyal Elec)",
+   "mpn": "0402WGF4702TCE",
+   "package": "0402",
+   "stock": 5546316
+  },
+  "C25887": {
+   "library": "extended",
+   "manufacturer": "UNI-ROYAL(Uniroyal Elec)",
+   "mpn": "0402WGF3652TCE",
+   "package": "0402",
+   "stock": 88315
+  },
+  "C25900": {
+   "library": "basic",
+   "manufacturer": "UNI-ROYAL(Uniroyal Elec)",
+   "mpn": "0402WGF4701TCE",
+   "package": "0402",
+   "stock": 13113874
+  },
+  "C25905": {
+   "library": "basic",
+   "manufacturer": "UNI-ROYAL(Uniroyal Elec)",
+   "mpn": "0402WGF5101TCE",
+   "package": "0402",
+   "stock": 4467730
+  },
+  "C26083": {
+   "library": "basic",
+   "manufacturer": "UNI-ROYAL(Uniroyal Elec)",
+   "mpn": "0402WGF1004TCE",
+   "package": "0402",
+   "stock": 2899959
+  },
+  "C265101": {
+   "library": "extended",
+   "manufacturer": "JST",
+   "mpn": "S3B-PH-SM4-TB(LF)(SN)",
+   "package": "SMD,P=2mm,Surface Mount\uff0cRight Angle",
+   "stock": 21909
+  },
+  "C2681320": {
+   "library": "extended",
+   "manufacturer": "Texas Instruments",
+   "mpn": "TPS22917DBVR",
+   "package": "SOT-23-6",
+   "stock": 18980
+  },
+  "C2682121": {
+   "library": "extended",
+   "manufacturer": "Texas Instruments",
+   "mpn": "SN74AUP1G04DBVR",
+   "package": "SOT-23-5",
+   "stock": 2831
+  },
+  "C27176": {
+   "library": "extended",
+   "manufacturer": "UNI-ROYAL(Uniroyal Elec)",
+   "mpn": "0402WGF1622TCE",
+   "package": "0402",
+   "stock": 66458
+  },
+  "C2909890": {
+   "library": "extended",
+   "manufacturer": "Sensirion",
+   "mpn": "SHT40-AD1B-R2",
+   "package": "DFN-4-EP(1.5x1.5)",
+   "stock": 13449
+  },
+  "C3020560": {
+   "library": "extended",
+   "manufacturer": "Global Connector Technology",
+   "mpn": "USB4105-GF-A",
+   "package": "SMD",
+   "stock": 15410
+  },
+  "C3678679": {
+   "library": "extended",
+   "manufacturer": "PANASONIC",
+   "mpn": "EKMB1101111",
+   "package": "-",
+   "stock": 0
+  },
+  "C3716049": {
+   "library": "extended",
+   "manufacturer": "Texas Instruments",
+   "mpn": "TMAG5273A1QDBVR",
+   "package": "SOT-23-6",
+   "stock": 3402
+  },
+  "C44639442": {
+   "library": "extended",
+   "manufacturer": "Texas Instruments",
+   "mpn": "BQ25186DLHR",
+   "package": "WSON-10",
+   "stock": 1930
+  },
+  "C45783": {
+   "library": "basic",
+   "manufacturer": "Samsung Electro-Mechanics",
+   "mpn": "CL21A226MAQNNNE",
+   "package": "0805",
+   "stock": 3829107
+  },
+  "C4649894": {
+   "library": "extended",
+   "manufacturer": "Samtec",
+   "mpn": "MEC8-110-02-L-D-EM2",
+   "package": "P=0.8mm",
+   "stock": 0
+  },
+  "C474132": {
+   "library": "extended",
+   "manufacturer": "UNI-ROYAL(Uniroyal Elec)",
+   "mpn": "0402WGF4704TCE",
+   "package": "0402",
+   "stock": 29088
+  },
+  "C47967030": {
+   "library": "extended",
+   "manufacturer": "Espressif Systems",
+   "mpn": "ESP32-H2-MINI-1-H4S",
+   "package": "SMD,16.6x13.2mm",
+   "stock": 27
+  },
+  "C485916": {
+   "library": "extended",
+   "manufacturer": "Texas Instruments",
+   "mpn": "TPS2121RUXR",
+   "package": "VQFN-HR-12(2x2.5)",
+   "stock": 32707
+  },
+  "C52923": {
+   "library": "basic",
+   "manufacturer": "Samsung Electro-Mechanics",
+   "mpn": "CL05A105KA5NQNC",
+   "package": "0402",
+   "stock": 9270847
+  },
+  "C54582899": {
+   "library": "extended",
+   "manufacturer": "XYECONN",
+   "mpn": "XY-S2B-PH-SM4-TB",
+   "package": "SMD,P=2mm,Surface Mount\uff0cRight Angle",
+   "stock": 2904
+  },
+  "C576403": {
+   "library": "extended",
+   "manufacturer": "Murata Electronics",
+   "mpn": "DFE252012F-2R2M=P2",
+   "package": "1008",
+   "stock": 11727
+  },
+  "C7519": {
+   "library": "extended",
+   "manufacturer": "STMicroelectronics",
+   "mpn": "USBLC6-2SC6",
+   "package": "SOT-23-6L",
+   "stock": 37145
+  },
+  "C84255": {
+   "library": "extended",
+   "manufacturer": "Nexperia",
+   "mpn": "PESD5V0L5UV,115",
+   "package": "SOT-666-6",
+   "stock": 149
+  },
+  "C8678": {
+   "library": "basic",
+   "manufacturer": "MDD(Microdiode Semiconductor)",
+   "mpn": "SS34",
+   "package": "SMA(DO-214AC)",
+   "stock": 2596297
+  }
+ },
+ "source": "https://jlcpcb.com/api/overseas-pcb-order/v1/shoppingCart/smtGood/selectSmtComponentList"
+}

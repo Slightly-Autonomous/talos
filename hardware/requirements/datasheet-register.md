@@ -16,6 +16,7 @@ These are the sources actually read for H0–H3, with the sections relied on. "R
 | SN74AUP1G04 | TI SCES571K | Rev K (Jun 2014) | Pin table (DBV: 1 NC, 2 A, 3 GND, 4 Y, 5 VCC); ICC 0.5 µA max 25 °C, 0.9 µA max |
 | LIS2DW12 | ST DS11811 | Rev 8 | Table 1 pins, Vdd 1.62–3.6 V, SAD 001100x (0x18/0x19), decoupling 100 nF + 10 µF, power-down 50 nA |
 | EKMB110111x | Panasonic PaPIRs WL reference spec | Rev 7.1 | Dimensions (bottom view Vdd/OUT/GND), Vdd 2.3–4.0 V, Iw 1.0 µA typ, Iout ≤ 100 µA, warm-up ~25 s |
+| PESD5V0L5UV | JLCPCB/LCSC parametric listing C84255 only (Nexperia PDF blocked automated access) | 2026-11-17 | VRWM 5 V, IR 5 nA, Cd 16 pF, VBR 6.4 V, SOT-666. **Pinout not read: VERIFY** |
 | MEC8-EM / MEC1-EM | Samtec F-226 Micro Edge Card catalog page | F-226 | Key specs table (pitch, positions, 2.3 A/2.2 A), MEC8-EM ordering (10–70 positions per row, -L plating, 1.60 mm card) |
 
 **Not yet sourced:**

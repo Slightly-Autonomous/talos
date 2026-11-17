@@ -427,7 +427,7 @@
     "5": "SLOT0_ALERT_N",
     "6": "SLOT0_RESET_N"
    },
-   "value": "PESD3V3L5UV"
+   "value": "PESD5V0L5UV"
   },
   "D5": {
    "datasheet": "https://assets.nexperia.com/documents/data-sheet/PESDXL5UF_V_Y.pdf",
@@ -450,7 +450,7 @@
     "5": "SLOT1_ALERT_N",
     "6": "SLOT1_RESET_N"
    },
-   "value": "PESD3V3L5UV"
+   "value": "PESD5V0L5UV"
   },
   "D6": {
    "datasheet": "https://assets.nexperia.com/documents/data-sheet/PESDXL5UF_V_Y.pdf",
@@ -473,7 +473,7 @@
     "5": "SLOT2_ALERT_N",
     "6": "SLOT2_RESET_N"
    },
-   "value": "PESD3V3L5UV"
+   "value": "PESD5V0L5UV"
   },
   "D7": {
    "datasheet": "https://assets.nexperia.com/documents/data-sheet/PESDXL5UF_V_Y.pdf",
@@ -496,7 +496,7 @@
     "5": "SLOT3_ALERT_N",
     "6": "SLOT3_RESET_N"
    },
-   "value": "PESD3V3L5UV"
+   "value": "PESD5V0L5UV"
   },
   "J1": {
    "datasheet": "https://www.usb.org/sites/default/files/documents/usb_type-c.zip",

@@ -12,7 +12,8 @@ The owner chose to start layout before an EE review. Treat everything here as a 
 | Plane fanout | `scripts/route_pcbs.py` | Before autorouting, every SMD pad on a plane net (GND→In1, V3V3_CORE→In2) gets a clearance-checked stub and via, sized to the pad, so the router only handles signals |
 | Routing | `scripts/route_pcbs.py` + Freerouting 2.5.0 | Routed `.kicad_pcb`. Each attempt is DRC-gated; the best attempt is kept |
 | Checks | `scripts/check_kicad.py` | ERC, netlist round-trip, cross-board, safe defaults, **PCB DRC with schematic parity** |
-| Fab package | `scripts/export_fab.py` | `fab/<board>/`: Gerbers + drill (zip), pick-and-place CSV, BOM CSV, top/bottom renders |
+| Fab package | `scripts/export_fab.py` | `fab/<board>/`: Gerbers + drill (zip), pick-and-place CSV, BOM CSV, JLCPCB BOM/CPL (`-jlc-bom.csv`, `-jlc-cpl.csv`), a not-assembled list, top/bottom renders |
+| JLCPCB sourcing | `scripts/jlc_sourcing.py` | Maps every part to a stocked LCSC part (`sourcing/jlc-parts.csv`). `refresh` queries JLCPCB, `check` runs offline in CI. Parts JLCPCB can't place are listed with their risk ID |
 
 Reproduce:
 
@@ -70,4 +71,5 @@ Autorouted is not reviewed. A layout engineer still has to review the power sect
    - no length or matching constraints
    - no via stitching beyond the pours
 6. **Card fingers:** hard gold vs ENIG, bevel angle and card-thickness tolerance must match the socket datasheet.
-7. **Assembly:** everything is on one side except the bottom-layer finger pads. Check DFM with the assembler: 0402 parts, the 0.4 mm-pitch WSON, LGA-12 and DFN-4.
+7. **JLCPCB order:** run `jlc_sourcing.py refresh` and `check` the day you order, since stock moves. Upload `-jlc-bom.csv` and `-jlc-cpl.csv`. **Check every part's rotation in JLCPCB's placement preview** (no rotation corrections have been verified yet; record any you find in `ROTATION_FIX`). Parts in `-not-assembled.csv` are not placed by JLCPCB.
+8. **Assembly:** everything is on one side except the bottom-layer finger pads. Check DFM with the assembler: 0402 parts, the 0.4 mm-pitch WSON, LGA-12 and DFN-4.

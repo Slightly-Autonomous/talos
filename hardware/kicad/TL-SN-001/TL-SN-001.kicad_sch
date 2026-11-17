@@ -22396,7 +22396,7 @@
 				)
 			)
 		)
-		(property "Value" "PESD3V3L5UV"
+		(property "Value" "PESD5V0L5UV"
 			(at 403.86 259.08 0)
 			(effects
 				(font
@@ -22496,7 +22496,7 @@
 				)
 			)
 		)
-		(property "Value" "PESD3V3L5UV"
+		(property "Value" "PESD5V0L5UV"
 			(at 439.42 259.08 0)
 			(effects
 				(font
@@ -22572,7 +22572,7 @@
 				)
 			)
 		)
-		(property "Value" "PESD3V3L5UV"
+		(property "Value" "PESD5V0L5UV"
 			(at 467.36 259.08 0)
 			(effects
 				(font
@@ -22648,7 +22648,7 @@
 				)
 			)
 		)
-		(property "Value" "PESD3V3L5UV"
+		(property "Value" "PESD5V0L5UV"
 			(at 497.84 259.08 0)
 			(effects
 				(font
@@ -22724,7 +22724,7 @@
 				)
 			)
 		)
-		(property "Value" "PESD3V3L5UV"
+		(property "Value" "PESD5V0L5UV"
 			(at 528.32 259.08 0)
 			(effects
 				(font
@@ -23825,7 +23825,7 @@
 				)
 			)
 		)
-		(property "Value" "PESD3V3L5UV"
+		(property "Value" "PESD5V0L5UV"
 			(at 693.42 259.08 0)
 			(effects
 				(font
@@ -23925,7 +23925,7 @@
 				)
 			)
 		)
-		(property "Value" "PESD3V3L5UV"
+		(property "Value" "PESD5V0L5UV"
 			(at 731.52 259.08 0)
 			(effects
 				(font
@@ -24001,7 +24001,7 @@
 				)
 			)
 		)
-		(property "Value" "PESD3V3L5UV"
+		(property "Value" "PESD5V0L5UV"
 			(at 756.92 259.08 0)
 			(effects
 				(font
@@ -24077,7 +24077,7 @@
 				)
 			)
 		)
-		(property "Value" "PESD3V3L5UV"
+		(property "Value" "PESD5V0L5UV"
 			(at 787.4 259.08 0)
 			(effects
 				(font
@@ -24153,7 +24153,7 @@
 				)
 			)
 		)
-		(property "Value" "PESD3V3L5UV"
+		(property "Value" "PESD5V0L5UV"
 			(at 45.72 353.06 0)
 			(effects
 				(font
@@ -25254,7 +25254,7 @@
 				)
 			)
 		)
-		(property "Value" "PESD3V3L5UV"
+		(property "Value" "PESD5V0L5UV"
 			(at 210.82 353.06 0)
 			(effects
 				(font
@@ -25354,7 +25354,7 @@
 				)
 			)
 		)
-		(property "Value" "PESD3V3L5UV"
+		(property "Value" "PESD5V0L5UV"
 			(at 248.92 353.06 0)
 			(effects
 				(font
@@ -25430,7 +25430,7 @@
 				)
 			)
 		)
-		(property "Value" "PESD3V3L5UV"
+		(property "Value" "PESD5V0L5UV"
 			(at 274.32 353.06 0)
 			(effects
 				(font
@@ -25506,7 +25506,7 @@
 				)
 			)
 		)
-		(property "Value" "PESD3V3L5UV"
+		(property "Value" "PESD5V0L5UV"
 			(at 304.8 353.06 0)
 			(effects
 				(font
@@ -25582,7 +25582,7 @@
 				)
 			)
 		)
-		(property "Value" "PESD3V3L5UV"
+		(property "Value" "PESD5V0L5UV"
 			(at 335.28 353.06 0)
 			(effects
 				(font
@@ -26683,7 +26683,7 @@
 				)
 			)
 		)
-		(property "Value" "PESD3V3L5UV"
+		(property "Value" "PESD5V0L5UV"
 			(at 500.38 353.06 0)
 			(effects
 				(font
@@ -26783,7 +26783,7 @@
 				)
 			)
 		)
-		(property "Value" "PESD3V3L5UV"
+		(property "Value" "PESD5V0L5UV"
 			(at 538.48 353.06 0)
 			(effects
 				(font
@@ -26859,7 +26859,7 @@
 				)
 			)
 		)
-		(property "Value" "PESD3V3L5UV"
+		(property "Value" "PESD5V0L5UV"
 			(at 566.42 353.06 0)
 			(effects
 				(font
@@ -26935,7 +26935,7 @@
 				)
 			)
 		)
-		(property "Value" "PESD3V3L5UV"
+		(property "Value" "PESD5V0L5UV"
 			(at 596.9 353.06 0)
 			(effects
 				(font
@@ -27011,7 +27011,7 @@
 				)
 			)
 		)
-		(property "Value" "PESD3V3L5UV"
+		(property "Value" "PESD5V0L5UV"
 			(at 627.38 353.06 0)
 			(effects
 				(font

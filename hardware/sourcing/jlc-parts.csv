@@ -1,0 +1,51 @@
+value,footprint,assembly,lcsc,mpn,manufacturer,risk,note
+100n,C_0402_1005Metric,jlc,C1525,CL05B104KO5NNNC,Samsung,,16 V X7R basic
+1u,C_0402_1005Metric,jlc,C52923,CL05A105KA5NQNC,Samsung,,25 V X5R basic
+10u,C_0805_2012Metric,jlc,C15850,CL21A106KAYNNNE,Samsung,,25 V X5R basic
+10u/25V,C_0805_2012Metric,jlc,C15850,CL21A106KAYNNNE,Samsung,,25 V X5R basic
+22u,C_0805_2012Metric,jlc,C45783,CL21A226MAQNNNE,Samsung,,25 V X5R basic; DC-bias derating applies
+4.7u,C_0805_2012Metric,jlc,C1779,CL21A475KAQNNNE,Samsung,,25 V X5R basic
+4.7u/25V,C_0805_2012Metric,jlc,C1779,CL21A475KAQNNNE,Samsung,,25 V X5R basic
+TBD,C_0402_1005Metric,not_placed,,,,HD-007,TPS2121 soft-start cap: value not chosen yet
+10k,R_0402_1005Metric,jlc,C25744,0402WGF1002TCE,Uniroyal,,1% basic
+5.1k,R_0402_1005Metric,jlc,C25905,0402WGF5101TCE,Uniroyal,,1% basic (USB-C CC)
+100k,R_0402_1005Metric,jlc,C25741,0402WGF1003TCE,Uniroyal,,1% basic
+33k,R_0402_1005Metric,jlc,C25779,0402WGF3302TCE,Uniroyal,,1% basic
+36.5k 1%,R_0402_1005Metric,jlc,C25887,0402WGF3652TCE,Uniroyal,,1% extended
+16.2k 1%,R_0402_1005Metric,jlc,C27176,0402WGF1622TCE,Uniroyal,,1% extended
+0R,R_0402_1005Metric,jlc,C17168,0402WGF0000TCE,Uniroyal,,basic
+1M,R_0402_1005Metric,jlc,C26083,0402WGF1004TCE,Uniroyal,,1% basic
+4.7k,R_0402_1005Metric,jlc,C25900,0402WGF4701TCE,Uniroyal,,1% basic
+1k,R_0402_1005Metric,jlc,C11702,0402WGF1001TCE,Uniroyal,,1% basic
+4.7M,R_0402_1005Metric,jlc,C474132,0402WGF4704TCE,Uniroyal,,1% extended
+47k,R_0402_1005Metric,jlc,C25792,0402WGF4702TCE,Uniroyal,,1% basic
+330,R_0402_1005Metric,jlc,C25104,0402WGF3300TCE,Uniroyal,,1% basic
+TBD,R_0402_1005Metric,not_placed,,,,HD-007,TPS2121 ILIM resistor: value not chosen yet
+STATUS,LED_0603_1608Metric,jlc,C2286,KT-0603R,Hubei KENTO,,red basic
+SS34,D_SMA,jlc,C8678,SS34,MDD,,basic
+SMAJ12A,D_SMA,jlc,C113957,SMAJ12A,MDD,,
+PESD5V0L5UV,SOT-666,jlc,C84255,"PESD5V0L5UV,115",Nexperia,,replaces PESD3V3L5UV (0 stock); same family and package; pinout VERIFY
+USB-C sink,USB_C_Receptacle_GCT_USB4105-xx-A_16P_TopMnt_Horizontal,jlc,C3020560,USB4105-GF-A,GCT,,
+PV in,JST_PH_S2B-PH-SM4-TB_1x02-1MP_P2.00mm_Horizontal,jlc,C54582899,XY-S2B-PH-SM4-TB,XYECONN,,JST original out of stock; footprint-compatible copy (VERIFY drawing)
+"1S pack (BAT+, NTC, GND)",JST_PH_S3B-PH-SM4-TB_1x03-1MP_P2.00mm_Horizontal,jlc,C265101,S3B-PH-SM4-TB(LF)(SN),JST,,
+sensor_edge_v1 slot *,Samtec_MEC8-110-02-L-D-EM2_PLACEHOLDER,not_placed,C4649894,MEC8-110-02-L-D-EM2,Samtec,HD-002,edge-mount MEC8 not stocked by JLCPCB; socket choice open
+2.2u DFE252012F-2R2M,L_1008_2520Metric,jlc,C576403,DFE252012F-2R2M=P2,Murata,,
+RESET,SW_SPST_PTS810,jlc,C221895,PTS810SJG250SMTRLFS,C&K,,SJM variant low stock; SJG is the same body
+BOOT,SW_SPST_PTS810,jlc,C221895,PTS810SJG250SMTRLFS,C&K,,SJM variant low stock; SJG is the same body
+*,TestPoint_Pad_D1.0mm,board_feature,,,,,bare copper pad
+sensor_edge_v1 card fingers,CardEdge_sensor_edge_v1_2x10_P0.8mm,board_feature,,,,,gold fingers are part of the PCB
+ESP32-H2-MINI-1-H4S,ESP32-H2-MINI-1,jlc,C47967030,ESP32-H2-MINI-1-H4S,Espressif,,low stock at JLCPCB; re-check before ordering
+TPS22917DBVR,SOT-23-6,jlc,C2681320,TPS22917DBVR,TI,,
+TCA9546APWR,TSSOP-16_4.4x5mm_P0.65mm,jlc,C201653,TCA9546APWR,TI,,
+TCA9535PWR,TSSOP-24_4.4x7.8mm_P0.65mm,jlc,C130204,TCA9535PWR,TI,,
+TS3A5017RSVR,UQFN-16_1.8x2.6mm_P0.4mm,jlc,C112339,TS3A5017RSVR,TI,,
+USBLC6-2SC6,SOT-23-6,jlc,C7519,USBLC6-2SC6,ST,,
+TPS2121RUXR,Texas_VQFN-HR-12_2x2.5mm_P0.5mm,jlc,C485916,TPS2121RUXR,TI,,
+BQ25186DLHR,Texas_DLH0010A_WSON-10-1EP_2.2x2mm_P0.4mm,jlc,C44639442,BQ25186DLHR,TI,,
+TPS63900DSKR,WSON-10-1EP_2.5x2.5mm_P0.5mm_EP1.2x2mm,jlc,C1518762,TPS63900DSKR,TI,,
+24AA025E48T-I/OT,SOT-23-6,jlc,C129895,24AA025E48T-I/OT,Microchip,,
+TMAG5273A1QDBVR,SOT-23-6,jlc,C3716049,TMAG5273A1QDBVR,TI,,
+SN74AUP1G04DBVR,SOT-23-5,jlc,C2682121,SN74AUP1G04DBVR,TI,,
+EKMB1101111,PIR_Panasonic_EKMB_TO-5,not_placed,C3678679,EKMB1101111,Panasonic,HD-022,no low-power PIR stocked by JLCPCB; sensor choice open
+LIS2DW12TR,LGA-12_2x2mm_P0.5mm,jlc,C189624,LIS2DW12TR,ST,,
+SHT40-AD1B,Sensirion_DFN-4_1.5x1.5mm_P0.8mm_SHT4x_CentralKeepout,jlc,C2909890,SHT40-AD1B-R2,Sensirion,,

@@ -87,3 +87,8 @@ requirements:
     board: TL-SN-001, TL-MOD-001..004, TL-TEST-001
     status: verified_tool
     test: hardware/scripts/check_kicad.py -> hardware/results/kicad-check.md (PCB DRC columns)
+  - id: HWR-018
+    statement: Every assembled part is stocked by JLCPCB, with enough stock for 5 of every board; a part JLCPCB cannot place is listed as not placed with a risk ID
+    board: TL-SN-001, TL-MOD-001..004, TL-TEST-001
+    status: verified_tool
+    test: hardware/scripts/jlc_sourcing.py check (snapshot hardware/sourcing/jlc-stock.json; refresh before ordering)

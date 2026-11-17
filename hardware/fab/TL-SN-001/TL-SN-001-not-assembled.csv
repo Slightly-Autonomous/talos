@@ -1,0 +1,7 @@
+ref,value,mpn,risk,why
+C7,TBD,,HD-007,TPS2121 soft-start cap: value not chosen yet
+J4,sensor_edge_v1 slot 0,MEC8-110-02-L-D-EM2,HD-002,edge-mount MEC8 not stocked by JLCPCB; socket choice open
+J5,sensor_edge_v1 slot 1,MEC8-110-02-L-D-EM2,HD-002,edge-mount MEC8 not stocked by JLCPCB; socket choice open
+J6,sensor_edge_v1 slot 2,MEC8-110-02-L-D-EM2,HD-002,edge-mount MEC8 not stocked by JLCPCB; socket choice open
+J7,sensor_edge_v1 slot 3,MEC8-110-02-L-D-EM2,HD-002,edge-mount MEC8 not stocked by JLCPCB; socket choice open
+R12,TBD,,HD-007,TPS2121 ILIM resistor: value not chosen yet

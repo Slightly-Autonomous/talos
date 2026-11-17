@@ -4,4 +4,4 @@ qty,refs,value,symbol,footprint
 1,TP1,V3V3_AON,Connector:TestPoint,TestPoint:TestPoint_Pad_D1.0mm
 1,TP2,GND,Connector:TestPoint,TestPoint:TestPoint_Pad_D1.0mm
 1,U1,24AA025E48T-I/OT,Memory_EEPROM:24AA025E-OT,Package_TO_SOT_SMD:SOT-23-6
-1,U2,SHT40-AD1B,Sensor_Humidity:SHT4x,Sensor_Humidity:Sensirion_DFN-4_1.5x1.5mm_P0.8mm_SHT4x_NoCentralPad
+1,U2,SHT40-AD1B,Sensor_Humidity:SHT4x,talos:Sensirion_DFN-4_1.5x1.5mm_P0.8mm_SHT4x_CentralKeepout

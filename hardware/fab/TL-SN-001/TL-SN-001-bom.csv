@@ -10,7 +10,7 @@ qty,refs,value,symbol,footprint
 1,D1,STATUS,Device:LED,LED_SMD:LED_0603_1608Metric
 1,D2,SS34,Diode:SS34,Diode_SMD:D_SMA
 1,D3,SMAJ12A,Diode:SMAJ12A,Diode_SMD:D_SMA
-4,D4 D5 D6 D7,PESD3V3L5UV,Power_Protection:PESD3V3L5UV,Package_TO_SOT_SMD:SOT-666
+4,D4 D5 D6 D7,PESD5V0L5UV,Power_Protection:PESD3V3L5UV,Package_TO_SOT_SMD:SOT-666
 1,J1,USB-C sink,Connector:USB_C_Receptacle_USB2.0_16P,Connector_USB:USB_C_Receptacle_GCT_USB4105-xx-A_16P_TopMnt_Horizontal
 1,J2,PV in,Connector_Generic:Conn_01x02,Connector_JST:JST_PH_S2B-PH-SM4-TB_1x02-1MP_P2.00mm_Horizontal
 1,J3,"1S pack (BAT+, NTC, GND)",Connector_Generic:Conn_01x03,Connector_JST:JST_PH_S3B-PH-SM4-TB_1x03-1MP_P2.00mm_Horizontal

@@ -17,6 +17,7 @@ Read `docs/architecture/overview.md` and the ADRs in `docs/decisions/` before ch
 - **Determinism:** core never reads the wall clock or uses unseeded randomness. Inject `IClock`. Cross-device order comes from `journal_seq` only (ADR 0008).
 - **Commands:** TTL gates dispatch only. Verification has its own window. Late evidence is recorded with `late=true`. Only `verified` is success (ADR 0004).
 - **Ownership checks** belong in domain/ingest/policy, not the codec (ADR 0003).
+- **JLCPCB sourcing:** every assembled part must be stocked by JLCPCB. Add it to `hardware/sourcing/jlc-parts.csv`, then run `jlc_sourcing.py refresh` and `check`. A part JLCPCB can't place needs a risk ID and the owner's decision.
 - **Hardware is provisional:** never hard-code pins, rails, connectors or part choices in code. They belong in manifests marked `provisional: true`. Call out anything that needs datasheet or bench verification.
 - **Scope:** build what the current phase needs, with tests. No speculative frameworks for later phases.
 - **Core style:** exception-free (`Result`/`Status`), small value types, explicit units in names (`_ms`, `_mw`, `_ma`, `_milli_c`).
