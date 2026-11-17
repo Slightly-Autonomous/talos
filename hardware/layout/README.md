@@ -49,7 +49,7 @@ These sit inside typical 2- and 4-layer prototype-service limits. Confirm them a
 ## Finishing the Sensor Node layout
 Reproduce: `gen_pcbs.py` (placement), then `route_pcbs.py TL-SN-001` (fanout + Freerouting, keeps the best attempt), then `finish_sn.py`, then `gen_schematics.py` again (a pcbnew save rewrites the `.kicad_pro`, and CI checks generated files are current). The `finish_sn.py` step makes two hand edits Freerouting could not find, because plane vias crowded 0.4–0.5 mm pitch pins:
 - U4 (BQ25186): pin 4 GND tied to the exposed pad instead of its own via, CHG_PG_N moved up, VBAT runs straight to C10.
-- U5 (TPS62840): pin 6 runs directly to output cap C12 instead of a plane via, pin 8 GND ties to the exposed pad, LX2 runs from pin 7 to L1.
+- U5 (TPS63900 buck-boost): pin 6 runs directly to output cap C12 instead of a plane via, pin 8 GND ties to the exposed pad, LX2 runs from pin 7 to L1.
 
 `finish_sn.py` matches exact coordinates. After a reroute it may no longer apply; then make the same edits interactively in KiCad.
 

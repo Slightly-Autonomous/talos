@@ -4,7 +4,7 @@
 Freerouting could not close two fine-pitch power connections because plane-fanout vias
 crowded the pins. This applies the edits a layout engineer would make:
   U4 (BQ25186): pin 4 GND to the exposed pad, CHG_PG_N moved up, VBAT straight to C10.
-  U5 (TPS62840): pin 6 directly to output cap C12, pin 8 GND to the exposed pad, LX2 pin 7 to L1.
+  U5 (TPS63900 buck-boost): pin 6 directly to output cap C12, pin 8 GND to the exposed pad, LX2 pin 7 to L1.
 It matches exact coordinates of the current routed board and refuses to save if they moved.
 """
 import pathlib
