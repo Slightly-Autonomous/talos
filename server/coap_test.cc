@@ -102,6 +102,17 @@ void pump(Fixture& f, CoapNode& n, int ticks) {
   }
 }
 
+// Real UDP between threads: pump until `done` holds, up to `max_ticks`, so a slow runner
+// does not lose a reply that lands just after a fixed tick budget.
+template <typename Pred>
+bool pump_until(Fixture& f, CoapNode& n, int max_ticks, Pred done) {
+  for (int i = 0; i < max_ticks; ++i) {
+    if (done()) return true;
+    pump(f, n, 1);
+  }
+  return done();
+}
+
 std::size_t journaled(HubService& hub, const std::string& type) {
   std::size_t n = 0;
   std::uint64_t after = 0;
@@ -155,8 +166,11 @@ TEST(CoapIngress, ConfigPushIsAppliedAndAcknowledged) {
   EXPECT_EQ(f.hub->set_device_config(PrincipalId("agent-1"), DeviceId("node-12"), req).error().code,
             "denied");
   // The node only hears config when it talks: wait for its next heartbeat.
-  pump(f, n, 6'200);
-  EXPECT_EQ(n.node.runtime().config().revision, r.value().desired_revision());
+  const auto want = r.value().desired_revision();
+  // set_device_config bumps the revision, so only the node's side is polled here.
+  EXPECT_TRUE(pump_until(f, n, 12'500, [&] { return n.node.runtime().config().revision == want; }));
+  pump(f, n, 50);  // let the applying exchange's ACK reach the hub
+  EXPECT_EQ(n.node.runtime().config().revision, want);
   EXPECT_EQ(n.node.runtime().config().heartbeat_interval_ms, 30'000u);
   auto again = f.hub->set_device_config(PrincipalId("owner"), DeviceId("node-12"), req);
   EXPECT_EQ(again.value().applied_revision(), r.value().desired_revision());
