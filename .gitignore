@@ -41,5 +41,6 @@ __pycache__/
 # KiCad per-user state and routing temp files
 *.kicad_prl
 *.placed
+*.best
 fp-info-cache
 *-backups/

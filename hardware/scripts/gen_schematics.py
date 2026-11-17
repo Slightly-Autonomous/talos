@@ -300,9 +300,19 @@ def card(name: str, title: str, used: set[str], parts: list[Part]) -> Board:
 def boards() -> list[Board]:
     i2c = {"AON", "SDA", "SCL"}
     out = [sensor_node()]
+    # 3-axis Hall so the card works in any orientation (HD-020). TMAG5273 INT is open-drain active-low
+    # and latched until the host addresses the device; the inverter turns it into the slot standard's
+    # push-pull, idle-low WAKE (SLYS045C Table 4-1, §6.3.3; SCES571K pin table).
     out.append(card("TL-MOD-001", "TL-MOD-001 Magnetic contact card Rev A", i2c | {"WAKE"}, [
-        Part("U2", "talos:DRV5032xx-DBZ", "DRV5032FBDBZR", {"1": "V3V3_AON", "2": "WAKE", "3": "GND"}),
+        Part("U2", "Sensor_Magnetic:TMAG5273x1QDBV", "TMAG5273A1QDBVR",
+             {"1": "SCL", "2": "GND", "3": "GND", "4": "V3V3_AON", "5": "MAG_INT_N", "6": "SDA"},
+             note="I2C 0x35 (A1), +/-40/80 mT; TEST pin 3 to GND; volatile config, host sets W&S mode"),
         C("C2", "100n", "V3V3_AON"),
+        R("R1", "100k", "V3V3_AON", "MAG_INT_N", "INT pull-up (open-drain)"),
+        Part("U3", "74xGxx:74AUP1G04", "SN74AUP1G04DBVR",
+             {"1": None, "2": "MAG_INT_N", "3": "GND", "4": "WAKE", "5": "V3V3_AON"},
+             "Package_TO_SOT_SMD:SOT-23-5", "inverts INT_N to idle-low push-pull WAKE"),
+        C("C3", "100n", "V3V3_AON"),
     ]))
     out.append(card("TL-MOD-002", "TL-MOD-002 PIR card Rev A", i2c | {"WAKE"}, [
         Part("U2", "talos:EKMB", "EKMB1101111", {"1": "V3V3_AON", "2": "WAKE", "3": "GND"}, None,
@@ -410,6 +420,13 @@ def place(board: Board, root: str, p: Part, sym, unit: int, upins, sx: float, sy
 
 
 
+def _netclass(name: str, width: float) -> dict:
+    return {"name": name, "clearance": 0.15, "track_width": width, "via_diameter": 0.6, "via_drill": 0.3,
+            "microvia_diameter": 0.3, "microvia_drill": 0.1, "diff_pair_gap": 0.2, "diff_pair_width": 0.2,
+            "diff_pair_via_gap": 0.25, "wire_width": 6, "bus_width": 12, "line_style": 0, "priority": 0,
+            "pcb_color": "rgba(0, 0, 0, 0.000)", "schematic_color": "rgba(0, 0, 0, 0.000)"}
+
+
 def project_file(name: str) -> dict:
     """Project file with fab-oriented design rules (typical 4-layer/2-layer prototype service limits)."""
     return {
@@ -424,13 +441,13 @@ def project_file(name: str) -> dict:
             "microvia_diameter": 0.3, "microvia_drill": 0.1, "diff_pair_gap": 0.2, "diff_pair_width": 0.2,
             "diff_pair_via_gap": 0.25, "wire_width": 6, "bus_width": 12, "line_style": 0, "priority": 2147483647,
             "pcb_color": "rgba(0, 0, 0, 0.000)", "schematic_color": "rgba(0, 0, 0, 0.000)"},
-            {"name": "Power", "clearance": 0.15, "track_width": 0.4, "via_diameter": 0.6, "via_drill": 0.3,
-             "microvia_diameter": 0.3, "microvia_drill": 0.1, "diff_pair_gap": 0.2, "diff_pair_width": 0.2,
-             "diff_pair_via_gap": 0.25, "wire_width": 6, "bus_width": 12, "line_style": 0, "priority": 0,
-             "pcb_color": "rgba(0, 0, 0, 0.000)", "schematic_color": "rgba(0, 0, 0, 0.000)"}],
+            _netclass("Power", 0.3), _netclass("Rail", 0.25)],
+            # Power: charger/regulator path (<=1 A). Rail: 3V3 distribution (<=0.35 A peaks) and VBAT, whose
+            # BQ25186 pin sits mid-row at 0.4 mm pitch (0.3 mm there leaves no router margin). GND is the
+            # In1 plane and V3V3_CORE the In2 plane on the 4-layer board.
             "netclass_patterns": [{"netclass": "Power", "pattern": pat} for pat in (
-                "/GND", "/V3V3_*", "/SYS_PATH", "/VBAT", "/USB_VBUS", "/CHG_IN", "/PV_IN", "/PV_RAW",
-                "/REG_LX1", "/REG_LX2")],
+                "/SYS_PATH", "/USB_VBUS", "/CHG_IN", "/PV_IN", "/PV_RAW", "/REG_LX1", "/REG_LX2")]
+            + [{"netclass": "Rail", "pattern": pat} for pat in ("/V3V3_*", "/VBAT")],
             "meta": {"version": 4}},
         "schematic": {"page_layout_descr_file": ""},
     }

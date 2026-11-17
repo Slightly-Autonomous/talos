@@ -8,7 +8,9 @@ The owner chose to start layout before an EE review. Treat everything here as a 
 |---|---|---|
 | Schematic + netlist | `scripts/gen_schematics.py` | `kicad/<board>/<board>.kicad_sch`, project rules, Talos symbol and footprint libraries |
 | Placement | `scripts/gen_pcbs.py` (KiCad's Python) | Outline, stackup, nets, footprints linked to symbols, pours, keepouts, custom rules (`.kicad_dru`) |
-| Routing | `scripts/route_pcbs.py` + Freerouting 2.5.0 | Routed `.kicad_pcb`. Each attempt is DRC-gated, and a board is saved only after zero DRC errors |
+| Placement optimisation | `scripts/place_opt.py` (called by `gen_pcbs.py` for TL-SN-001) | Simulated annealing (seeded, deterministic) over every part except the connectors and the radio module. Minimises Manhattan MST wirelength, decoupling-cap distance to its IC pin, and RUDY routing congestion, then legalises with courtyard halos. KiCad has no auto-placer |
+| Plane fanout | `scripts/route_pcbs.py` | Before autorouting, every SMD pad on a plane net (GND→In1, V3V3_CORE→In2) gets a clearance-checked stub and via, sized to the pad, so the router only handles signals |
+| Routing | `scripts/route_pcbs.py` + Freerouting 2.5.0 | Routed `.kicad_pcb`. Each attempt is DRC-gated; the best attempt is kept |
 | Checks | `scripts/check_kicad.py` | ERC, netlist round-trip, cross-board, safe defaults, **PCB DRC with schematic parity** |
 | Fab package | `scripts/export_fab.py` | `fab/<board>/`: Gerbers + drill (zip), pick-and-place CSV, BOM CSV, top/bottom renders |
 
@@ -30,14 +32,14 @@ Freerouting is not committed. It is the GPL-3.0 macOS build: Freerouting 2.5.0, 
 
 | Board | Size | Layers | Notes |
 |---|---|---|---|
-| TL-SN-001 | 100 × 80 mm | 4: F signal / In1 solid GND plane / In2 signal + GND pour / B signal | **Placed, partially routed.** Freerouting leaves ~147 connections unrouted even after the board grew from 84 × 66 to 100 × 80 mm. Placement and the routed portion pass DRC; only unconnected items remain (`kicad/layout-status.json`). Module at the top edge with the antenna strip clear. Two slots per side edge. USB-C, PV and battery along the bottom |
+| TL-SN-001 | 100 × 80 mm | 4: F signal / In1 solid GND plane / In2 solid V3V3_CORE plane / B signal | **Routed, 0 DRC errors.** Annealed placement, plane fanout (175 pads), Freerouting (40 passes, best of 3), then two hand fixes at fine-pitch power pins (`scripts/finish_sn.py`). Only silkscreen warnings remain. Module at the top edge with the antenna strip clear. Two slots per side edge. USB-C, PV and battery along the bottom |
 | TL-MOD-001..004 | 16 × 26 mm (PIR card 18 × 30) | 2 | Gold fingers on the bottom edge, stopping 0.15 mm short of the bevel. Tracks only in the finger zone (no pour, no vias) |
 | TL-TEST-001 | 22 × 32 mm | 2 | Same finger zone |
 
 Design rules (project file):
 - 0.15 mm clearance
 - 0.15 mm default track, 0.1 mm minimum at fine-pitch pads
-- 0.4 mm `Power` netclass for GND, 3V3 rails, SYS_PATH, VBAT, USB/PV inputs and the regulator switch nodes
+- 0.3 mm `Power` netclass for SYS_PATH, USB/PV inputs, CHG_IN and the regulator switch nodes; 0.25 mm `Rail` for the 3V3 rails and VBAT (VBAT's BQ25186 pin is mid-row at 0.4 mm pitch). **EE check:** confirm these widths against the chosen charge current (~0.8 A at 0.25 mm, 1 oz outer, 10 °C rise, IPC-2221 estimate)
 - 0.6/0.3 mm vias
 - 0.3 mm copper-to-edge, except the deliberate edge connectors (custom rule), backed by a 0.35 mm track/via keepout ring
 - copper pours drop unconnected islands
@@ -45,12 +47,13 @@ Design rules (project file):
 These sit inside typical 2- and 4-layer prototype-service limits. Confirm them against the chosen fab's capability sheet.
 
 ## Finishing the Sensor Node layout
-A scripted autorouter is not enough for this board (dense edge connectors, radio keepout, power section). Options, in order of preference:
-1. A layout engineer finishes it interactively in KiCad, starting from this placement. That review is needed for an order anyway.
-2. An AI/cloud router (Quilter, DeepPCB) imports the KiCad project. This needs an account and uploading the design, so owner approval first.
-3. Iterate on placement here: hand-tuned positions for the slot-side passives, then autoroute again.
+Reproduce: `gen_pcbs.py` (placement), then `route_pcbs.py TL-SN-001` (fanout + Freerouting, keeps the best attempt), then `finish_sn.py`. The last step makes two hand edits Freerouting could not find, because plane vias crowded 0.4–0.5 mm pitch pins:
+- U4 (BQ25186): pin 4 GND tied to the exposed pad instead of its own via, CHG_PG_N moved up, VBAT runs straight to C10.
+- U5 (TPS62840): pin 6 runs directly to output cap C12 instead of a plane via, pin 8 GND ties to the exposed pad, LX2 runs from pin 7 to L1.
 
-No fab package is exported for TL-SN-001 until routing is complete.
+`finish_sn.py` matches exact coordinates. After a reroute it may no longer apply; then make the same edits interactively in KiCad.
+
+Autorouted is not reviewed. A layout engineer still has to review the power section (switch-node loop area, charger thermal pad vias, current-path widths), the radio keepout and the return paths before any order.
 
 ## What a reviewer must check before any order
 

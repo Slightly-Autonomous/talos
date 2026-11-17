@@ -3,7 +3,7 @@
 **Status:** Accepted (2026-11-16). Adopts `TALOS_CUSTOM_HARDWARE_HANDOFF_v0_1` as the hardware plan. It refines ADR 0016: dev-kit bring-up is still the first physical step.
 
 ## Decision
-- **The hardware workstream lives in `hardware/`**, with its own ADRs HW-0001..0005 in `hardware/architecture/decisions/`. Root ADRs win if the two conflict.
+- **The hardware workstream lives in `hardware/`**, with its own ADRs HW-0001..0006 in `hardware/architecture/decisions/`. Root ADRs win if the two conflict.
 - **Board family:**
   - the hub is bought (TL-HUB-REF)
   - one bespoke four-slot Thread Sensor Node (TL-SN-001)

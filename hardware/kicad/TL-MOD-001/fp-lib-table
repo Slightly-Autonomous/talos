@@ -15,6 +15,13 @@
 		(descr "")
 	)
 	(lib
+		(name "Resistor_SMD")
+		(type "KiCad")
+		(uri "${KICAD10_FOOTPRINT_DIR}/Resistor_SMD.pretty")
+		(options "")
+		(descr "")
+	)
+	(lib
 		(name "TestPoint")
 		(type "KiCad")
 		(uri "${KICAD10_FOOTPRINT_DIR}/TestPoint.pretty")

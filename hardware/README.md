@@ -9,8 +9,8 @@ The Talos custom-hardware workstream. It follows `TALOS_CUSTOM_HARDWARE_HANDOFF_
 | ID | What | Bespoke? | State |
 |---|---|---|---|
 | TL-HUB-REF | Hub: Pi 5 / mini-PC + USB 802.15.4 RCP | No, bought | `bom/devkit_rig_v0.csv` |
-| TL-SN-001 | Four-slot Thread Sensor Node (ESP32-H2-MINI-1) | Yes | H3 schematic + H4 placed, **partially routed** 4-layer layout ([layout](layout/README.md)) |
-| TL-MOD-001 | Magnetic contact card (DRV5032FB Hall) | Yes | H3 schematic + H4 routed 2-layer layout |
+| TL-SN-001 | Four-slot Thread Sensor Node (ESP32-H2-MINI-1) | Yes | H3 schematic + H4 placed and routed 4-layer layout, 0 DRC errors, not yet reviewed ([layout](layout/README.md)) |
+| TL-MOD-001 | Magnetic contact card (TMAG5273 3-axis Hall, any orientation) | Yes | H3 schematic + H4 routed 2-layer layout |
 | TL-MOD-002 | PIR card (Panasonic EKMB 1 µA) | Yes | H3 schematic + H4 routed 2-layer layout |
 | TL-MOD-003 | Vibration/impact card (ST LIS2DW12) | Yes | H3 schematic + H4 routed 2-layer layout |
 | TL-MOD-004 | Temperature/humidity card (Sensirion SHT4x) | Yes | H3 schematic + H4 routed 2-layer layout |
@@ -23,7 +23,7 @@ The camera **slot** module (`smart_camera_s3_v1`) is superseded by TL-VN-001 ([A
 
 | Path | Contents |
 |---|---|
-| `architecture/` | [hardware-overview.md](architecture/hardware-overview.md) and hardware ADRs HW-0001..0005 |
+| `architecture/` | [hardware-overview.md](architecture/hardware-overview.md) and hardware ADRs HW-0001..0006 |
 | `requirements/` | Requirements (`hardware-requirements.yaml`), decision/risk register, datasheet register, component selection, interface test matrix |
 | `interfaces/` | [sensor_edge_v1](interfaces/sensor_edge_v1.md) slot connector contract |
 | `pins/` | Complete ESP32-H2-MINI-1 pad ledger (CSV), the single source for the firmware `BoardSupport` table |

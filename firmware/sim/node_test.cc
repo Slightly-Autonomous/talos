@@ -2,6 +2,7 @@
 #include <gtest/gtest.h>
 
 #include <algorithm>
+#include <array>
 #include <string>
 
 #include "common/sha256/sha256.h"
@@ -113,6 +114,71 @@ TEST(Contact, BounceProducesOneDebouncedEvent) {
   n.gpio.set(0, true);
   n.run_for(100);
   EXPECT_TRUE(of_kind(n.drain_and_ack(), EventKind::kContact).empty());
+}
+
+// TL-MOD-001 (TMAG5273): the same door works whichever axis the magnet lines up with.
+class HallContact : public ::testing::TestWithParam<int> {};
+
+TEST_P(HallContact, OpenCloseOnAnyAxisAndReArms) {
+  const int axis = GetParam();
+  auto field = [&](std::int32_t ut) {
+    std::int32_t f[3] = {40, -25, 30};  // stray field, well under the thresholds
+    f[axis] = ut;
+    return std::array<std::int32_t, 3>{f[0], f[1], f[2]};
+  };
+  Node n(default_board());
+  n.insert(0, ModuleCode::kTmag5273Contact);
+  auto closed = field(axis == 1 ? -8'000 : 8'000);  // either magnet polarity
+  n.hall(0).set_field(closed[0], closed[1], closed[2]);
+  n.boot();
+  n.run_for(5);
+  auto boot = of_kind(n.drain_and_ack(), EventKind::kContact);
+  ASSERT_EQ(boot.size(), 1u);
+  EXPECT_FALSE(boot[0].flag);  // closed
+  EXPECT_EQ(boot[0].b, 1u);    // state report, not a transition
+  EXPECT_TRUE(n.hall(0).in_wake_sleep());
+  EXPECT_FALSE(n.gpio.read(0));
+
+  // A small wobble while closed raises nothing.
+  auto wobble = field(axis == 1 ? -6'000 : 6'000);
+  n.hall(0).set_field(wobble[0], wobble[1], wobble[2]);
+  n.run_for(10);
+  EXPECT_TRUE(of_kind(n.drain_and_ack(), EventKind::kContact).empty());
+
+  // Door opens: the field collapses.
+  auto open = field(200);
+  n.hall(0).set_field(open[0], open[1], open[2]);
+  n.run_for(10);
+  auto opened = of_kind(n.drain_and_ack(), EventKind::kContact);
+  ASSERT_EQ(opened.size(), 1u);
+  EXPECT_TRUE(opened[0].flag);
+  EXPECT_EQ(opened[0].priority, Priority::kP0Critical);
+  EXPECT_FALSE(n.gpio.read(0));            // latch cleared by the read
+  EXPECT_TRUE(n.hall(0).in_wake_sleep());  // re-armed, not left in 0.45 mA standby
+
+  // Door closes again.
+  n.hall(0).set_field(closed[0], closed[1], closed[2]);
+  n.run_for(10);
+  auto shut = of_kind(n.drain_and_ack(), EventKind::kContact);
+  ASSERT_EQ(shut.size(), 1u);
+  EXPECT_FALSE(shut[0].flag);
+  EXPECT_TRUE(n.hall(0).in_wake_sleep());
+}
+
+INSTANTIATE_TEST_SUITE_P(Axes, HallContact, ::testing::Values(0, 1, 2));
+
+TEST(HallContactCodes, ThresholdCodesAndBootOpen) {
+  EXPECT_EQ(Tmag5273ContactDriver::threshold_code(1'500), 5);  // 5 x 0.3125 mT = 1.56 mT
+  EXPECT_EQ(Tmag5273ContactDriver::threshold_code(3'000), 10);
+  EXPECT_EQ(Tmag5273ContactDriver::threshold_code(0), 1);
+  EXPECT_EQ(Tmag5273ContactDriver::threshold_code(100'000), 127);
+  Node n(default_board());
+  n.insert(0, ModuleCode::kTmag5273Contact);  // no magnet anywhere
+  n.boot();
+  n.run_for(5);
+  auto boot = of_kind(n.drain_and_ack(), EventKind::kContact);
+  ASSERT_EQ(boot.size(), 1u);
+  EXPECT_TRUE(boot[0].flag);
 }
 
 TEST(Pir, RisingAndFallingEdges) {

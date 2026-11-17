@@ -11,6 +11,7 @@ Goal: run the **same portable firmware** on real silicon with off-the-shelf brea
   |---|---|
   | PIR | `0x0101` |
   | Reed contact | `0x0102` |
+  | TL-MOD-001 3-axis Hall contact (TMAG5273) | `0x0103` |
   | LIS2DW12 | `0x0201` |
   | SHT40 | `0x0301` |
   | Camera | `0x0401` |

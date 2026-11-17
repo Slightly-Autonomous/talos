@@ -8,6 +8,13 @@
 		(descr "Talos project symbols (generated)")
 	)
 	(lib
+		(name "74xGxx")
+		(type "KiCad")
+		(uri "${KICAD10_SYMBOL_DIR}/74xGxx.kicad_sym")
+		(options "")
+		(descr "")
+	)
+	(lib
 		(name "Connector")
 		(type "KiCad")
 		(uri "${KICAD10_SYMBOL_DIR}/Connector.kicad_sym")
@@ -32,6 +39,13 @@
 		(name "Memory_EEPROM")
 		(type "KiCad")
 		(uri "${KICAD10_SYMBOL_DIR}/Memory_EEPROM.kicad_sym")
+		(options "")
+		(descr "")
+	)
+	(lib
+		(name "Sensor_Magnetic")
+		(type "KiCad")
+		(uri "${KICAD10_SYMBOL_DIR}/Sensor_Magnetic.kicad_sym")
 		(options "")
 		(descr "")
 	)

@@ -1,5 +1,5 @@
 // Virtual hardware for the portable firmware (spec §41, L2 twin): register-
-// level models of the I2C mux, module ID EEPROMs, LIS2DW12 and SHT40, plus
+// level models of the I2C mux, module ID EEPROMs, LIS2DW12, TMAG5273 and SHT40, plus
 // GPIO, rails/battery, an atomic store with power-cut injection, A/B flash
 // and a lossy loopback link. The firmware cannot tell it from hardware
 // through the HAL; physical timing/electrical behavior stays in HIL (L4).
@@ -99,6 +99,27 @@ class Lis2dw12 final : public RegisterDevice {
   std::uint8_t line_;
 };
 
+// TMAG5273A1 register model (SLYS045C): results at 820 LSB/mT, symmetric
+// per-axis thresholds (THR_HYST = 1, zero = axis not checked), MAG_THR_DIR,
+// wake-up-and-sleep mode, latched INT cleared by any transaction. `wake_line`
+// is the card's WAKE: INT_N through the on-card inverter, so high = asserted.
+class Tmag5273 final : public RegisterDevice {
+ public:
+  Tmag5273(Gpio& gpio, std::uint8_t wake_line);
+  // The magnet moved: new field at the sensor, microtesla per axis.
+  void set_field(std::int32_t x_ut, std::int32_t y_ut, std::int32_t z_ut);
+  bool write(const std::uint8_t* data, std::size_t n) override;
+  bool read(std::uint8_t* out, std::size_t n) override;
+  bool in_wake_sleep() const { return (regs[0x01] & 0x03) == 0x03; }
+
+ private:
+  void update_results();
+  void evaluate();
+  Gpio& gpio_;
+  std::uint8_t line_;
+  std::array<std::int32_t, 3> field_ut_{};
+};
+
 class Sht40 final : public I2cDevice {
  public:
   bool write(const std::uint8_t* data, std::size_t n) override;
@@ -178,6 +199,7 @@ class Node {
   void insert(std::uint8_t slot, ModuleCode code);
   Lis2dw12& imu(std::uint8_t slot) { return *imus_.at(slot); }
   Sht40& sht(std::uint8_t slot) { return *shts_.at(slot); }
+  Tmag5273& hall(std::uint8_t slot) { return *halls_.at(slot); }
 
   void boot();  // power-on / reset: fresh runtime, same store and flash
   // Advances virtual time in 1 ms ticks, stepping the runtime when it is due
@@ -208,6 +230,7 @@ class Node {
   std::map<std::uint8_t, std::unique_ptr<IdEeprom>> eeproms_;
   std::map<std::uint8_t, std::unique_ptr<Lis2dw12>> imus_;
   std::map<std::uint8_t, std::unique_ptr<Sht40>> shts_;
+  std::map<std::uint8_t, std::unique_ptr<Tmag5273>> halls_;
   std::uint32_t reboots_ = 0;
 };
 

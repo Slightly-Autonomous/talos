@@ -5,7 +5,7 @@ Sources:
   apart, rows 9.8 mm, corner pads 0.7 at 11.9 x 9.9, 3x3 1.45 mm EP array over 5.4 mm). That geometry
   is identical to KiCad's ESP32-C6-MINI-1 footprint, which is reused with the H2 description.
 - BQ25186 DLH0010A: TI SLUSF69 §12 land pattern example (10 x 0.5 x 0.2 mm at 0.4 mm, 2.1 mm row
-  span, EP 0.9 x 1.5 mm).
+  span, EP 0.9 x 1.5 mm), modified: rows at +/-0.825 and EP 0.75 x 1.5 mm for 0.2 mm pad-to-EP copper.
 - EKMB: Panasonic PaPIRs WL reference spec rev 7.1: three 0.45 mm leads on a 5.08 mm PCD; GND and OUT
   at +/-45 deg from the bottom vertical, Vdd opposite. Mapping VERIFY against a sample.
 - sensor_edge_v1 card fingers: 0.80 mm pitch, 2 x 10 (odd top, even bottom), for a 1.60 mm card.
@@ -67,16 +67,19 @@ def _footprint(name: str, descr: str, attr: str, body: str, ref_y: float, val_y:
 
 def dlh0010a() -> str:
     body = ""
+    # TI's example (pads at +/-0.8, EP 0.9 wide) leaves 0.1 mm pad-to-EP copper, below the 0.15 mm fab
+    # rule, and the autorouter then refuses every pin. Pads move out 0.025 mm and the EP narrows to
+    # 0.75 mm, giving 0.2 mm. VERIFY with an EE: EP solder area drops ~17 % (thermal via in the EP).
     for i in range(5):
         y = -0.8 + 0.4 * i
-        body += _smd(str(1 + i), -0.8, y, 0.5, 0.2)  # pins 1-5 down the left column
-        body += _smd(str(10 - i), 0.8, y, 0.5, 0.2)  # pins 10-6 down the right column
-    body += _smd("11", 0, 0, 0.9, 1.5, shape="rect")
+        body += _smd(str(1 + i), -0.825, y, 0.5, 0.2)  # pins 1-5 down the left column
+        body += _smd(str(10 - i), 0.825, y, 0.5, 0.2)  # pins 10-6 down the right column
+    body += _smd("11", 0, 0, 0.75, 1.5, shape="rect")
     body += _rect(-1.1, -1.0, 1.1, 1.0, "F.Fab")
     body += _rect(-1.35, -1.25, 1.35, 1.25, "F.CrtYd", 0.05)
     body += _line(-1.2, -1.15, -0.6, -1.15, "F.SilkS")  # pin-1 marker
     return _footprint("Texas_DLH0010A_WSON-10-1EP_2.2x2mm_P0.4mm",
-                      "TI DLH0010A WSON-10, land pattern from SLUSF69 §12 (BQ25186)", "smd", body, -2, 2)
+                      "TI DLH0010A WSON-10, from SLUSF69 §12 land pattern with EP narrowed to 0.75 mm for 0.2 mm pad-to-EP clearance (BQ25186); VERIFY", "smd", body, -2, 2)
 
 
 def ekmb() -> str:

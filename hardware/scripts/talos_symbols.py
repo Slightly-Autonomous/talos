@@ -98,16 +98,6 @@ SYMBOLS = {
             ("8", "GND", "power_in", "B"),
         ],
     },
-    "DRV5032xx-DBZ": {
-        "ref": "U",
-        "source": "TI SLVSDC7H Table 5-1 (SOT-23 DBZ: 1 VCC, 2 OUT, 3 GND; FA/FB/FC/AJ/ZE)",
-        "footprint": "Package_TO_SOT_SMD:SOT-23",
-        "pins": [
-            ("1", "VCC", "power_in", "L"),
-            ("2", "OUT", "output", "R"),
-            ("3", "GND", "power_in", "B"),
-        ],
-    },
     "EKMB": {
         "ref": "U",
         "source": "Panasonic PaPIRs WL EKMB110111x reference spec rev 7.1 (bottom view: Vdd, OUT, GND; "

@@ -12,6 +12,199 @@
 		(comment 2 "PROVISIONAL: not reviewed by an electrical engineer, not laid out, not built")
 	)
 	(lib_symbols
+		(symbol "74xGxx:74AUP1G04"
+			(exclude_from_sim no)
+			(in_bom yes)
+			(on_board yes)
+			(in_pos_files yes)
+			(duplicate_pin_numbers_are_jumpers no)
+			(property "Reference" "U"
+				(at -2.54 3.81 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Value" "74AUP1G04"
+				(at 0 -3.81 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Footprint" ""
+				(at 0 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Datasheet" "https://www.ti.com/lit/ds/symlink/sn74aup1g04.pdf"
+				(at 0 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Description" "Single NOT Gate, Low-Voltage CMOS"
+				(at 0 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "ki_keywords" "Single Gate NOT LVC CMOS"
+				(at 0 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "ki_fp_filters" "SOT?23* Texas?R-PDSO-G5?DCK* Texas?R-PDSO-N5?DRL* Texas?X2SON*0.8x0.8mm*P0.48mm*"
+				(at 0 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(symbol "74AUP1G04_0_1"
+				(polyline
+					(pts
+						(xy -7.62 6.35)
+						(xy -7.62 -6.35)
+						(xy 5.08 0)
+						(xy -7.62 6.35)
+					)
+					(stroke
+						(width 0.254)
+						(type default)
+					)
+					(fill
+						(type background)
+					)
+				)
+			)
+			(symbol "74AUP1G04_1_1"
+				(pin no_connect line
+					(at -7.62 2.54 0)
+					(length 2.54)
+					(hide yes)
+					(name "NC"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "1"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin input line
+					(at -15.24 0 0)
+					(length 7.62)
+					(name ""
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "2"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin power_in line
+					(at -5.08 -10.16 90)
+					(length 5.08)
+					(name "GND"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "3"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin output inverted
+					(at 12.7 0 180)
+					(length 7.62)
+					(name ""
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "4"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin power_in line
+					(at -5.08 10.16 270)
+					(length 5.08)
+					(name "VCC"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "5"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+			)
+			(embedded_fonts no)
+		)
 		(symbol "Connector:TestPoint"
 			(pin_numbers
 				(hide yes)
@@ -972,6 +1165,146 @@
 			)
 			(embedded_fonts no)
 		)
+		(symbol "Device:R"
+			(pin_numbers
+				(hide yes)
+			)
+			(pin_names
+				(offset 0)
+			)
+			(exclude_from_sim no)
+			(in_bom yes)
+			(on_board yes)
+			(in_pos_files yes)
+			(duplicate_pin_numbers_are_jumpers no)
+			(property "Reference" "R"
+				(at 2.032 0 90)
+				(show_name no)
+				(do_not_autoplace no)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Value" "R"
+				(at 0 0 90)
+				(show_name no)
+				(do_not_autoplace no)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Footprint" ""
+				(at -1.778 0 90)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Datasheet" ""
+				(at 0 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Description" "Resistor"
+				(at 0 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "ki_keywords" "R res resistor"
+				(at 0 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "ki_fp_filters" "R_*"
+				(at 0 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(symbol "R_0_1"
+				(rectangle
+					(start -1.016 -2.54)
+					(end 1.016 2.54)
+					(stroke
+						(width 0.254)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+			)
+			(symbol "R_1_1"
+				(pin passive line
+					(at 0 3.81 270)
+					(length 1.27)
+					(name ""
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "1"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin passive line
+					(at 0 -3.81 90)
+					(length 1.27)
+					(name ""
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "2"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+			)
+			(embedded_fonts no)
+		)
 		(symbol "Memory_EEPROM:24AA025E-OT"
 			(exclude_from_sim no)
 			(in_bom yes)
@@ -1177,6 +1510,212 @@
 			)
 			(embedded_fonts no)
 		)
+		(symbol "Sensor_Magnetic:TMAG5273x1QDBV"
+			(exclude_from_sim no)
+			(in_bom yes)
+			(on_board yes)
+			(in_pos_files yes)
+			(duplicate_pin_numbers_are_jumpers no)
+			(property "Reference" "U"
+				(at -7.62 6.35 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(justify left)
+				)
+			)
+			(property "Value" "TMAG5273x1QDBV"
+				(at 1.27 6.35 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(justify left)
+				)
+			)
+			(property "Footprint" "Package_TO_SOT_SMD:SOT-23-6"
+				(at 0 -15.24 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Datasheet" "https://www.ti.com/lit/ds/symlink/tmag5273.pdf"
+				(at 0 -12.7 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Description" "3D linear Hall effect sensor, ±80 mT, I2C, SOT-23-6"
+				(at 0 -10.16 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "ki_keywords" "Low-power 3-axis Angle"
+				(at 0 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "ki_fp_filters" "SOT?23*"
+				(at 0 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(symbol "TMAG5273x1QDBV_1_1"
+				(rectangle
+					(start -7.62 5.08)
+					(end 7.62 -5.08)
+					(stroke
+						(width 0.254)
+						(type solid)
+					)
+					(fill
+						(type background)
+					)
+				)
+				(pin input line
+					(at -10.16 2.54 0)
+					(length 2.54)
+					(name "SCL"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "1"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin power_in line
+					(at 0 -7.62 90)
+					(length 2.54)
+					(name "GND"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "2"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin passive line
+					(at 2.54 -7.62 90)
+					(length 2.54)
+					(name "TEST"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "3"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin power_in line
+					(at 0 7.62 270)
+					(length 2.54)
+					(name "VCC"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "4"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin bidirectional line
+					(at 10.16 2.54 180)
+					(length 2.54)
+					(name "~{INT}"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "5"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin bidirectional line
+					(at -10.16 0 0)
+					(length 2.54)
+					(name "SDA"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "6"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+			)
+			(embedded_fonts no)
+		)
 		(symbol "power:PWR_FLAG"
 			(power global)
 			(pin_numbers
@@ -1292,124 +1831,6 @@
 					)
 					(fill
 						(type none)
-					)
-				)
-			)
-			(embedded_fonts no)
-		)
-		(symbol "talos:DRV5032xx-DBZ"
-			(exclude_from_sim no)
-			(in_bom yes)
-			(on_board yes)
-			(property "Reference" "U"
-				(at 0 3.81 0)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-				)
-			)
-			(property "Value" "DRV5032xx-DBZ"
-				(at 0 -7.62 0)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-				)
-			)
-			(property "Footprint" "Package_TO_SOT_SMD:SOT-23"
-				(at 0 -10.16 0)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-					(hide yes)
-				)
-			)
-			(property "Datasheet" ""
-				(at 0 -12.7 0)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-					(hide yes)
-				)
-			)
-			(property "Description" "TI SLVSDC7H Table 5-1 (SOT-23 DBZ: 1 VCC, 2 OUT, 3 GND; FA/FB/FC/AJ/ZE)"
-				(at 0 -15.24 0)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-					(hide yes)
-				)
-			)
-			(symbol "DRV5032xx-DBZ_0_1"
-				(rectangle
-					(start -12.7 2.54)
-					(end 12.7 -2.54)
-					(stroke
-						(width 0.254)
-						(type default)
-					)
-					(fill
-						(type background)
-					)
-				)
-			)
-			(symbol "DRV5032xx-DBZ_1_1"
-				(pin power_in line
-					(at -15.24 0 0)
-					(length 2.54)
-					(name "VCC"
-						(effects
-							(font
-								(size 1.016 1.016)
-							)
-						)
-					)
-					(number "1"
-						(effects
-							(font
-								(size 1.016 1.016)
-							)
-						)
-					)
-				)
-				(pin output line
-					(at 15.24 0 180)
-					(length 2.54)
-					(name "OUT"
-						(effects
-							(font
-								(size 1.016 1.016)
-							)
-						)
-					)
-					(number "2"
-						(effects
-							(font
-								(size 1.016 1.016)
-							)
-						)
-					)
-				)
-				(pin power_in line
-					(at 0 -5.08 90)
-					(length 2.54)
-					(name "GND"
-						(effects
-							(font
-								(size 1.016 1.016)
-							)
-						)
-					)
-					(number "3"
-						(effects
-							(font
-								(size 1.016 1.016)
-							)
-						)
 					)
 				)
 			)
@@ -2076,8 +2497,8 @@
 		(uuid "2e38f438-58eb-5345-b3ea-d41d939573e9")
 	)
 	(symbol
-		(lib_id "talos:DRV5032xx-DBZ")
-		(at 160.02 35.56 0)
+		(lib_id "Sensor_Magnetic:TMAG5273x1QDBV")
+		(at 149.86 53.34 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
@@ -2085,23 +2506,23 @@
 		(dnp no)
 		(uuid "0f05ba55-0bb0-592d-8278-cc8653914d0a")
 		(property "Reference" "U2"
-			(at 160.02 27.94 0)
+			(at 149.86 45.72 0)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
 			)
 		)
-		(property "Value" "DRV5032FBDBZR"
-			(at 160.02 43.18 0)
+		(property "Value" "TMAG5273A1QDBVR"
+			(at 149.86 60.96 0)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
 			)
 		)
-		(property "Footprint" "Package_TO_SOT_SMD:SOT-23"
-			(at 160.02 35.56 0)
+		(property "Footprint" "Package_TO_SOT_SMD:SOT-23-6"
+			(at 149.86 53.34 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -2109,8 +2530,17 @@
 				(hide yes)
 			)
 		)
-		(property "Datasheet" "~"
-			(at 160.02 35.56 0)
+		(property "Datasheet" "https://www.ti.com/lit/ds/symlink/tmag5273.pdf"
+			(at 149.86 53.34 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Talos_Note" "I2C 0x35 (A1), +/-40/80 mT; TEST pin 3 to GND; volatile config, host sets W&S mode"
+			(at 149.86 53.34 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -2127,6 +2557,15 @@
 		(pin "3"
 			(uuid "b1e5a230-44e7-56bf-92b1-629a94426115")
 		)
+		(pin "4"
+			(uuid "1f197c46-49f6-5a0b-8bcf-ef806d39832e")
+		)
+		(pin "5"
+			(uuid "26076fae-a406-5daa-9dc6-759bfcbc0a66")
+		)
+		(pin "6"
+			(uuid "f96de4af-a88d-5415-b92f-a9fd6a806b7f")
+		)
 		(instances
 			(project "TL-MOD-001"
 				(path "/220bbf33-6588-545b-b458-ee681e9192be"
@@ -2138,8 +2577,8 @@
 	)
 	(wire
 		(pts
-			(xy 144.78 35.56)
-			(xy 142.24 35.56)
+			(xy 139.7 50.8)
+			(xy 137.16 50.8)
 		)
 		(stroke
 			(width 0)
@@ -2147,8 +2586,8 @@
 		)
 		(uuid "b24d1c82-814f-5218-92cb-f8699ea78c60")
 	)
-	(label "V3V3_AON"
-		(at 142.24 35.56 180)
+	(label "SCL"
+		(at 137.16 50.8 180)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -2159,8 +2598,8 @@
 	)
 	(wire
 		(pts
-			(xy 175.26 35.56)
-			(xy 177.8 35.56)
+			(xy 149.86 60.96)
+			(xy 149.86 63.5)
 		)
 		(stroke
 			(width 0)
@@ -2168,20 +2607,20 @@
 		)
 		(uuid "0db727ef-4257-5c2e-9a05-8e31d9f00f1d")
 	)
-	(label "WAKE"
-		(at 177.8 35.56 0)
+	(label "GND"
+		(at 149.86 63.5 270)
 		(effects
 			(font
 				(size 1.27 1.27)
 			)
-			(justify left bottom)
+			(justify right bottom)
 		)
 		(uuid "c150ce56-e60d-5e39-831a-cff6fb4ed0b6")
 	)
 	(wire
 		(pts
-			(xy 160.02 40.64)
-			(xy 160.02 43.18)
+			(xy 152.4 60.96)
+			(xy 152.4 63.5)
 		)
 		(stroke
 			(width 0)
@@ -2190,7 +2629,7 @@
 		(uuid "4668bfad-364e-5a67-9f4c-711c3fda7690")
 	)
 	(label "GND"
-		(at 160.02 43.18 270)
+		(at 152.4 63.5 270)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -2199,9 +2638,72 @@
 		)
 		(uuid "380e0f5a-7afd-511d-8a2e-df4157307338")
 	)
+	(wire
+		(pts
+			(xy 149.86 45.72)
+			(xy 149.86 43.18)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "e292d0e6-a003-5ace-a81e-8cc2d4067e16")
+	)
+	(label "V3V3_AON"
+		(at 149.86 43.18 90)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "02d397a9-eadd-5494-94c5-c69e90ecd277")
+	)
+	(wire
+		(pts
+			(xy 160.02 50.8)
+			(xy 162.56 50.8)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "b5d086f5-a8bf-5292-9e86-60cac8455538")
+	)
+	(label "MAG_INT_N"
+		(at 162.56 50.8 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "51556aca-cab7-5f03-b209-2d6bba15fd67")
+	)
+	(wire
+		(pts
+			(xy 139.7 53.34)
+			(xy 137.16 53.34)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "f6f443ed-f2d7-5aec-9b66-14911de5106c")
+	)
+	(label "SDA"
+		(at 137.16 53.34 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right bottom)
+		)
+		(uuid "8d3a740c-34a5-51da-aa7a-68ebfd4a0ca1")
+	)
 	(symbol
 		(lib_id "Device:C")
-		(at 195.58 48.26 0)
+		(at 185.42 48.26 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
@@ -2209,7 +2711,7 @@
 		(dnp no)
 		(uuid "6401ab52-2146-5c3e-bf82-5b1032d3ea57")
 		(property "Reference" "C2"
-			(at 195.58 40.64 0)
+			(at 185.42 40.64 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -2217,7 +2719,7 @@
 			)
 		)
 		(property "Value" "100n"
-			(at 195.58 55.88 0)
+			(at 185.42 55.88 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -2225,7 +2727,7 @@
 			)
 		)
 		(property "Footprint" "Capacitor_SMD:C_0402_1005Metric"
-			(at 195.58 48.26 0)
+			(at 185.42 48.26 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -2234,7 +2736,7 @@
 			)
 		)
 		(property "Datasheet" "~"
-			(at 195.58 48.26 0)
+			(at 185.42 48.26 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -2259,8 +2761,8 @@
 	)
 	(wire
 		(pts
-			(xy 195.58 44.45)
-			(xy 195.58 41.91)
+			(xy 185.42 44.45)
+			(xy 185.42 41.91)
 		)
 		(stroke
 			(width 0)
@@ -2269,7 +2771,7 @@
 		(uuid "b24406c6-be58-5858-a37d-7e17432a188e")
 	)
 	(label "V3V3_AON"
-		(at 195.58 41.91 90)
+		(at 185.42 41.91 90)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -2280,8 +2782,8 @@
 	)
 	(wire
 		(pts
-			(xy 195.58 52.07)
-			(xy 195.58 54.61)
+			(xy 185.42 52.07)
+			(xy 185.42 54.61)
 		)
 		(stroke
 			(width 0)
@@ -2290,7 +2792,7 @@
 		(uuid "38be38aa-b2d2-56a5-8e6b-224186e9586b")
 	)
 	(label "GND"
-		(at 195.58 54.61 270)
+		(at 185.42 54.61 270)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -2300,32 +2802,32 @@
 		(uuid "1c7b4a28-3499-54d8-b398-8f58b76802df")
 	)
 	(symbol
-		(lib_id "Connector:TestPoint")
-		(at 210.82 35.56 0)
+		(lib_id "Device:R")
+		(at 200.66 48.26 0)
 		(unit 1)
 		(exclude_from_sim no)
-		(in_bom no)
+		(in_bom yes)
 		(on_board yes)
 		(dnp no)
-		(uuid "558c63bc-a284-52c9-97fc-ddef7803b669")
-		(property "Reference" "TP1"
-			(at 210.82 27.94 0)
+		(uuid "a924c6f9-c84e-50d6-ac41-d5eb98f2c298")
+		(property "Reference" "R1"
+			(at 200.66 40.64 0)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
 			)
 		)
-		(property "Value" "V3V3_AON"
-			(at 210.82 43.18 0)
+		(property "Value" "100k"
+			(at 200.66 55.88 0)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
 			)
 		)
-		(property "Footprint" "TestPoint:TestPoint_Pad_D1.0mm"
-			(at 210.82 35.56 0)
+		(property "Footprint" "Resistor_SMD:R_0402_1005Metric"
+			(at 200.66 48.26 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -2334,7 +2836,380 @@
 			)
 		)
 		(property "Datasheet" "~"
-			(at 210.82 35.56 0)
+			(at 200.66 48.26 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Talos_Note" "INT pull-up (open-drain)"
+			(at 200.66 48.26 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "7516b638-0ae9-5452-86f7-8e9f835ae722")
+		)
+		(pin "2"
+			(uuid "56aef412-48d1-5550-8672-bbe4f65ec41a")
+		)
+		(instances
+			(project "TL-MOD-001"
+				(path "/220bbf33-6588-545b-b458-ee681e9192be"
+					(reference "R1")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(wire
+		(pts
+			(xy 200.66 44.45)
+			(xy 200.66 41.91)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "02a0caa5-1816-5f4a-bd8e-d0bfacd50007")
+	)
+	(label "V3V3_AON"
+		(at 200.66 41.91 90)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "180781b3-c1c6-5aa2-bbe4-ffe92c6b9577")
+	)
+	(wire
+		(pts
+			(xy 200.66 52.07)
+			(xy 200.66 54.61)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "7ee27f9c-e8f4-5727-b9eb-b7a88d6d5ac4")
+	)
+	(label "MAG_INT_N"
+		(at 200.66 54.61 270)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right bottom)
+		)
+		(uuid "4d2c2b2d-f782-51df-a22d-ca17c0efa1c3")
+	)
+	(symbol
+		(lib_id "74xGxx:74AUP1G04")
+		(at 243.84 55.88 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "69462839-2e6d-51b9-815f-454f6b0e4a0d")
+		(property "Reference" "U3"
+			(at 243.84 48.26 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "SN74AUP1G04DBVR"
+			(at 243.84 63.5 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" "Package_TO_SOT_SMD:SOT-23-5"
+			(at 243.84 55.88 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" "https://www.ti.com/lit/ds/symlink/sn74aup1g04.pdf"
+			(at 243.84 55.88 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Talos_Note" "inverts INT_N to idle-low push-pull WAKE"
+			(at 243.84 55.88 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "2d2f71fe-dd31-5c96-8e94-4b8d6aaef3ff")
+		)
+		(pin "2"
+			(uuid "d29f1144-cec0-59a2-b177-1d5551d842d5")
+		)
+		(pin "3"
+			(uuid "86a29e22-57b6-56e5-b21e-34289c81559d")
+		)
+		(pin "4"
+			(uuid "83e27f51-51d7-505f-8abd-2d814a7d87d6")
+		)
+		(pin "5"
+			(uuid "d3dd4ead-ffe0-5a45-8781-926fd34d3b85")
+		)
+		(instances
+			(project "TL-MOD-001"
+				(path "/220bbf33-6588-545b-b458-ee681e9192be"
+					(reference "U3")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(no_connect
+		(at 236.22 53.34)
+		(uuid "0c15870b-3d68-5d8b-8e12-918f73be0151")
+	)
+	(wire
+		(pts
+			(xy 228.6 55.88)
+			(xy 226.06 55.88)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "3ee5d355-4b22-56e4-877c-02a17872df9e")
+	)
+	(label "MAG_INT_N"
+		(at 226.06 55.88 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right bottom)
+		)
+		(uuid "3cb35442-6cbf-5fb1-92bf-b353ed2e2bf1")
+	)
+	(wire
+		(pts
+			(xy 238.76 66.04)
+			(xy 238.76 68.58)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "86da8b42-5a41-5d93-a9f4-8c65b3b4855b")
+	)
+	(label "GND"
+		(at 238.76 68.58 270)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right bottom)
+		)
+		(uuid "99e3eb88-a076-5bc3-9aa7-d576b382853c")
+	)
+	(wire
+		(pts
+			(xy 256.54 55.88)
+			(xy 259.08 55.88)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "aff8f9c9-fc6b-53ba-8bad-e35954e55427")
+	)
+	(label "WAKE"
+		(at 259.08 55.88 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "a5c2c0cd-9d0a-5b79-8489-22a2c32642f7")
+	)
+	(wire
+		(pts
+			(xy 238.76 45.72)
+			(xy 238.76 43.18)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "ab38b581-64f1-5d77-bc25-45b140c71716")
+	)
+	(label "V3V3_AON"
+		(at 238.76 43.18 90)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "0076c245-5a16-58a4-a5a3-e0e9f8766a1e")
+	)
+	(symbol
+		(lib_id "Device:C")
+		(at 276.86 48.26 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "0d7b2812-0b12-51ce-bb76-cd1f0d093f0a")
+		(property "Reference" "C3"
+			(at 276.86 40.64 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "100n"
+			(at 276.86 55.88 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" "Capacitor_SMD:C_0402_1005Metric"
+			(at 276.86 48.26 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" "~"
+			(at 276.86 48.26 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "bece32cd-9cb6-506b-9580-931eba7124a6")
+		)
+		(pin "2"
+			(uuid "d4f40cc7-c252-578d-b195-2fa1114ffe45")
+		)
+		(instances
+			(project "TL-MOD-001"
+				(path "/220bbf33-6588-545b-b458-ee681e9192be"
+					(reference "C3")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(wire
+		(pts
+			(xy 276.86 44.45)
+			(xy 276.86 41.91)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "ef1690ab-21de-505d-8906-77c6f8a3807c")
+	)
+	(label "V3V3_AON"
+		(at 276.86 41.91 90)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "1c041ff1-dfbe-5b7e-a303-29452b727350")
+	)
+	(wire
+		(pts
+			(xy 276.86 52.07)
+			(xy 276.86 54.61)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "4f29bbcc-08f4-5df9-b53a-4e41bf1595e7")
+	)
+	(label "GND"
+		(at 276.86 54.61 270)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right bottom)
+		)
+		(uuid "e2e917a0-0f2c-5e9c-a85f-bdf061b3785c")
+	)
+	(symbol
+		(lib_id "Connector:TestPoint")
+		(at 292.1 35.56 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom no)
+		(on_board yes)
+		(dnp no)
+		(uuid "558c63bc-a284-52c9-97fc-ddef7803b669")
+		(property "Reference" "TP1"
+			(at 292.1 27.94 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "V3V3_AON"
+			(at 292.1 43.18 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" "TestPoint:TestPoint_Pad_D1.0mm"
+			(at 292.1 35.56 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" "~"
+			(at 292.1 35.56 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -2356,8 +3231,8 @@
 	)
 	(wire
 		(pts
-			(xy 210.82 35.56)
-			(xy 210.82 38.1)
+			(xy 292.1 35.56)
+			(xy 292.1 38.1)
 		)
 		(stroke
 			(width 0)
@@ -2366,7 +3241,7 @@
 		(uuid "e38e3c21-ab28-5da4-b387-e75af2f4abc7")
 	)
 	(label "V3V3_AON"
-		(at 210.82 38.1 270)
+		(at 292.1 38.1 270)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -2377,7 +3252,7 @@
 	)
 	(symbol
 		(lib_id "Connector:TestPoint")
-		(at 226.06 35.56 0)
+		(at 307.34 35.56 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom no)
@@ -2385,7 +3260,7 @@
 		(dnp no)
 		(uuid "4a4960eb-72f3-5af7-8f99-c7f197d41f4a")
 		(property "Reference" "TP2"
-			(at 226.06 27.94 0)
+			(at 307.34 27.94 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -2393,7 +3268,7 @@
 			)
 		)
 		(property "Value" "GND"
-			(at 226.06 43.18 0)
+			(at 307.34 43.18 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -2401,7 +3276,7 @@
 			)
 		)
 		(property "Footprint" "TestPoint:TestPoint_Pad_D1.0mm"
-			(at 226.06 35.56 0)
+			(at 307.34 35.56 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -2410,7 +3285,7 @@
 			)
 		)
 		(property "Datasheet" "~"
-			(at 226.06 35.56 0)
+			(at 307.34 35.56 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -2432,8 +3307,8 @@
 	)
 	(wire
 		(pts
-			(xy 226.06 35.56)
-			(xy 226.06 38.1)
+			(xy 307.34 35.56)
+			(xy 307.34 38.1)
 		)
 		(stroke
 			(width 0)
@@ -2442,7 +3317,7 @@
 		(uuid "ee740148-5487-5449-977c-e2eaaa602a11")
 	)
 	(label "GND"
-		(at 226.06 38.1 270)
+		(at 307.34 38.1 270)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -2453,7 +3328,7 @@
 	)
 	(symbol
 		(lib_id "power:PWR_FLAG")
-		(at 241.3 35.56 0)
+		(at 322.58 35.56 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom no)
@@ -2461,7 +3336,7 @@
 		(dnp no)
 		(uuid "ad2117ec-bbbd-5850-8d91-d1207859dedd")
 		(property "Reference" "#FLG01"
-			(at 241.3 27.94 0)
+			(at 322.58 27.94 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -2470,7 +3345,7 @@
 			)
 		)
 		(property "Value" "PWR_FLAG"
-			(at 241.3 43.18 0)
+			(at 322.58 43.18 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -2478,7 +3353,7 @@
 			)
 		)
 		(property "Footprint" ""
-			(at 241.3 35.56 0)
+			(at 322.58 35.56 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -2487,7 +3362,7 @@
 			)
 		)
 		(property "Datasheet" "~"
-			(at 241.3 35.56 0)
+			(at 322.58 35.56 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -2509,8 +3384,8 @@
 	)
 	(wire
 		(pts
-			(xy 241.3 35.56)
-			(xy 241.3 38.1)
+			(xy 322.58 35.56)
+			(xy 322.58 38.1)
 		)
 		(stroke
 			(width 0)
@@ -2519,7 +3394,7 @@
 		(uuid "d71ebe81-4df8-5daf-94f6-f7a56496aa6f")
 	)
 	(label "GND"
-		(at 241.3 38.1 270)
+		(at 322.58 38.1 270)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -2530,7 +3405,7 @@
 	)
 	(symbol
 		(lib_id "power:PWR_FLAG")
-		(at 256.54 35.56 0)
+		(at 337.82 35.56 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom no)
@@ -2538,7 +3413,7 @@
 		(dnp no)
 		(uuid "a84b0aa0-a5cd-57ab-92f9-98ecfcc21a98")
 		(property "Reference" "#FLG02"
-			(at 256.54 27.94 0)
+			(at 337.82 27.94 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -2547,7 +3422,7 @@
 			)
 		)
 		(property "Value" "PWR_FLAG"
-			(at 256.54 43.18 0)
+			(at 337.82 43.18 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -2555,7 +3430,7 @@
 			)
 		)
 		(property "Footprint" ""
-			(at 256.54 35.56 0)
+			(at 337.82 35.56 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -2564,7 +3439,7 @@
 			)
 		)
 		(property "Datasheet" "~"
-			(at 256.54 35.56 0)
+			(at 337.82 35.56 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -2586,8 +3461,8 @@
 	)
 	(wire
 		(pts
-			(xy 256.54 35.56)
-			(xy 256.54 38.1)
+			(xy 337.82 35.56)
+			(xy 337.82 38.1)
 		)
 		(stroke
 			(width 0)
@@ -2596,7 +3471,7 @@
 		(uuid "8ab67499-d108-56fa-940c-ce2dd3572966")
 	)
 	(label "V3V3_AON"
-		(at 256.54 38.1 270)
+		(at 337.82 38.1 270)
 		(effects
 			(font
 				(size 1.27 1.27)

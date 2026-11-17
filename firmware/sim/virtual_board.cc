@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 
 namespace talos::fw::sim {
 
@@ -85,6 +86,59 @@ void Lis2dw12::after_read(std::uint8_t reg) {
     regs[0x38] = static_cast<std::uint8_t>(regs[0x38] & ~0x08);
     gpio_.set(line_, false);
   }
+}
+
+// --- TMAG5273 ---------------------------------------------------------------------------
+
+Tmag5273::Tmag5273(Gpio& gpio, std::uint8_t wake_line) : gpio_(gpio), line_(wake_line) {
+  regs[0x0D] = 0x01;  // DEVICE_ID: +/-40/80 mT version
+  regs[0x0E] = 0x49;  // MANUFACTURER_ID "TI"
+  regs[0x0F] = 0x54;
+}
+
+void Tmag5273::set_field(std::int32_t x_ut, std::int32_t y_ut, std::int32_t z_ut) {
+  field_ut_ = {x_ut, y_ut, z_ut};
+  update_results();
+  evaluate();
+}
+
+void Tmag5273::update_results() {
+  for (int axis = 0; axis < 3; ++axis) {
+    const auto lsb = static_cast<std::int16_t>(
+        std::clamp(field_ut_[axis] * Tmag5273ContactDriver::kLsbPerMt / 1000, -32768, 32767));
+    regs[0x12 + 2 * axis] = static_cast<std::uint8_t>(static_cast<std::uint16_t>(lsb) >> 8);
+    regs[0x13 + 2 * axis] = static_cast<std::uint8_t>(static_cast<std::uint16_t>(lsb) & 0xFF);
+  }
+}
+
+void Tmag5273::evaluate() {
+  // Threshold interrupt only in W&S mode with THRSLD_INT and INT through the INT pin.
+  if (!in_wake_sleep() || (regs[0x08] & 0x40) == 0 || ((regs[0x08] >> 2) & 0x7) != 1) return;
+  const bool below = (regs[0x03] & 0x20) != 0;
+  bool fire = false;
+  for (int axis = 0; axis < 3; ++axis) {
+    const std::uint8_t code = regs[0x04 + axis] & 0x7F;  // THR_HYST = 1: 7 LSBs, +/- band
+    if (code == 0) continue;
+    const std::int32_t thr_ut = code * 40'000 / 128;
+    const std::int32_t b = std::abs(field_ut_[axis]);
+    fire |= below ? b < thr_ut : b > thr_ut;
+  }
+  if (!fire) return;
+  regs[0x01] = static_cast<std::uint8_t>(regs[0x01] & ~0x03);  // exits W&S to standby
+  gpio_.set(line_, true);                                      // INT latched (WAKE high)
+}
+
+bool Tmag5273::write(const std::uint8_t* data, std::size_t n) {
+  gpio_.set(line_, false);  // any valid address clears the latched INT
+  const bool ok = RegisterDevice::write(data, n);
+  if ((regs[0x01] & 0x03) == 0x02) update_results();  // continuous mode converts
+  evaluate();                                         // newly armed W&S converts on its first wake
+  return ok;
+}
+
+bool Tmag5273::read(std::uint8_t* out, std::size_t n) {
+  gpio_.set(line_, false);
+  return RegisterDevice::read(out, n);
 }
 
 // --- SHT40 ------------------------------------------------------------------------------
@@ -192,6 +246,9 @@ void Node::insert(std::uint8_t slot, ModuleCode code) {
   if (code == ModuleCode::kLis2dw12) {
     imus_[slot] = std::make_unique<Lis2dw12>(gpio, board.slots[slot].wake_line);
     i2c.attach(branch, Lis2dw12Driver::kAddr, imus_[slot].get());
+  } else if (code == ModuleCode::kTmag5273Contact) {
+    halls_[slot] = std::make_unique<Tmag5273>(gpio, board.slots[slot].wake_line);
+    i2c.attach(branch, Tmag5273ContactDriver::kAddr, halls_[slot].get());
   } else if (code == ModuleCode::kSht40) {
     shts_[slot] = std::make_unique<Sht40>();
     i2c.attach(branch, Sht40Driver::kAddr, shts_[slot].get());

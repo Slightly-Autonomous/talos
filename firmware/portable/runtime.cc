@@ -126,6 +126,9 @@ void NodeRuntime::discover() {
       case ModuleCode::kReedContact:
         ok = st.driver.emplace<ContactDriver>().init(io, *this, now);
         break;
+      case ModuleCode::kTmag5273Contact:
+        ok = st.driver.emplace<Tmag5273ContactDriver>().init(io, *this, now);
+        break;
       case ModuleCode::kLis2dw12:
         ok = st.driver.emplace<Lis2dw12Driver>().init(io, *this, now, config_.impact_threshold_mg);
         break;

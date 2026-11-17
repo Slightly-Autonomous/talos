@@ -9,7 +9,7 @@ expander_io,32,31,1,EXP_B P17 spare (test pad)
 spi_chip_selects,4,4,0,via EXP_A (slow; low-rate cards only)
 uart_channels,1,1,0,UART1 + TS3A5017 dual 4:1; one active slot at a time
 adc_to_slots,0,0,0,contact 19 reserved (HD-003)
-v3v3_aon_per_slot_ma,20 (est),PIR 0.002 / Hall 0.002 / IMU 0.1 / SHT 0.5 peak,,TPS22917 limit 2 A; budget set by regulator and battery
+v3v3_aon_per_slot_ma,20 (est),PIR 0.002 / Hall 2.3 (TMAG5273 conversion; ~0.003 avg) / IMU 0.1 / SHT 0.5 peak,,TPS22917 limit 2 A; budget set by regulator and battery
 v3v3_sw_per_slot_ma,150 (est),0 (Rev A cards use AON only),150,
 v3v3_core_total_ma,400 (TPS63900 at VIN>=2.0 V),H2 TX 123 peak + cards,~250,
 v5_sw,0,0,0,not provided in Rev A

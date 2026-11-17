@@ -35,7 +35,10 @@ SLEEP_LOADS = [
     Load("TCA9535 x2 standby", 2 * 0.9, "3v3", "SRC SCPS201F ICC standby typ @3.6 V"),
     Load("TPS22917 x4 AON enabled (IQ)", 4 * 0.5, "3v3", "SRC SLVSDW8B IQ 0.5 uA typ"),
     Load("TPS22917 x4 SW disabled (ISD)", 4 * 0.010, "3v3", "SRC SLVSDW8B ISD 10 nA typ"),
-    Load("TL-MOD-001 DRV5032FB", 0.69, "3v3", "SRC SLVSDC7H ICC(AVG) FB @3 V"),
+    # W&S mode, 100 ms SLEEPTIME, one axis (door closed). EST interpolated from SLYS045C ICC_DCM:
+    # 1.21 uA @5 s and 160 uA @1 ms (1 ch) -> ~1.18 uA floor + ~0.17 uC/conversion. Door open (3 axes) ~3.8 uA.
+    Load("TL-MOD-001 TMAG5273A1 W&S 100 ms, 1 axis", 2.9, "3v3", "EST from SLYS045C ICC_DCM endpoints"),
+    Load("TL-MOD-001 SN74AUP1G04 ICC", 0.5, "3v3", "SRC SCES571K ICC 0.5 uA max 25 C"),
     Load("TL-MOD-002 EKMB1101111 (sleep mode)", 1.0, "3v3", "SRC Panasonic spec Iw typ"),
     Load("TL-MOD-003 LIS2DW12 low-power, low ODR", 1.0, "3v3", "EST datasheet claims <1 uA active"),
     Load("TL-MOD-004 SHT4x idle", 1.0, "3v3", "EST placeholder, not sourced"),
@@ -74,7 +77,7 @@ T_AMBIENT_OUTDOOR_C = 45.0  # EST hot enclosure
 
 # ---- Peak -----------------------------------------------------------------------------
 TPS63900_MAX_MA = 400.0  # SRC SLVSET3D (VIN >= 2.0 V, VOUT 3.3 V)
-CARD_PEAK_MA = 2.7 + 0.1 + 1.0 + 1.0  # SRC DRV5032 ICC(PK); EST others
+CARD_PEAK_MA = 2.7 + 0.1 + 1.0 + 1.0  # EST worst card: 2.3 mA TMAG5273 active (SLYS045C) + INT pull-up + margin
 V_BAT_MIN = 3.0
 
 SLEEP_LIMIT_UA = 40.0  # HWR-009

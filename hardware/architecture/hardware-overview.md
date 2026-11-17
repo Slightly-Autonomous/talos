@@ -12,7 +12,7 @@ flowchart LR
   subgraph Custom
     SN["TL-SN-001 Sensor Node<br/>ESP32-H2-MINI-1, Thread"]
     VN["TL-VN-001 Vision Node<br/>CM4/CM5/video SoC (H5)"]
-    M1["TL-MOD-001 Hall contact"]
+    M1["TL-MOD-001 3-axis Hall contact"]
     M2["TL-MOD-002 PIR"]
     M3["TL-MOD-003 LIS2DW12"]
     M4["TL-MOD-004 SHT4x"]
@@ -67,7 +67,7 @@ The KiCad schematic is flat, one sheet per board, in Rev A. Section labels in th
 | Card UART | GPIO22 TX, GPIO25 RX via a 4:1 mux | GPIO25 is the JTAG-source strap. It only matters if EFUSE_JTAG_SEL_ENABLE is burnt, which we never do. |
 | Battery voltage | GPIO1 (ADC1_CH0) | 4.7 MΩ/4.7 MΩ divider with a 100 nF hold capacitor, about 0.45 µA leakage *(est)*. |
 
-**Wake polarity:** every card drives WAKE push-pull and idle-low. The main board holds each WAKE line low with 1 MΩ so an empty slot never wakes the node. The contact card idles low only while the door is closed (DRV5032FB pulls OUT low when it sees the magnet). Firmware must re-arm the per-pin wake level after every edge. Whether ESP-IDF ext1 on the H2 supports per-pin levels is **HD-004 and must be confirmed on a dev kit**. The fallback is GPIO wake from light sleep.
+**Wake polarity:** every card drives WAKE push-pull and idle-low. The main board holds each WAKE line low with 1 MΩ so an empty slot never wakes the node. The contact card (TMAG5273, HW-0006) raises WAKE only while a latched threshold interrupt is pending, in either door direction; the host clears it over I²C and re-arms, so WAKE always idles low. PIR and IMU cards follow the same rising-edge convention, so firmware only needs a high-level wake per pin. Whether ESP-IDF ext1 on the H2 supports per-pin levels is **HD-004 and must be confirmed on a dev kit**. The fallback is GPIO wake from light sleep.
 
 ## 4. Root I²C address map (reserved; branch devices must avoid these)
 

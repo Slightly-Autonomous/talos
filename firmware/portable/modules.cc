@@ -1,5 +1,8 @@
 #include "firmware/portable/modules.h"
 
+#include <algorithm>
+#include <cstdlib>
+
 namespace talos::fw {
 
 namespace {
@@ -7,6 +10,7 @@ namespace {
 constexpr ModuleInfo kRegistry[] = {
     {ModuleCode::kPirEkmb, "pir_ekmb_v1", true, false, true, 1},
     {ModuleCode::kReedContact, "reed_contact_v1", true, false, true, 0},
+    {ModuleCode::kTmag5273Contact, "tl_mod_001_magnetic", true, false, true, 0},
     {ModuleCode::kLis2dw12, "vibration_lis2dw12_v1", true, false, true, 1},
     {ModuleCode::kSht40, "environment_sht40_v1", false, false, false, 1},
     {ModuleCode::kSmartCameraS3, "smart_camera_s3_v1", false, true, false, 600},
@@ -93,6 +97,88 @@ void ContactDriver::poll(SlotIo& io, IEventSink& sink, TimeMs now) {
     stable_ = candidate_;
     sink.emit(io.slot(), EventKind::kContact, stable_ ? Priority::kP0Critical : Priority::kP1State,
               stable_, 0, 0);
+  }
+}
+
+// --- TMAG5273 contact -------------------------------------------------------------------
+
+std::uint8_t Tmag5273ContactDriver::threshold_code(std::int32_t ut) {
+  std::int32_t code = (ut * 128 + 39'999) / 40'000;
+  if (code < 1) code = 1;
+  if (code > 127) code = 127;
+  return static_cast<std::uint8_t>(code);
+}
+
+bool Tmag5273ContactDriver::read_field(SlotIo& io, std::int32_t (&ut)[3]) {
+  std::uint8_t raw[6] = {};
+  if (!io.reg_read(kAddr, kXMsbResult, raw, 6)) return false;
+  for (int axis = 0; axis < 3; ++axis) {
+    const auto v = static_cast<std::int16_t>(
+        static_cast<std::uint16_t>((raw[2 * axis] << 8) | raw[2 * axis + 1]));
+    ut[axis] = static_cast<std::int32_t>(v) * 1000 / kLsbPerMt;
+  }
+  return true;
+}
+
+bool Tmag5273ContactDriver::arm(SlotIo& io, const std::int32_t (&ut)[3]) {
+  int dominant = 0;
+  for (int axis = 1; axis < 3; ++axis) {
+    if (std::abs(ut[axis]) > std::abs(ut[dominant])) dominant = axis;
+  }
+  // Standby first so the new thresholds apply cleanly, then symmetric (+/-)
+  // thresholds (THR_HYST = 1). A zero threshold disables that axis' check.
+  if (!io.reg_write(kAddr, kDeviceConfig2, 0x20)) return false;
+  const std::uint8_t channels = open_ ? 0x7 : static_cast<std::uint8_t>(1u << dominant);
+  for (int axis = 0; axis < 3; ++axis) {
+    const bool checked = open_ || axis == dominant;
+    const std::uint8_t code = checked ? threshold_code(open_ ? kCloseUt : kOpenUt) : 0;
+    if (!io.reg_write(kAddr, static_cast<std::uint8_t>(kXThr + axis), code)) return false;
+  }
+  return io.reg_write(kAddr, kSensorConfig2, open_ ? 0x00 : 0x20) &&  // MAG_THR_DIR: above/below
+         io.reg_write(kAddr, kSensorConfig1,
+                      static_cast<std::uint8_t>((channels << 4) | kSleep100Ms)) &&
+         io.reg_write(kAddr, kIntConfig1, 0x44) &&   // threshold INT on INT pin, latched
+         io.reg_write(kAddr, kDeviceConfig2, 0x23);  // W&S mode
+}
+
+bool Tmag5273ContactDriver::init(SlotIo& io, IEventSink& sink, TimeMs) {
+  std::uint8_t id[2] = {};
+  if (!io.reg_read(kAddr, kManufacturerIdLsb, id, 2) ||
+      static_cast<std::uint16_t>((id[1] << 8) | id[0]) != kManufacturerId) {
+    return false;
+  }
+  // One continuous-mode conversion of all axes to learn the current state.
+  std::int32_t ut[3] = {};
+  if (!io.reg_write(kAddr, kSensorConfig1, 0x70) || !io.reg_write(kAddr, kDeviceConfig2, 0x02) ||
+      !read_field(io, ut)) {
+    return false;
+  }
+  std::int32_t peak = 0;
+  for (auto v : ut) peak = std::max(peak, std::abs(v));
+  open_ = peak < kCloseUt;
+  sink.emit(io.slot(), EventKind::kContact, Priority::kP1State, open_, peak, 1);  // state report
+  return arm(io, ut);
+}
+
+void Tmag5273ContactDriver::poll(SlotIo& io, IEventSink& sink, TimeMs) {
+  if (!io.read_wake_line()) return;  // WAKE high = latched threshold interrupt
+  std::int32_t ut[3] = {};
+  if (!read_field(io, ut)) {  // the read also clears the latch
+    sink.emit(io.slot(), EventKind::kModuleFault, Priority::kP2Health, false,
+              static_cast<std::int32_t>(ModuleFault::kBusError), 0);
+    return;
+  }
+  std::int32_t peak = 0;
+  for (auto v : ut) peak = std::max(peak, std::abs(v));
+  const bool now_open = open_ ? peak <= kCloseUt : peak < kOpenUt;
+  if (now_open != open_) {
+    open_ = now_open;
+    sink.emit(io.slot(), EventKind::kContact, open_ ? Priority::kP0Critical : Priority::kP1State,
+              open_, peak, 0);
+  }
+  if (!arm(io, ut)) {  // never leave the sensor in standby (0.45 mA) unarmed
+    sink.emit(io.slot(), EventKind::kModuleFault, Priority::kP2Health, false,
+              static_cast<std::int32_t>(ModuleFault::kBusError), 0);
   }
 }
 

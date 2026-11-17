@@ -11,7 +11,8 @@ USB ESD,TL-SN-001,USBLC6-2SC6,ST,SOT-23-6,,(not sourced),TPD2E2U06,KiCad library
 PV TVS,TL-SN-001,SMAJ12A,various,SMA,12 V standoff,,SMAJ15A,clamp below TPS2121 24 V abs max,proposed (check Voc)
 PV reverse,TL-SN-001,SS34,various,SMA,40 V 3 A,,ideal-diode controller (Rev B),simple reverse-polarity block,proposed
 Slot connector,TL-SN-001,MEC8-110-02-L-D-EM2,Samtec,edge mount 0.80 mm 2x10,2.3 A (2 pins); 1.60 mm card,,MEC1-110-02-L-D-EM2; coplanar RA terminal+socket,coplanar edge mount; small,proposed (samples needed)
-Hall switch,TL-MOD-001,DRV5032FBDBZR,TI,SOT-23,1.65-5.5 V; omnipolar push-pull 5 Hz,ICC(AVG) 0.69 uA typ @3 V,DRV5032FA (20 Hz 1.6 uA); reed,lowest-current Hall,proposed
+3-axis Hall,TL-MOD-001,TMAG5273A1QDBVR,TI,SOT-23-6,1.7-3.6 V; I2C 0x35; +/-40/80 mT; INT open-drain active-low,W&S 1.21 uA @5 s (SRC); ~2.9 uA @100 ms 1 axis (EST); standby 0.45 mA,SM351LT (in-plane AMR switch); DRV5032FB (z-axis only),orientation-independent contact sensing (HW-0006),proposed
+INT inverter,TL-MOD-001,SN74AUP1G04DBVR,TI,SOT-23-5,0.8-3.6 V,ICC 0.5 uA max 25 C (0.9 uA -40..85 C),74LVC1G04,turns TMAG5273 INT_N into idle-low push-pull WAKE,proposed
 PIR,TL-MOD-002,EKMB1101111,Panasonic,TO-5 3-pin THT,Vdd 2.3-4.0 V; Iout <= 100 uA,Iw 1.0 uA typ,EKMB1201111 (2 uA),1 uA digital-output PIR,proposed
 Accelerometer,TL-MOD-003,LIS2DW12TR,ST,LGA-12 2x2,1.62-3.6 V,power-down 50 nA,LIS2DH12,wake/tap engine; sub-uA,proposed
 Temp/RH,TL-MOD-004,SHT40-AD1B,Sensirion,DFN-4 1.5x1.5,KiCad SHT4x symbol,(not sourced),SHT45,I2C 0x44,proposed

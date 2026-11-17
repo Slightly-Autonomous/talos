@@ -22,6 +22,9 @@ import uuid
 
 import pcbnew
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import place_opt  # noqa: E402
+
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 KICAD = ROOT / "hardware" / "kicad"
 TALOS_FP = KICAD / "libraries" / "talos-footprints.pretty"
@@ -72,14 +75,25 @@ def sn_spec() -> dict:
     near.update({r: "U5" for r in ("C11", "C12", "L1", "R18", "R19", "R20")})
     near.update({"C21": "U14", "C22": "U15", "C23": "U16", "C24": "U17", "R10": "J1", "R11": "J1", "D2": "J2",
                  "D3": "J2"})
-    return {"size": (w, h), "layers": 4, "fixed": fixed, "keepout_top": 5.2, "near": near, "gap": 1.0}
+    # Only the parts whose position is set by the enclosure/RF/edge are pinned; every other fixed entry
+    # is just a starting point for the placement optimiser (place_opt.py).
+    pinned = {"U1", "J1", "J2", "J3", "J4", "J5", "J6", "J7"}
+    return {"size": (w, h), "layers": 4, "fixed": fixed, "keepout_top": 5.2, "near": near, "gap": 1.0,
+            "pinned": pinned, "optimize": True,
+            # The 41-pin core rail is a plane: the autorouter could not build that tree as tracks.
+            "plane_nets": {pcbnew.In2_Cu: "V3V3_CORE"}}
 
 
 def card_spec(board: str) -> dict:
     w, h = {"TL-MOD-002": (18.0, 30.0), "TL-TEST-001": (22.0, 32.0)}.get(board, (16.0, 26.0))
     fixed = {"J1": (w / 2, h - 1.65, 0)}  # fingers stop 0.15 mm short of the bevelled bottom edge
-    fixed["U2"] = (w / 2, {"TL-MOD-002": 9.0, "TL-TEST-001": 11.0}.get(board, 8.0), 0)
+    # TL-MOD-001: the Hall switch sits at the far edge (opposite the fingers), nearest the door magnet.
+    # Its sensitive axis is normal to the package top, so the card's orientation in the enclosure
+    # matters as much as this distance (HD-020).
+    fixed["U2"] = (w / 2, {"TL-MOD-001": 2.6, "TL-MOD-002": 9.0, "TL-TEST-001": 11.0}.get(board, 8.0), 0)
     near = {"C1": "U1", "C2": "U2", "C3": "U2"}  # decoupling next to the part it decouples
+    if board == "TL-MOD-001":
+        near.update({"C3": "U3", "R1": "U2"})
     return {"size": (w, h), "layers": 2, "fixed": fixed, "finger_zone": 4.0, "near": near}
 
 
@@ -93,9 +107,6 @@ DRU_SN = """(version 1)
 (rule "edge-mount slot sockets straddle the board edge by design"
   (condition "A.memberOfFootprint('J4') || A.memberOfFootprint('J5') || A.memberOfFootprint('J6') || A.memberOfFootprint('J7') || B.memberOfFootprint('J4') || B.memberOfFootprint('J5') || B.memberOfFootprint('J6') || B.memberOfFootprint('J7')")
   (constraint edge_clearance (min 0mm)))
-(rule "BQ25186 DLH0010A pad-to-thermal-pad gap per TI land pattern (SLUSF69 section 12)"
-  (condition "A.memberOfFootprint('U4') && B.memberOfFootprint('U4')")
-  (constraint clearance (min 0.09mm)))
 """
 
 DRU_CARD = """(version 1)
@@ -199,6 +210,38 @@ def add_rule_area(board, rect, layers, name, allow_tracks=False) -> None:
     board.Add(z)
 
 
+def optimise_placement(spec, parts, fps, w, h, margin, keep_top, keep_bottom) -> None:
+    """Refine the rule-based start with the annealing placer; pinned parts stay where the spec put them."""
+    pinned = spec.get("pinned", set())
+    probs = {}
+    for ref, fp in fps.items():
+        x0, y0 = (pcbnew.ToMM(v) - o for v, o in zip((fp.GetPosition().x, fp.GetPosition().y), ORIGIN))
+        rot0 = int(round(fp.GetOrientationDegrees())) % 360
+        shapes = {}
+        for rot in place_opt.ROTS:
+            fp.SetOrientationDegrees(rot)
+            fp.SetPosition(pt(0, 0))
+            pads = []
+            for pad in fp.Pads():
+                num = PAD_ALIASES.get(pad.GetNumber(), pad.GetNumber())
+                net = parts[ref]["pins"].get(num)
+                p = pad.GetPosition()
+                pads.append((pcbnew.ToMM(p.x) - ORIGIN[0], pcbnew.ToMM(p.y) - ORIGIN[1], net or ""))
+            shapes[rot] = (bbox(fp), pads)
+        fp.SetOrientationDegrees(rot0)
+        fp.SetPosition(pt(x0, y0))
+        is_ic = ref.startswith("U")
+        probs[ref] = place_opt.Part(ref=ref, movable=ref not in pinned, shapes=shapes, x=x0, y=y0,
+                                    rot=rot0 if rot0 in place_opt.ROTS else 0,
+                                    halo=0.8 if is_ic else 0.35, anchor=spec.get("near", {}).get(ref))
+    area = (margin, keep_top + margin, w - margin, h - keep_bottom - margin)
+    prob = place_opt.Problem(parts=probs, area=area, plane_nets={"GND"})
+    sol = place_opt.optimize(prob, seed=spec.get("seed", 1), iterations=spec.get("iterations", 150_000))
+    for ref, (x, y, rot) in sol.items():
+        fps[ref].SetOrientationDegrees(rot)
+        fps[ref].SetPosition(pt(x, y))
+
+
 def build(board_name: str) -> dict:
     spec = SPECS[board_name]
     intended = json.load(open(KICAD / board_name / "intended-netlist.json"))
@@ -211,8 +254,9 @@ def build(board_name: str) -> dict:
     ds.m_ViasMinSize = mm(0.5)
     ds.m_MinThroughDrill = mm(0.3)
     ds.SetBoardThickness(mm(1.6))
-    if spec["layers"] == 4:  # In1 is a solid GND plane; In2 is a routing layer with a GND pour added after
+    if spec["layers"] == 4:  # In1 = GND plane, In2 = V3V3_CORE plane; signals route on F.Cu and B.Cu
         board.SetLayerType(pcbnew.In1_Cu, pcbnew.LT_POWER)
+        board.SetLayerType(pcbnew.In2_Cu, pcbnew.LT_POWER)
 
     nets = {}
     for p in parts.values():
@@ -303,13 +347,17 @@ def build(board_name: str) -> dict:
         if not done:
             raise SystemExit(f"{board_name}: no room for {ref}")
 
+    if spec.get("optimize"):
+        optimise_placement(spec, parts, fps, w, h, margin, keep_top, keep_bottom)
+
     add_outline(board, w, h)
     ds.SetAuxOrigin(pt(0, h))  # fab/pick-and-place origin at the board's lower-left corner
     gnd = nets["GND"]
     copper = [pcbnew.F_Cu, pcbnew.B_Cu] if spec["layers"] == 2 else [pcbnew.F_Cu, pcbnew.In1_Cu, pcbnew.In2_Cu, pcbnew.B_Cu]
     pour = (0.3, 0.3 + keep_top, w - 0.3, h - 0.3 - keep_bottom)
     for layer in copper:
-        add_zone(board, gnd, layer, pour)
+        net = nets[spec["plane_nets"][layer]] if layer in spec.get("plane_nets", {}) else gnd
+        add_zone(board, net, layer, pour)
     # 0.35 mm track/via-free ring inside the outline (pads still allowed: edge connectors sit there)
     ring = 0.35
     for rect in ((0, 0, w, ring), (0, h - ring, w, h), (0, 0, ring, h), (w - ring, 0, w, h)):

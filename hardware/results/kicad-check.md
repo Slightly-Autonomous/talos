@@ -4,8 +4,8 @@
 
 | Board | Parts | ERC errors | ERC warnings | Waived | Netlist round-trip | Safe defaults | PCB DRC errors | PCB DRC warnings |
 |---|---:|---:|---:|---:|---|---|---:|---:|
-| TL-SN-001 | 134 | 0 | 0 | 0 | match | ok | 109 | 133 |
-| TL-MOD-001 | 7 | 0 | 0 | 0 | match | ok | 0 | 3 |
+| TL-SN-001 | 134 | 0 | 0 | 0 | match | ok | 0 | 104 |
+| TL-MOD-001 | 10 | 0 | 0 | 0 | match | ok | 0 | 9 |
 | TL-MOD-002 | 7 | 0 | 0 | 0 | match | ok | 0 | 3 |
 | TL-MOD-003 | 8 | 0 | 0 | 1 | match | ok | 0 | 16 |
 | TL-MOD-004 | 7 | 0 | 0 | 0 | match | ok | 0 | 3 |
@@ -19,8 +19,7 @@
 
 - ERC: no violations
 - Netlist: KiCad export equals the intended netlist
-- PCB DRC (with schematic parity): unconnected_items 109, silk_edge_clearance 6, silk_over_copper 58, silk_overlap 44, via_dangling 25
-- **Routing incomplete** (109 unconnected items): Placed and partially autorouted (Freerouting 2.5.0, 300 passes: ~147 connections unrouted). Needs a layout engineer or a better router before any order. Only unconnected_items are tolerated; every other DRC error still fails.
+- PCB DRC (with schematic parity): silk_edge_clearance 6, silk_over_copper 62, silk_overlap 36
 - Footprints still to draw (H4):
   - J4 (sensor_edge_v1 slot 0): placeholder land pattern talos:Samtec_MEC8-110-02-L-D-EM2_PLACEHOLDER
   - J5 (sensor_edge_v1 slot 1): placeholder land pattern talos:Samtec_MEC8-110-02-L-D-EM2_PLACEHOLDER
@@ -31,7 +30,7 @@
 
 - ERC: no violations
 - Netlist: KiCad export equals the intended netlist
-- PCB DRC (with schematic parity): silk_over_copper 1, silk_overlap 2
+- PCB DRC (with schematic parity): silk_edge_clearance 2, silk_over_copper 5, silk_overlap 2
 
 ## TL-MOD-002
 

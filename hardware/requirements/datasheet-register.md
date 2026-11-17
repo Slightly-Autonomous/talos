@@ -12,7 +12,8 @@ These are the sources actually read for H0–H3, with the sections relied on. "R
 | TPS22917 | TI SLVSDW8B | Rev B (Dec 2021) | Features (IQ 0.5 µA, ISD 10 nA, 1–5.5 V, 2 A), reverse leakage |
 | TCA9546A | TI SCPS205B | Rev B | Electrical (standby ICC 1.0 µA typ @3.6 V) |
 | TCA9535 | TI SCPS201F | Rev F | Electrical (standby ICC 0.9 µA typ @3.6 V) |
-| DRV5032 | TI SLVSDC7H | Rev H (Dec 2024) | Table 4-1 variants, Table 5-1 pins (SOT-23: 1 VCC, 2 OUT, 3 GND), ICC(AVG) FB 0.69 µA @3 V |
+| TMAG5273 | TI SLYS045C | Rev C (Apr 2026) | Table 4-1 pins (1 SCL, 2 GND, 3 TEST→GND, 4 VCC, 5 INT, 6 SDA); Table 6-2 addresses (A1 0x35); ICC_DCM 1.21 µA @5 s / 160 µA @1 ms (1 ch, 3.3 V); ISTANDBY 0.45 mA; INT latched until addressed (§6.3.3); THR_HYST/MAG_THR_DIR (Table 8-4, 8-6); 820 LSB/mT at ±40 mT; decoupling ≥ 0.01 µF (§7.3) |
+| SN74AUP1G04 | TI SCES571K | Rev K (Jun 2014) | Pin table (DBV: 1 NC, 2 A, 3 GND, 4 Y, 5 VCC); ICC 0.5 µA max 25 °C, 0.9 µA max |
 | LIS2DW12 | ST DS11811 | Rev 8 | Table 1 pins, Vdd 1.62–3.6 V, SAD 001100x (0x18/0x19), decoupling 100 nF + 10 µF, power-down 50 nA |
 | EKMB110111x | Panasonic PaPIRs WL reference spec | Rev 7.1 | Dimensions (bottom view Vdd/OUT/GND), Vdd 2.3–4.0 V, Iw 1.0 µA typ, Iout ≤ 100 µA, warm-up ~25 s |
 | MEC8-EM / MEC1-EM | Samtec F-226 Micro Edge Card catalog page | F-226 | Key specs table (pitch, positions, 2.3 A/2.2 A), MEC8-EM ordering (10–70 positions per row, -L plating, 1.60 mm card) |

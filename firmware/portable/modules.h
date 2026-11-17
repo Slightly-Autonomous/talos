@@ -19,6 +19,7 @@ enum class ModuleCode : std::uint16_t {
   kNone = 0,
   kPirEkmb = 0x0101,
   kReedContact = 0x0102,
+  kTmag5273Contact = 0x0103,  // TL-MOD-001: 3-axis Hall, orientation-independent
   kLis2dw12 = 0x0201,
   kSht40 = 0x0301,
   kSmartCameraS3 = 0x0401,
@@ -95,6 +96,38 @@ class ContactDriver {
   TimeMs since_ = 0;
 };
 
+// TMAG5273A1 3-axis Hall door contact (TL-MOD-001, TI SLYS045C). The sensor runs
+// autonomously in wake-up-and-sleep mode; its open-drain INT (inverted on the
+// card to an idle-low push-pull WAKE) latches on a threshold cross and drops the
+// sensor to standby until this driver reads it and re-arms.
+//   closed: only the dominant axis is checked, interrupt when |B| < kOpenUt
+//   open:   all three axes are checked, interrupt when any |B| > kCloseUt
+// so the magnet can sit at any angle. Config is volatile: init() runs after
+// every power-up.
+class Tmag5273ContactDriver {
+ public:
+  static constexpr std::uint8_t kAddr = 0x35;  // TMAG5273A1 factory address
+  static constexpr std::uint8_t kDeviceConfig2 = 0x01, kSensorConfig1 = 0x02;
+  static constexpr std::uint8_t kSensorConfig2 = 0x03, kXThr = 0x04, kIntConfig1 = 0x08;
+  static constexpr std::uint8_t kManufacturerIdLsb = 0x0E, kXMsbResult = 0x12;
+  static constexpr std::uint16_t kManufacturerId = 0x5449;  // "TI"
+  static constexpr std::uint8_t kSleep100Ms = 0x07;
+  static constexpr std::int32_t kOpenUt = 1'500;   // door counts as open below 1.5 mT
+  static constexpr std::int32_t kCloseUt = 3'000;  // and closed above 3 mT (hysteresis)
+  static constexpr std::int32_t kLsbPerMt = 820;   // +/-40 mT range
+  bool init(SlotIo& io, IEventSink& sink, TimeMs now);
+  void poll(SlotIo& io, IEventSink& sink, TimeMs now);
+  bool busy() const { return false; }
+  // 8-bit threshold code for +/-40 mT range: 40 mT / 128 per code, rounded up.
+  static std::uint8_t threshold_code(std::int32_t ut);
+  bool open() const { return open_; }
+
+ private:
+  bool read_field(SlotIo& io, std::int32_t (&ut)[3]);
+  bool arm(SlotIo& io, const std::int32_t (&ut)[3]);
+  bool open_ = true;
+};
+
 class Lis2dw12Driver {
  public:
   static constexpr std::uint8_t kAddr = 0x19;
@@ -131,8 +164,8 @@ class SmartModuleDriver {
   bool busy() const { return false; }
 };
 
-using Driver = std::variant<std::monostate, PirDriver, ContactDriver, Lis2dw12Driver, Sht40Driver,
-                            SmartModuleDriver>;
+using Driver = std::variant<std::monostate, PirDriver, ContactDriver, Tmag5273ContactDriver,
+                            Lis2dw12Driver, Sht40Driver, SmartModuleDriver>;
 
 struct SlotState {
   ModuleCode code = ModuleCode::kNone;
