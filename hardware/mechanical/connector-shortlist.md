@@ -15,3 +15,24 @@
 2. Get samples and test 1.60 mm ±10 % cards, insertion force and retention in the printed guide.
 3. Get a quote for card hard-gold vs ENIG fingers.
 4. Make a 3D fit with the enclosure, keeping the antenna keepout.
+
+## Re-survey, 2026-11-17 (JLCPCB sourcing rule, wider vendor search)
+
+A wider search: every vendor's coplanar card-edge and edge-to-edge parts, plus pogo/magnetic contacts, header pairs and how modular products (Breakout Garden, MicroMod, WAGO 750, ET 200SP, Framework, Libelium) join modules. Stock is from JLCPCB's parts API on 2026-11-17.
+
+| Option | Coplanar? | Contact plating | Cycles | JLCPCB stock | Price (qty 1) | Verdict |
+|---|---|---|---|---|---|---|
+| Samtec MEC8-110-02-L-D-EM2 (current) | yes, straddle | 10 µin gold, the only option | not published for EM (vertical MEC8 passes 100) | 0 | n/a | Plating is thin for outdoor fretting |
+| **Samtec HSEC8-110-01-S-D-EM2** | yes, straddle, 0.8 mm, 1.57 mm card | **30 µin gold**, BeCu | "high", no number | 0 (listed, C4845888) | not verified | Same concept as MEC8 with the plating fixed. Check its card-edge key/chamfer rules |
+| Samtec ERM8-010-01-L-D-EM2 (card) + ERF8-010-01-L-D-EM2 (host) | yes, edge to edge | 10 µin gold (-L); the 30 µin -S versions are not stocked | 100–1000 depending on source | 2331 card side / 34 host side | ~$5.18 + $4.50 | JLCPCB can place both today. Latch option. Adds a connector to every card |
+| WingTAT HEE20LP03BK (C5448210) | listed as board-edge straddle; **unverified** | gold, phosphor bronze | unknown | 36 | ~$1.36 | Cheap wildcard. Datasheet could not be fetched; sample before use |
+| Mill-Max 854-22-020-20-001101 pogo + right-angle target | yes | 20 µin gold | 1,000,000 | not checked | n/a | Rejected: ~12 N permanent clamp on printed plastic, pins fragile under side load, no wiping |
+| 1.27 mm right-angle header pairs (Hanbo C6332254 + Harwin C5356820) | only if heights match | tin on the female | n/a | 488 / 0 | cheap | Rejected: tin plating, no latch, female not stocked |
+
+Findings:
+- **The gold-finger card edge is the right architecture.** Industrial side-by-side buses (WAGO 750) use the same idea: thick hard gold plus a wiping contact. Nobody found uses bare pogo pins on a side-by-side signal bus.
+- **The weak point is the MEC8-EM's 10 µin plating**, below the ~30 µin usually recommended for humid thermal cycling.
+- No 0.8 mm straddle socket from a cheap LCSC-native brand exists. Non-Samtec straddle parts start at 1.0 mm and PCIe sizes.
+- Whatever the socket: specify ≥30 µin hard gold over nickel on the card fingers with a bevel, make the enclosure clamp the card so it cannot micro-move (fretting needs motion), and seal the cavity with a vent membrane or desiccant.
+
+Unverified: every Samtec cycle rating, 20-position prices, the WingTAT datasheet, and whether ERM8-EM2 + ERF8-EM2 heights give a flush coplanar mate (check the drawings).
