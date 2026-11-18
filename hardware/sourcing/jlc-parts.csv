@@ -28,7 +28,7 @@ PESD5V0L5UV,SOT-666,jlc,C84255,"PESD5V0L5UV,115",Nexperia,,replaces PESD3V3L5UV 
 USB-C sink,USB_C_Receptacle_GCT_USB4105-xx-A_16P_TopMnt_Horizontal,jlc,C3020560,USB4105-GF-A,GCT,,
 PV in,JST_PH_S2B-PH-SM4-TB_1x02-1MP_P2.00mm_Horizontal,jlc,C54582899,XY-S2B-PH-SM4-TB,XYECONN,,JST original out of stock; footprint-compatible copy (VERIFY drawing)
 "1S pack (BAT+, NTC, GND)",JST_PH_S3B-PH-SM4-TB_1x03-1MP_P2.00mm_Horizontal,jlc,C265101,S3B-PH-SM4-TB(LF)(SN),JST,,
-sensor_edge_v1 slot *,Samtec_MEC8-110-02-L-D-EM2_PLACEHOLDER,not_placed,C4649894,MEC8-110-02-L-D-EM2,Samtec,HD-002,edge-mount MEC8 not stocked by JLCPCB; socket choice open
+sensor_edge_v1 slot *,Samtec_HSEC8-110-01-S-D-EM2_PLACEHOLDER,not_placed,C4845888,HSEC8-110-01-S-D-EM2,Samtec,HD-002,JLCPCB lists it with 0 stock: buy from Samtec/distributor and hand-solder (owner decision 2026-11-17)
 2.2u DFE252012F-2R2M,L_1008_2520Metric,jlc,C576403,DFE252012F-2R2M=P2,Murata,,
 RESET,SW_SPST_PTS810,jlc,C221895,PTS810SJG250SMTRLFS,C&K,,SJM variant low stock; SJG is the same body
 BOOT,SW_SPST_PTS810,jlc,C221895,PTS810SJG250SMTRLFS,C&K,,SJM variant low stock; SJG is the same body
@@ -49,3 +49,7 @@ SN74AUP1G04DBVR,SOT-23-5,jlc,C2682121,SN74AUP1G04DBVR,TI,,
 EKMB1101111,PIR_Panasonic_EKMB_TO-5,not_placed,C3678679,EKMB1101111,Panasonic,HD-022,no low-power PIR stocked by JLCPCB; sensor choice open
 LIS2DW12TR,LGA-12_2x2mm_P0.5mm,jlc,C189624,LIS2DW12TR,ST,,
 SHT40-AD1B,Sensirion_DFN-4_1.5x1.5mm_P0.8mm_SHT4x_CentralKeepout,jlc,C2909890,SHT40-AD1B-R2,Sensirion,,
+AP2112K-3.3TRG1,SOT-23-5,jlc,C51118,AP2112K-3.3TRG1,Diodes Inc,,TL-DBG-001 3.3 V LDO
+MCP2221AT-I/SL,SOIC-14_3.9x8.7mm_P1.27mm,jlc,C626750,MCP2221AT-I/SL,Microchip,,TL-DBG-001 USB bridge; thin stock
+SN74LVC1G125DBVR,SOT-23-5,jlc,C23654,SN74LVC1G125DBVR,TI,,TL-DBG-001 UART TX buffer (Ioff)
+* meter,PinHeader_1x02_P2.54mm_Vertical,jlc,C492401,PZ254V-11-02P,XFCN,,through-hole (JLCPCB THT assembly); shunt bought separately

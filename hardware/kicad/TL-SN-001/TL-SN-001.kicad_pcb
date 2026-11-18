@@ -12272,11 +12272,11 @@
 		)
 		(embedded_fonts no)
 	)
-	(footprint "talos:Samtec_MEC8-110-02-L-D-EM2_PLACEHOLDER"
+	(footprint "talos:Samtec_HSEC8-110-01-S-D-EM2_PLACEHOLDER"
 		(layer "F.Cu")
 		(uuid "88928dac-25dc-4126-8957-ad318e491dc3")
 		(at 199 128 90)
-		(descr "PLACEHOLDER for Samtec MEC8-110-02-L-D-EM2 edge-mount socket: pads straddle the host edge (host edge at y=+1.0). Pad size and setback are ASSUMED; replace with the Samtec drawing before fabrication (HD-002).")
+		(descr "PLACEHOLDER for Samtec HSEC8-110-01-S-D-EM2 edge-mount socket: pads straddle the host edge (host edge at y=+1.0). Pad size and setback are ASSUMED; replace with the Samtec drawing before fabrication (HD-002).")
 		(property "Reference" "J6"
 			(at 0 -2.5 90)
 			(layer "F.SilkS")
@@ -12321,7 +12321,7 @@
 				)
 			)
 		)
-		(property "Talos_Note" "MEC8-110-02-L-D-EM2 candidate; PLACEHOLDER land pattern until the Samtec drawing is obtained (HD-002)"
+		(property "Talos_Note" "HSEC8-110-01-S-D-EM2 (30 µin gold); PLACEHOLDER land pattern until the Samtec drawing is obtained (HD-002)"
 			(at 0 0 90)
 			(layer "F.Fab")
 			(hide yes)
@@ -22720,11 +22720,11 @@
 			)
 		)
 	)
-	(footprint "talos:Samtec_MEC8-110-02-L-D-EM2_PLACEHOLDER"
+	(footprint "talos:Samtec_HSEC8-110-01-S-D-EM2_PLACEHOLDER"
 		(layer "F.Cu")
 		(uuid "e7f819e8-90c1-43ec-93a8-0cbb9d0d9826")
 		(at 199 154 90)
-		(descr "PLACEHOLDER for Samtec MEC8-110-02-L-D-EM2 edge-mount socket: pads straddle the host edge (host edge at y=+1.0). Pad size and setback are ASSUMED; replace with the Samtec drawing before fabrication (HD-002).")
+		(descr "PLACEHOLDER for Samtec HSEC8-110-01-S-D-EM2 edge-mount socket: pads straddle the host edge (host edge at y=+1.0). Pad size and setback are ASSUMED; replace with the Samtec drawing before fabrication (HD-002).")
 		(property "Reference" "J7"
 			(at 0 -2.5 90)
 			(layer "F.SilkS")
@@ -22769,7 +22769,7 @@
 				)
 			)
 		)
-		(property "Talos_Note" "MEC8-110-02-L-D-EM2 candidate; PLACEHOLDER land pattern until the Samtec drawing is obtained (HD-002)"
+		(property "Talos_Note" "HSEC8-110-01-S-D-EM2 (30 µin gold); PLACEHOLDER land pattern until the Samtec drawing is obtained (HD-002)"
 			(at 0 0 90)
 			(layer "F.Fab")
 			(hide yes)
@@ -25210,11 +25210,11 @@
 			)
 		)
 	)
-	(footprint "talos:Samtec_MEC8-110-02-L-D-EM2_PLACEHOLDER"
+	(footprint "talos:Samtec_HSEC8-110-01-S-D-EM2_PLACEHOLDER"
 		(layer "F.Cu")
 		(uuid "fa91b8df-36cd-4db0-975a-f51eacd270ca")
 		(at 101 128 -90)
-		(descr "PLACEHOLDER for Samtec MEC8-110-02-L-D-EM2 edge-mount socket: pads straddle the host edge (host edge at y=+1.0). Pad size and setback are ASSUMED; replace with the Samtec drawing before fabrication (HD-002).")
+		(descr "PLACEHOLDER for Samtec HSEC8-110-01-S-D-EM2 edge-mount socket: pads straddle the host edge (host edge at y=+1.0). Pad size and setback are ASSUMED; replace with the Samtec drawing before fabrication (HD-002).")
 		(property "Reference" "J4"
 			(at 0 -2.5 270)
 			(layer "F.SilkS")
@@ -25259,7 +25259,7 @@
 				)
 			)
 		)
-		(property "Talos_Note" "MEC8-110-02-L-D-EM2 candidate; PLACEHOLDER land pattern until the Samtec drawing is obtained (HD-002)"
+		(property "Talos_Note" "HSEC8-110-01-S-D-EM2 (30 µin gold); PLACEHOLDER land pattern until the Samtec drawing is obtained (HD-002)"
 			(at 0 0 270)
 			(layer "F.Fab")
 			(hide yes)
@@ -25479,11 +25479,11 @@
 		)
 		(embedded_fonts no)
 	)
-	(footprint "talos:Samtec_MEC8-110-02-L-D-EM2_PLACEHOLDER"
+	(footprint "talos:Samtec_HSEC8-110-01-S-D-EM2_PLACEHOLDER"
 		(layer "F.Cu")
 		(uuid "fd98ae06-ca18-44de-a1bd-da6f688c54dc")
 		(at 101 154 -90)
-		(descr "PLACEHOLDER for Samtec MEC8-110-02-L-D-EM2 edge-mount socket: pads straddle the host edge (host edge at y=+1.0). Pad size and setback are ASSUMED; replace with the Samtec drawing before fabrication (HD-002).")
+		(descr "PLACEHOLDER for Samtec HSEC8-110-01-S-D-EM2 edge-mount socket: pads straddle the host edge (host edge at y=+1.0). Pad size and setback are ASSUMED; replace with the Samtec drawing before fabrication (HD-002).")
 		(property "Reference" "J5"
 			(at 0 -2.5 270)
 			(layer "F.SilkS")
@@ -25528,7 +25528,7 @@
 				)
 			)
 		)
-		(property "Talos_Note" "MEC8-110-02-L-D-EM2 candidate; PLACEHOLDER land pattern until the Samtec drawing is obtained (HD-002)"
+		(property "Talos_Note" "HSEC8-110-01-S-D-EM2 (30 µin gold); PLACEHOLDER land pattern until the Samtec drawing is obtained (HD-002)"
 			(at 0 0 270)
 			(layer "F.Fab")
 			(hide yes)

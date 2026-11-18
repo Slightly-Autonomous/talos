@@ -577,9 +577,9 @@
   },
   "J4": {
    "datasheet": "~",
-   "footprint": "talos:Samtec_MEC8-110-02-L-D-EM2_PLACEHOLDER",
+   "footprint": "talos:Samtec_HSEC8-110-01-S-D-EM2_PLACEHOLDER",
    "lib_id": "Connector_Generic:Conn_02x10_Odd_Even",
-   "note": "MEC8-110-02-L-D-EM2 candidate; PLACEHOLDER land pattern until the Samtec drawing is obtained (HD-002)",
+   "note": "HSEC8-110-01-S-D-EM2 (30 \u00b5in gold); PLACEHOLDER land pattern until the Samtec drawing is obtained (HD-002)",
    "pin_names": {
     "1": "Pin_1",
     "10": "Pin_10",
@@ -628,9 +628,9 @@
   },
   "J5": {
    "datasheet": "~",
-   "footprint": "talos:Samtec_MEC8-110-02-L-D-EM2_PLACEHOLDER",
+   "footprint": "talos:Samtec_HSEC8-110-01-S-D-EM2_PLACEHOLDER",
    "lib_id": "Connector_Generic:Conn_02x10_Odd_Even",
-   "note": "MEC8-110-02-L-D-EM2 candidate; PLACEHOLDER land pattern until the Samtec drawing is obtained (HD-002)",
+   "note": "HSEC8-110-01-S-D-EM2 (30 \u00b5in gold); PLACEHOLDER land pattern until the Samtec drawing is obtained (HD-002)",
    "pin_names": {
     "1": "Pin_1",
     "10": "Pin_10",
@@ -679,9 +679,9 @@
   },
   "J6": {
    "datasheet": "~",
-   "footprint": "talos:Samtec_MEC8-110-02-L-D-EM2_PLACEHOLDER",
+   "footprint": "talos:Samtec_HSEC8-110-01-S-D-EM2_PLACEHOLDER",
    "lib_id": "Connector_Generic:Conn_02x10_Odd_Even",
-   "note": "MEC8-110-02-L-D-EM2 candidate; PLACEHOLDER land pattern until the Samtec drawing is obtained (HD-002)",
+   "note": "HSEC8-110-01-S-D-EM2 (30 \u00b5in gold); PLACEHOLDER land pattern until the Samtec drawing is obtained (HD-002)",
    "pin_names": {
     "1": "Pin_1",
     "10": "Pin_10",
@@ -730,9 +730,9 @@
   },
   "J7": {
    "datasheet": "~",
-   "footprint": "talos:Samtec_MEC8-110-02-L-D-EM2_PLACEHOLDER",
+   "footprint": "talos:Samtec_HSEC8-110-01-S-D-EM2_PLACEHOLDER",
    "lib_id": "Connector_Generic:Conn_02x10_Odd_Even",
-   "note": "MEC8-110-02-L-D-EM2 candidate; PLACEHOLDER land pattern until the Samtec drawing is obtained (HD-002)",
+   "note": "HSEC8-110-01-S-D-EM2 (30 \u00b5in gold); PLACEHOLDER land pattern until the Samtec drawing is obtained (HD-002)",
    "pin_names": {
     "1": "Pin_1",
     "10": "Pin_10",

@@ -15,6 +15,7 @@ The Talos custom-hardware workstream. It follows `TALOS_CUSTOM_HARDWARE_HANDOFF_
 | TL-MOD-003 | Vibration/impact card (ST LIS2DW12) | Yes | H3 schematic + H4 routed 2-layer layout |
 | TL-MOD-004 | Temperature/humidity card (Sensirion SHT4x) | Yes | H3 schematic + H4 routed 2-layer layout |
 | TL-TEST-001 | Slot test cartridge | Yes | H3 schematic + H4 routed 2-layer layout |
+| TL-DBG-001 | One-slot USB debug adapter: one card on a PC (MCP2221A bridge, PPK2 meter headers) | Yes, bench tool | Schematic + routed 2-layer layout, 0 DRC errors ([HW-0007](architecture/decisions/0007-slot-socket-and-debug-adapter.md)) |
 | TL-VN-001 | Vision Node (separate board, CM4/CM5/video SoC) | Yes | H5 study not started; manifest only |
 
 The camera **slot** module (`smart_camera_s3_v1`) is superseded by TL-VN-001 ([ADR HW-0001](architecture/decisions/0001-hardware-family.md)).

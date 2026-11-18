@@ -21379,7 +21379,7 @@
 				)
 			)
 		)
-		(property "Footprint" "talos:Samtec_MEC8-110-02-L-D-EM2_PLACEHOLDER"
+		(property "Footprint" "talos:Samtec_HSEC8-110-01-S-D-EM2_PLACEHOLDER"
 			(at 271.78 261.62 0)
 			(effects
 				(font
@@ -21397,7 +21397,7 @@
 				(hide yes)
 			)
 		)
-		(property "Talos_Note" "MEC8-110-02-L-D-EM2 candidate; PLACEHOLDER land pattern until the Samtec drawing is obtained (HD-002)"
+		(property "Talos_Note" "HSEC8-110-01-S-D-EM2 (30 µin gold); PLACEHOLDER land pattern until the Samtec drawing is obtained (HD-002)"
 			(at 271.78 261.62 0)
 			(effects
 				(font
@@ -22808,7 +22808,7 @@
 				)
 			)
 		)
-		(property "Footprint" "talos:Samtec_MEC8-110-02-L-D-EM2_PLACEHOLDER"
+		(property "Footprint" "talos:Samtec_HSEC8-110-01-S-D-EM2_PLACEHOLDER"
 			(at 561.34 261.62 0)
 			(effects
 				(font
@@ -22826,7 +22826,7 @@
 				(hide yes)
 			)
 		)
-		(property "Talos_Note" "MEC8-110-02-L-D-EM2 candidate; PLACEHOLDER land pattern until the Samtec drawing is obtained (HD-002)"
+		(property "Talos_Note" "HSEC8-110-01-S-D-EM2 (30 µin gold); PLACEHOLDER land pattern until the Samtec drawing is obtained (HD-002)"
 			(at 561.34 261.62 0)
 			(effects
 				(font
@@ -24237,7 +24237,7 @@
 				)
 			)
 		)
-		(property "Footprint" "talos:Samtec_MEC8-110-02-L-D-EM2_PLACEHOLDER"
+		(property "Footprint" "talos:Samtec_HSEC8-110-01-S-D-EM2_PLACEHOLDER"
 			(at 78.74 355.6 0)
 			(effects
 				(font
@@ -24255,7 +24255,7 @@
 				(hide yes)
 			)
 		)
-		(property "Talos_Note" "MEC8-110-02-L-D-EM2 candidate; PLACEHOLDER land pattern until the Samtec drawing is obtained (HD-002)"
+		(property "Talos_Note" "HSEC8-110-01-S-D-EM2 (30 µin gold); PLACEHOLDER land pattern until the Samtec drawing is obtained (HD-002)"
 			(at 78.74 355.6 0)
 			(effects
 				(font
@@ -25666,7 +25666,7 @@
 				)
 			)
 		)
-		(property "Footprint" "talos:Samtec_MEC8-110-02-L-D-EM2_PLACEHOLDER"
+		(property "Footprint" "talos:Samtec_HSEC8-110-01-S-D-EM2_PLACEHOLDER"
 			(at 370.84 355.6 0)
 			(effects
 				(font
@@ -25684,7 +25684,7 @@
 				(hide yes)
 			)
 		)
-		(property "Talos_Note" "MEC8-110-02-L-D-EM2 candidate; PLACEHOLDER land pattern until the Samtec drawing is obtained (HD-002)"
+		(property "Talos_Note" "HSEC8-110-01-S-D-EM2 (30 µin gold); PLACEHOLDER land pattern until the Samtec drawing is obtained (HD-002)"
 			(at 370.84 355.6 0)
 			(effects
 				(font

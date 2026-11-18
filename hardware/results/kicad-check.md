@@ -10,10 +10,11 @@
 | TL-MOD-003 | 8 | 0 | 0 | 1 | match | ok | 0 | 16 |
 | TL-MOD-004 | 7 | 0 | 0 | 0 | match | ok | 0 | 3 |
 | TL-TEST-001 | 14 | 0 | 0 | 0 | match | ok | 0 | 12 |
+| TL-DBG-001 | 51 | 0 | 0 | 0 | match | ok | 0 | 39 |
 
 ## Cross-board connector check (sensor_edge_v1)
 
-- All four main-board slots share one pinout; every card's used contacts match it, reserved contacts (5, 19) are unused, and PRESENT_N (18) is grounded on all five cards.
+- All four main-board slots and the debug adapter's socket share one pinout; every card's used contacts match it, reserved contacts (5, 19) are unused, and PRESENT_N (18) is grounded on all five cards.
 
 ## TL-SN-001
 
@@ -21,10 +22,10 @@
 - Netlist: KiCad export equals the intended netlist
 - PCB DRC (with schematic parity): silk_edge_clearance 6, silk_over_copper 62, silk_overlap 36
 - Footprints still to draw (H4):
-  - J4 (sensor_edge_v1 slot 0): placeholder land pattern talos:Samtec_MEC8-110-02-L-D-EM2_PLACEHOLDER
-  - J5 (sensor_edge_v1 slot 1): placeholder land pattern talos:Samtec_MEC8-110-02-L-D-EM2_PLACEHOLDER
-  - J6 (sensor_edge_v1 slot 2): placeholder land pattern talos:Samtec_MEC8-110-02-L-D-EM2_PLACEHOLDER
-  - J7 (sensor_edge_v1 slot 3): placeholder land pattern talos:Samtec_MEC8-110-02-L-D-EM2_PLACEHOLDER
+  - J4 (sensor_edge_v1 slot 0): placeholder land pattern talos:Samtec_HSEC8-110-01-S-D-EM2_PLACEHOLDER
+  - J5 (sensor_edge_v1 slot 1): placeholder land pattern talos:Samtec_HSEC8-110-01-S-D-EM2_PLACEHOLDER
+  - J6 (sensor_edge_v1 slot 2): placeholder land pattern talos:Samtec_HSEC8-110-01-S-D-EM2_PLACEHOLDER
+  - J7 (sensor_edge_v1 slot 3): placeholder land pattern talos:Samtec_HSEC8-110-01-S-D-EM2_PLACEHOLDER
 
 ## TL-MOD-001
 
@@ -55,5 +56,13 @@
 - ERC: no violations
 - Netlist: KiCad export equals the intended netlist
 - PCB DRC (with schematic parity): silk_edge_clearance 1, silk_over_copper 7, silk_overlap 4
+
+## TL-DBG-001
+
+- ERC: no violations
+- Netlist: KiCad export equals the intended netlist
+- PCB DRC (with schematic parity): silk_edge_clearance 1, silk_over_copper 22, silk_overlap 16
+- Footprints still to draw (H4):
+  - J2 (sensor_edge_v1 slot (debug)): placeholder land pattern talos:Samtec_HSEC8-110-01-S-D-EM2_PLACEHOLDER
 
 **Overall: PASS**

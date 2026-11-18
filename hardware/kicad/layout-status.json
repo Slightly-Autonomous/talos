@@ -1,21 +1,25 @@
 {
-  "TL-SN-001": {
-    "routing": "complete",
-    "note": "Autorouted plus two hand fixes (scripts/finish_sn.py). 0 DRC errors. Needs layout-engineer review before any order."
-  },
-  "TL-MOD-001": {
-    "routing": "complete"
-  },
-  "TL-MOD-002": {
-    "routing": "complete"
-  },
-  "TL-MOD-003": {
-    "routing": "complete"
-  },
-  "TL-MOD-004": {
-    "routing": "complete"
-  },
-  "TL-TEST-001": {
-    "routing": "complete"
-  }
+ "TL-SN-001": {
+  "routing": "complete",
+  "note": "Autorouted plus two hand fixes (scripts/finish_sn.py). 0 DRC errors. Needs layout-engineer review before any order."
+ },
+ "TL-MOD-001": {
+  "routing": "complete"
+ },
+ "TL-MOD-002": {
+  "routing": "complete"
+ },
+ "TL-MOD-003": {
+  "routing": "complete"
+ },
+ "TL-MOD-004": {
+  "routing": "complete"
+ },
+ "TL-TEST-001": {
+  "routing": "complete"
+ },
+ "TL-DBG-001": {
+  "routing": "complete",
+  "note": "Autorouted, 0 DRC errors, no hand fixes. Bench tool, not a product board; still needs a layout review before ordering."
+ }
 }

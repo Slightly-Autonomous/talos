@@ -36,6 +36,7 @@ Freerouting is not committed. It is the GPL-3.0 macOS build: Freerouting 2.5.0, 
 | TL-SN-001 | 100 × 80 mm | 4: F signal / In1 solid GND plane / In2 solid V3V3_CORE plane / B signal | **Routed, 0 DRC errors.** Annealed placement, plane fanout (175 pads), Freerouting (40 passes, best of 3), then two hand fixes at fine-pitch power pins (`scripts/finish_sn.py`). Only silkscreen warnings remain. Module at the top edge with the antenna strip clear. Two slots per side edge. USB-C, PV and battery along the bottom |
 | TL-MOD-001..004 | 16 × 26 mm (PIR card 18 × 30) | 2 | Gold fingers on the bottom edge, stopping 0.15 mm short of the bevel. Tracks only in the finger zone (no pour, no vias) |
 | TL-TEST-001 | 22 × 32 mm | 2 | Same finger zone |
+| TL-DBG-001 | 36 × 32 mm | 2 | **Routed, 0 DRC errors**, no hand fixes. Slot socket straddles the top edge (card plugs in beside it), USB-C on the bottom edge, PPK2 meter headers either side of the socket ([HW-0007](../architecture/decisions/0007-slot-socket-and-debug-adapter.md)) |
 
 Design rules (project file):
 - 0.15 mm clearance
@@ -58,7 +59,7 @@ Autorouted is not reviewed. A layout engineer still has to review the power sect
 
 ## What a reviewer must check before any order
 
-1. **The MEC8-EM2 socket footprint is a placeholder.** Pad size, setback and host-board thickness are assumed (HD-002). Do not order the Sensor Node until it is replaced with Samtec's drawing.
+1. **The HSEC8-EM2 socket footprint is a placeholder.** Pad size, setback and host-board thickness are assumed (HD-002). Do not order the Sensor Node or the debug adapter until it is replaced with Samtec's drawing.
 2. **Check the EKMB pin mapping** (Vdd/OUT/GND on a 5.08 mm PCD) against a physical part.
 3. **RF:** the module sits on the top edge with Espressif's keepout honoured, but nobody has reviewed antenna ground clearance, enclosure or detuning.
 4. **Power layout:**

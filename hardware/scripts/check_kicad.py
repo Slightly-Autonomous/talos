@@ -10,8 +10,8 @@ Checks, per board:
      in hardware/kicad/erc-waivers.json with a justification.
   2. Netlist round-trip: KiCad's exported netlist must equal the generator's intended
      netlist pin for pin (intended-netlist.json). Intended no-connects must be unconnected.
-  3. Cross-board: every card's edge contacts must agree with the main board slot pinout
-     (sensor_edge_v1), and PRESENT_N must be grounded on every card.
+  3. Cross-board: every card's edge contacts, and every other host socket (the debug adapter), must
+     agree with the main board slot pinout (sensor_edge_v1); PRESENT_N must be grounded on every card.
   4. Safe defaults (HWR-007): power/reset/CS/mux control nets have a defining resistor.
   5. Footprint audit: assigned footprints exist in the KiCad library; missing ones are listed.
 Exit code is non-zero if any check fails.
@@ -36,8 +36,10 @@ from kicad_sexpr import find, find_all, parse, unq  # noqa: E402
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 KICAD = ROOT / "hardware" / "kicad"
 RESULTS = ROOT / "hardware" / "results"
-BOARDS = ["TL-SN-001", "TL-MOD-001", "TL-MOD-002", "TL-MOD-003", "TL-MOD-004", "TL-TEST-001"]
-CARDS = BOARDS[1:]
+BOARDS = ["TL-SN-001", "TL-MOD-001", "TL-MOD-002", "TL-MOD-003", "TL-MOD-004", "TL-TEST-001", "TL-DBG-001"]
+CARDS = ["TL-MOD-001", "TL-MOD-002", "TL-MOD-003", "TL-MOD-004", "TL-TEST-001"]
+# Boards that host a card in a slot socket besides the main board: (board, socket ref).
+HOSTS = [("TL-DBG-001", "J2")]
 
 
 def kicad_cli() -> str:
@@ -171,6 +173,11 @@ def cross_board(intended: dict[str, dict]) -> list[str]:
             slot0 = roles
         elif roles != slot0:
             problems.append(f"TL-SN-001 {j}: slot pinout differs from J4")
+    for host, j in HOSTS:
+        roles = {c: role(net) for c, net in intended[host]["parts"][j]["pins"].items()}
+        if roles != slot0:
+            diff = sorted(c for c in slot0 if roles.get(c) != slot0[c])
+            problems.append(f"{host} {j}: socket pinout differs from TL-SN-001 J4 at contacts {diff}")
     for card in CARDS:
         fingers = intended[card]["parts"]["J1"]["pins"]
         for c, net in fingers.items():
@@ -187,7 +194,7 @@ def cross_board(intended: dict[str, dict]) -> list[str]:
 
 
 SAFE = [r"^SLOT_SW_EN\d$", r"^SLOT_AON_EN\d$", r"^SLOT\d_RESET_N$", r"^SLOT\d_CS_N$", r"^UART_MUX_EN_N$",
-        r"^UART_SEL\d$", r"^MUX_RESET_N$", r"^SLOT_WAKE\d$", r"^BOOT_N$", r"^CHIP_EN$", r"^STATUS_LED_N$"]
+        r"^UART_SEL\d$", r"^MUX_RESET_N$", r"^DBG_(AON|SW)_EN$", r"^BRIDGE_RST_N$", r"^SLOT_WAKE\d$", r"^BOOT_N$", r"^CHIP_EN$", r"^STATUS_LED_N$"]
 
 
 def safe_defaults(intended: dict) -> list[str]:
@@ -203,7 +210,7 @@ def safe_defaults(intended: dict) -> list[str]:
                 continue
             a, b = p["pins"]["1"], p["pins"]["2"]
             other = b if a == net else a if b == net else None
-            if other in ("GND", "V3V3_CORE") or (other or "").startswith("V3V3_AON"):
+            if other in ("GND", "V3V3_CORE", "V3V3") or (other or "").startswith("V3V3_AON"):
                 ok = True
         if not ok:
             problems.append(f"{net}: no pull-up/pull-down defining the reset state")
@@ -302,8 +309,8 @@ def main() -> int:
     all_ok &= not xb
     report.append("\n## Cross-board connector check (sensor_edge_v1)\n")
     report += [f"- {p}" for p in xb] or [
-        "- All four main-board slots share one pinout; every card's used contacts match it, reserved contacts "
-        "(5, 19) are unused, and PRESENT_N (18) is grounded on all five cards."]
+        "- All four main-board slots and the debug adapter's socket share one pinout; every card's used contacts "
+        "match it, reserved contacts (5, 19) are unused, and PRESENT_N (18) is grounded on all five cards."]
     report += details
     report.append(f"\n**Overall: {'PASS' if all_ok else 'FAIL'}**\n")
     RESULTS.mkdir(parents=True, exist_ok=True)

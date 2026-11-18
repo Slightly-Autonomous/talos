@@ -269,8 +269,8 @@ def sensor_node() -> Board:
         aon = f"V3V3_AON_{n}"
         b.add(
             Part(f"J{4 + n}", "Connector_Generic:Conn_02x10_Odd_Even", f"sensor_edge_v1 slot {n}", pins,
-                 "talos:Samtec_MEC8-110-02-L-D-EM2_PLACEHOLDER",
-                 "MEC8-110-02-L-D-EM2 candidate; PLACEHOLDER land pattern until the Samtec drawing is obtained (HD-002)"),
+                 "talos:Samtec_HSEC8-110-01-S-D-EM2_PLACEHOLDER",
+                 "HSEC8-110-01-S-D-EM2 (30 µin gold); PLACEHOLDER land pattern until the Samtec drawing is obtained (HD-002)"),
             R(f"R{45 + 5 * n}", "1M", f"SLOT_WAKE{n}", "GND", "empty slot never wakes"),
             R(f"R{46 + 5 * n}", "100k", aon, f"SLOT{n}_ALERT_N"),
             R(f"R{47 + 5 * n}", "100k", aon, f"SLOT{n}_CS_N"),
@@ -284,6 +284,104 @@ def sensor_node() -> Board:
     # Sheet F: factory test pads
     for i, net in enumerate([core, "GND", "CHIP_EN", "BOOT_N", "U0TXD", "U0RXD", "VBAT", "SYS_PATH",
                              "I2C_SDA", "I2C_SCL", "EXPB_SPARE", "USB_VBUS"]):
+        b.add(TP(f"TP{i + 1}", net))
+    return b
+
+
+# ---- TL-DBG-001 -----------------------------------------------------------------------
+def debug_adapter() -> Board:
+    """One-slot USB debug adapter: a card plugs in beside it (coplanar) exactly as it does on the main
+    board, and the host PC reaches it through an MCP2221A USB-to-I2C/UART bridge (no firmware).
+
+    It mirrors one main-board slot (same socket, same rail switches, pull-ups and ESD), so a card that
+    works here sees the same electrical environment as in TL-SN-001. Differences, by design:
+    - Both rails default OFF (1M pull-downs); the host powers the card up when it is ready to watch.
+    - JP1/JP2 put each card rail through a 2-pin header: pull the shunt and insert a current meter
+      (Nordic PPK2 ammeter mode) to measure the card alone.
+    - SPI is not bridged (the MCP2221A has none): SCK/MOSI/MISO/CS_N go to test pads for a logic analyser.
+    - RESET_N is pulled up only (test pad); power-cycling AON is the reset.
+    - PRESENT_N lights D1 when a card is seated (the card grounds contact 18).
+    MCP2221A GPIO roles must be written to its flash once by the host tool, with no card seated. Factory
+    defaults (DS20005565E §1.7.1, Registers 1-12..1-15): GP0 = LED_URx, idles high; GP2 = USBCFG, high once
+    enumerated. So an unconfigured adapter turns both card rails on. After configuration the settings
+    load from flash at power-up, and the 1M pull-downs hold the rails off until then. The 1k series
+    resistors bound contention on GP1 (LED_UTx) and GP3 (LED_I2C) before configuration.
+    """
+    b = Board("TL-DBG-001", "TL-DBG-001 One-slot USB debug adapter Rev A (generated, provisional)",
+              # V3V3_AON reaches the card side through the JP1 meter header (passive), so ERC needs a flag
+              external_power={"GND", "USB_VBUS", "V3V3_AON"})
+    v = "V3V3"
+    socket = {}
+    for c, r in EDGE.items():
+        socket[str(c)] = {"GND": "GND", "AON": "V3V3_AON", "SW": "V3V3_SW", "V5_RSVD": None,
+                          "ANALOG_RSVD": None}.get(r, r)
+    b.add(
+        # USB-C device port, same parts as the Sensor Node
+        Part("J1", "Connector:USB_C_Receptacle_USB2.0_16P", "USB-C sink",
+             {"A1": "GND", "B1": "GND", "A12": "GND", "B12": "GND", "SH": "GND",
+              "A4": "USB_VBUS", "A9": "USB_VBUS", "B4": "USB_VBUS", "B9": "USB_VBUS",
+              "A5": "USB_CC1", "B5": "USB_CC2", "A6": "USB_DP", "B6": "USB_DP",
+              "A7": "USB_DN", "B7": "USB_DN", "A8": None, "B8": None},
+             "Connector_USB:USB_C_Receptacle_GCT_USB4105-xx-A_16P_TopMnt_Horizontal"),
+        R("R1", "5.1k", "USB_CC1", "GND", "UFP Rd"), R("R2", "5.1k", "USB_CC2", "GND", "UFP Rd"),
+        Part("U1", "Power_Protection:USBLC6-2SC6", "USBLC6-2SC6",
+             {"1": "USB_DP", "6": "USB_DP", "3": "USB_DN", "4": "USB_DN", "5": "USB_VBUS", "2": "GND"}),
+        # 3.3 V for the bridge and the card (AP2112K: 600 mA, EN tied to VIN)
+        Part("U2", "Regulator_Linear:AP2112K-3.3", "AP2112K-3.3TRG1",
+             {"1": "USB_VBUS", "2": "GND", "3": "USB_VBUS", "4": None, "5": v}),
+        C("C1", "1u", "USB_VBUS"), C("C2", "10u", v, bulk=True),
+        # USB bridge. VDD = 3.3 V, so VUSB ties to VDD (DS20005565E §1.6.2.3); RST has an internal pull-up
+        Part("U3", "Interface_USB:MCP2221AxSL", "MCP2221AT-I/SL",
+             {"1": v, "11": v, "14": "GND", "4": "BRIDGE_RST_N", "12": "USB_DN", "13": "USB_DP",
+              "9": "SDA", "10": "SCL", "6": "BRIDGE_TX", "5": "UART_RX",
+              "2": "DBG_AON_EN", "7": "DBG_SW_EN", "3": "BRIDGE_WAKE", "8": "BRIDGE_ALERT"},
+             note="GP0 AON enable, GP2 SW enable, GP1 WAKE in (interrupt-on-change), GP3 ALERT_N in"),
+        C("C3", "100n", v), C("C4", "1u", v),
+        R("R3", "10k", v, "BRIDGE_RST_N"),
+        # card rails: one slot's worth of the main board's switches, both default off
+        Part("U4", "Power_Management:TPS22917DBV", "TPS22917DBVR",
+             {"1": v, "2": "GND", "3": "DBG_AON_EN", "4": None, "5": None, "6": "AON_METER"},
+             note="card AON switch, default off on the adapter"),
+        R("R4", "1M", "DBG_AON_EN", "GND"),
+        Part("JP1", "Connector_Generic:Conn_01x02", "AON meter", {"1": "AON_METER", "2": "V3V3_AON"},
+             "Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical",
+             "shunt fitted for normal use; remove and insert a PPK2 (ammeter) to measure card AON current"),
+        C("C5", "1u", "V3V3_AON"),
+        Part("U5", "Power_Management:TPS22917DBV", "TPS22917DBVR",
+             {"1": v, "2": "GND", "3": "DBG_SW_EN", "4": None, "5": "SW_QOD", "6": "SW_METER"},
+             note="card switched rail, default off"),
+        R("R5", "1M", "DBG_SW_EN", "GND"),
+        R("R6", "0R", "SW_QOD", "SW_METER", "QOD to VOUT"),
+        Part("JP2", "Connector_Generic:Conn_01x02", "SW meter", {"1": "SW_METER", "2": "V3V3_SW"},
+             "Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical",
+             "shunt fitted for normal use; remove and insert a PPK2 (ammeter) to measure card SW current"),
+        C("C6", "1u", "V3V3_SW"),
+        # the slot, with the main board's defaults (pull-ups on the card's own AON rail: no back-powering)
+        Part("J2", "Connector_Generic:Conn_02x10_Odd_Even", "sensor_edge_v1 slot (debug)", socket,
+             "talos:Samtec_HSEC8-110-01-S-D-EM2_PLACEHOLDER",
+             "HSEC8-110-01-S-D-EM2 (30 µin gold); PLACEHOLDER land pattern until the Samtec drawing is obtained (HD-002)"),
+        R("R7", "4.7k", "V3V3_AON", "SDA"), R("R8", "4.7k", "V3V3_AON", "SCL"),
+        R("R9", "1M", "WAKE", "GND", "empty slot never wakes"),
+        R("R10", "100k", "V3V3_AON", "ALERT_N"),
+        R("R11", "100k", "V3V3_AON", "CS_N"),
+        R("R12", "100k", "V3V3_AON", "RESET_N"),
+        R("R13", "100k", "V3V3_AON", "UART_RX", "idle-high when the card has no UART"),
+        Part("D2", "Power_Protection:PESD3V3L5UV", "PESD5V0L5UV",  # PESD3V3L5UV symbol: same pinout
+             {"1": "WAKE", "3": "SDA", "4": "SCL", "5": "ALERT_N", "6": "RESET_N", "2": "GND"}),
+        # card outputs reach the bridge through 1k: bounds contention while GP pins are unconfigured
+        R("R14", "1k", "WAKE", "BRIDGE_WAKE"), R("R15", "1k", "ALERT_N", "BRIDGE_ALERT"),
+        # bridge TX is buffered from the card's AON rail: Ioff keeps an unpowered card unpowered
+        Part("U6", "74xGxx:74LVC1G125", "SN74LVC1G125DBVR",
+             {"1": "GND", "2": "BRIDGE_TX", "3": "GND", "4": "UART_TX", "5": "V3V3_AON"},
+             "Package_TO_SOT_SMD:SOT-23-5", "OE_N tied low; powered from the card rail"),
+        C("C7", "100n", "V3V3_AON"),
+        # card-seated indicator
+        Part("D1", "Device:LED", "STATUS", {"2": v, "1": "SEATED_K"}, "LED_SMD:LED_0603_1608Metric",
+             "lit when a card grounds PRESENT_N"),
+        R("R16", "1k", "SEATED_K", "PRESENT_N"),
+    )
+    for i, net in enumerate([v, "GND", "V3V3_AON", "V3V3_SW", "SCK", "MOSI", "MISO", "CS_N", "RESET_N",
+                             "UART_TX", "UART_RX", "SDA", "SCL", "WAKE", "ALERT_N", "GND"]):
         b.add(TP(f"TP{i + 1}", net))
     return b
 
@@ -347,6 +445,7 @@ def boards() -> list[Board]:
         R("R5", "330", "V3V3_SW", "GND", "~10 mA switched-rail load"),
         TP("TP3", "V3V3_SW"), TP("TP4", "WAKE"),
     ]))
+    out.append(debug_adapter())
     return out
 
 

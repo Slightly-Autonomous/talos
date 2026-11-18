@@ -79,16 +79,21 @@ requirements:
     test: contracts/proto/talos/v1/manifest.proto (no pin fields); firmware/esp_idf/main/board_tl_sn_001.h
   - id: HWR-016
     statement: Every schematic opens in KiCad 10 and passes ERC with zero errors; the exported netlist matches the generator's intended netlist
-    board: TL-SN-001, TL-MOD-001..004, TL-TEST-001
+    board: TL-SN-001, TL-MOD-001..004, TL-TEST-001, TL-DBG-001
     status: verified_tool
     test: hardware/scripts/check_kicad.py -> hardware/results/
   - id: HWR-017
     statement: Every routed PCB passes kicad-cli DRC with schematic parity at zero errors under the project fab rules
-    board: TL-SN-001, TL-MOD-001..004, TL-TEST-001
+    board: TL-SN-001, TL-MOD-001..004, TL-TEST-001, TL-DBG-001
     status: verified_tool
     test: hardware/scripts/check_kicad.py -> hardware/results/kicad-check.md (PCB DRC columns)
   - id: HWR-018
     statement: Every assembled part is stocked by JLCPCB, with enough stock for 5 of every board; a part JLCPCB cannot place is listed as not placed with a risk ID
-    board: TL-SN-001, TL-MOD-001..004, TL-TEST-001
+    board: TL-SN-001, TL-MOD-001..004, TL-TEST-001, TL-DBG-001
     status: verified_tool
     test: hardware/scripts/jlc_sourcing.py check (snapshot hardware/sourcing/jlc-stock.json; refresh before ordering)
+  - id: HWR-019
+    statement: Any single card can be powered, measured and exercised from a PC over USB in the same electrical environment as a main-board slot (same socket pinout, rail switches, pull-ups and ESD); rails default off
+    board: TL-DBG-001
+    status: designed
+    test: hardware/scripts/check_kicad.py cross-board check (HOSTS); bench bring-up not done

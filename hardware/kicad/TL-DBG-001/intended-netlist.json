@@ -1,0 +1,872 @@
+{
+ "board": "TL-DBG-001",
+ "parts": {
+  "C1": {
+   "datasheet": "~",
+   "footprint": "Capacitor_SMD:C_0402_1005Metric",
+   "lib_id": "Device:C",
+   "note": "",
+   "pin_names": {
+    "1": "",
+    "2": ""
+   },
+   "pins": {
+    "1": "USB_VBUS",
+    "2": "GND"
+   },
+   "value": "1u"
+  },
+  "C2": {
+   "datasheet": "~",
+   "footprint": "Capacitor_SMD:C_0805_2012Metric",
+   "lib_id": "Device:C",
+   "note": "",
+   "pin_names": {
+    "1": "",
+    "2": ""
+   },
+   "pins": {
+    "1": "V3V3",
+    "2": "GND"
+   },
+   "value": "10u"
+  },
+  "C3": {
+   "datasheet": "~",
+   "footprint": "Capacitor_SMD:C_0402_1005Metric",
+   "lib_id": "Device:C",
+   "note": "",
+   "pin_names": {
+    "1": "",
+    "2": ""
+   },
+   "pins": {
+    "1": "V3V3",
+    "2": "GND"
+   },
+   "value": "100n"
+  },
+  "C4": {
+   "datasheet": "~",
+   "footprint": "Capacitor_SMD:C_0402_1005Metric",
+   "lib_id": "Device:C",
+   "note": "",
+   "pin_names": {
+    "1": "",
+    "2": ""
+   },
+   "pins": {
+    "1": "V3V3",
+    "2": "GND"
+   },
+   "value": "1u"
+  },
+  "C5": {
+   "datasheet": "~",
+   "footprint": "Capacitor_SMD:C_0402_1005Metric",
+   "lib_id": "Device:C",
+   "note": "",
+   "pin_names": {
+    "1": "",
+    "2": ""
+   },
+   "pins": {
+    "1": "V3V3_AON",
+    "2": "GND"
+   },
+   "value": "1u"
+  },
+  "C6": {
+   "datasheet": "~",
+   "footprint": "Capacitor_SMD:C_0402_1005Metric",
+   "lib_id": "Device:C",
+   "note": "",
+   "pin_names": {
+    "1": "",
+    "2": ""
+   },
+   "pins": {
+    "1": "V3V3_SW",
+    "2": "GND"
+   },
+   "value": "1u"
+  },
+  "C7": {
+   "datasheet": "~",
+   "footprint": "Capacitor_SMD:C_0402_1005Metric",
+   "lib_id": "Device:C",
+   "note": "",
+   "pin_names": {
+    "1": "",
+    "2": ""
+   },
+   "pins": {
+    "1": "V3V3_AON",
+    "2": "GND"
+   },
+   "value": "100n"
+  },
+  "D1": {
+   "datasheet": "~",
+   "footprint": "LED_SMD:LED_0603_1608Metric",
+   "lib_id": "Device:LED",
+   "note": "lit when a card grounds PRESENT_N",
+   "pin_names": {
+    "1": "K",
+    "2": "A"
+   },
+   "pins": {
+    "1": "SEATED_K",
+    "2": "V3V3"
+   },
+   "value": "STATUS"
+  },
+  "D2": {
+   "datasheet": "https://assets.nexperia.com/documents/data-sheet/PESDXL5UF_V_Y.pdf",
+   "footprint": "Package_TO_SOT_SMD:SOT-666",
+   "lib_id": "Power_Protection:PESD3V3L5UV",
+   "note": "",
+   "pin_names": {
+    "1": "K1",
+    "2": "A",
+    "3": "K2",
+    "4": "K3",
+    "5": "K4",
+    "6": "K5"
+   },
+   "pins": {
+    "1": "WAKE",
+    "2": "GND",
+    "3": "SDA",
+    "4": "SCL",
+    "5": "ALERT_N",
+    "6": "RESET_N"
+   },
+   "value": "PESD5V0L5UV"
+  },
+  "J1": {
+   "datasheet": "https://www.usb.org/sites/default/files/documents/usb_type-c.zip",
+   "footprint": "Connector_USB:USB_C_Receptacle_GCT_USB4105-xx-A_16P_TopMnt_Horizontal",
+   "lib_id": "Connector:USB_C_Receptacle_USB2.0_16P",
+   "note": "",
+   "pin_names": {
+    "A1": "GND",
+    "A12": "GND",
+    "A4": "VBUS",
+    "A5": "CC1",
+    "A6": "D+",
+    "A7": "D-",
+    "A8": "SBU1",
+    "A9": "VBUS",
+    "B1": "GND",
+    "B12": "GND",
+    "B4": "VBUS",
+    "B5": "CC2",
+    "B6": "D+",
+    "B7": "D-",
+    "B8": "SBU2",
+    "B9": "VBUS",
+    "SH": "SHIELD"
+   },
+   "pins": {
+    "A1": "GND",
+    "A12": "GND",
+    "A4": "USB_VBUS",
+    "A5": "USB_CC1",
+    "A6": "USB_DP",
+    "A7": "USB_DN",
+    "A8": null,
+    "A9": "USB_VBUS",
+    "B1": "GND",
+    "B12": "GND",
+    "B4": "USB_VBUS",
+    "B5": "USB_CC2",
+    "B6": "USB_DP",
+    "B7": "USB_DN",
+    "B8": null,
+    "B9": "USB_VBUS",
+    "SH": "GND"
+   },
+   "value": "USB-C sink"
+  },
+  "J2": {
+   "datasheet": "~",
+   "footprint": "talos:Samtec_HSEC8-110-01-S-D-EM2_PLACEHOLDER",
+   "lib_id": "Connector_Generic:Conn_02x10_Odd_Even",
+   "note": "HSEC8-110-01-S-D-EM2 (30 \u00b5in gold); PLACEHOLDER land pattern until the Samtec drawing is obtained (HD-002)",
+   "pin_names": {
+    "1": "Pin_1",
+    "10": "Pin_10",
+    "11": "Pin_11",
+    "12": "Pin_12",
+    "13": "Pin_13",
+    "14": "Pin_14",
+    "15": "Pin_15",
+    "16": "Pin_16",
+    "17": "Pin_17",
+    "18": "Pin_18",
+    "19": "Pin_19",
+    "2": "Pin_2",
+    "20": "Pin_20",
+    "3": "Pin_3",
+    "4": "Pin_4",
+    "5": "Pin_5",
+    "6": "Pin_6",
+    "7": "Pin_7",
+    "8": "Pin_8",
+    "9": "Pin_9"
+   },
+   "pins": {
+    "1": "GND",
+    "10": "ALERT_N",
+    "11": "SCK",
+    "12": "MOSI",
+    "13": "MISO",
+    "14": "CS_N",
+    "15": "UART_TX",
+    "16": "UART_RX",
+    "17": "RESET_N",
+    "18": "PRESENT_N",
+    "19": null,
+    "2": "GND",
+    "20": "GND",
+    "3": "V3V3_AON",
+    "4": "V3V3_SW",
+    "5": null,
+    "6": "GND",
+    "7": "SDA",
+    "8": "SCL",
+    "9": "WAKE"
+   },
+   "value": "sensor_edge_v1 slot (debug)"
+  },
+  "JP1": {
+   "datasheet": "~",
+   "footprint": "Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical",
+   "lib_id": "Connector_Generic:Conn_01x02",
+   "note": "shunt fitted for normal use; remove and insert a PPK2 (ammeter) to measure card AON current",
+   "pin_names": {
+    "1": "Pin_1",
+    "2": "Pin_2"
+   },
+   "pins": {
+    "1": "AON_METER",
+    "2": "V3V3_AON"
+   },
+   "value": "AON meter"
+  },
+  "JP2": {
+   "datasheet": "~",
+   "footprint": "Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical",
+   "lib_id": "Connector_Generic:Conn_01x02",
+   "note": "shunt fitted for normal use; remove and insert a PPK2 (ammeter) to measure card SW current",
+   "pin_names": {
+    "1": "Pin_1",
+    "2": "Pin_2"
+   },
+   "pins": {
+    "1": "SW_METER",
+    "2": "V3V3_SW"
+   },
+   "value": "SW meter"
+  },
+  "R1": {
+   "datasheet": "~",
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "UFP Rd",
+   "pin_names": {
+    "1": "",
+    "2": ""
+   },
+   "pins": {
+    "1": "USB_CC1",
+    "2": "GND"
+   },
+   "value": "5.1k"
+  },
+  "R10": {
+   "datasheet": "~",
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "",
+   "pin_names": {
+    "1": "",
+    "2": ""
+   },
+   "pins": {
+    "1": "V3V3_AON",
+    "2": "ALERT_N"
+   },
+   "value": "100k"
+  },
+  "R11": {
+   "datasheet": "~",
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "",
+   "pin_names": {
+    "1": "",
+    "2": ""
+   },
+   "pins": {
+    "1": "V3V3_AON",
+    "2": "CS_N"
+   },
+   "value": "100k"
+  },
+  "R12": {
+   "datasheet": "~",
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "",
+   "pin_names": {
+    "1": "",
+    "2": ""
+   },
+   "pins": {
+    "1": "V3V3_AON",
+    "2": "RESET_N"
+   },
+   "value": "100k"
+  },
+  "R13": {
+   "datasheet": "~",
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "idle-high when the card has no UART",
+   "pin_names": {
+    "1": "",
+    "2": ""
+   },
+   "pins": {
+    "1": "V3V3_AON",
+    "2": "UART_RX"
+   },
+   "value": "100k"
+  },
+  "R14": {
+   "datasheet": "~",
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "",
+   "pin_names": {
+    "1": "",
+    "2": ""
+   },
+   "pins": {
+    "1": "WAKE",
+    "2": "BRIDGE_WAKE"
+   },
+   "value": "1k"
+  },
+  "R15": {
+   "datasheet": "~",
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "",
+   "pin_names": {
+    "1": "",
+    "2": ""
+   },
+   "pins": {
+    "1": "ALERT_N",
+    "2": "BRIDGE_ALERT"
+   },
+   "value": "1k"
+  },
+  "R16": {
+   "datasheet": "~",
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "",
+   "pin_names": {
+    "1": "",
+    "2": ""
+   },
+   "pins": {
+    "1": "SEATED_K",
+    "2": "PRESENT_N"
+   },
+   "value": "1k"
+  },
+  "R2": {
+   "datasheet": "~",
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "UFP Rd",
+   "pin_names": {
+    "1": "",
+    "2": ""
+   },
+   "pins": {
+    "1": "USB_CC2",
+    "2": "GND"
+   },
+   "value": "5.1k"
+  },
+  "R3": {
+   "datasheet": "~",
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "",
+   "pin_names": {
+    "1": "",
+    "2": ""
+   },
+   "pins": {
+    "1": "V3V3",
+    "2": "BRIDGE_RST_N"
+   },
+   "value": "10k"
+  },
+  "R4": {
+   "datasheet": "~",
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "",
+   "pin_names": {
+    "1": "",
+    "2": ""
+   },
+   "pins": {
+    "1": "DBG_AON_EN",
+    "2": "GND"
+   },
+   "value": "1M"
+  },
+  "R5": {
+   "datasheet": "~",
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "",
+   "pin_names": {
+    "1": "",
+    "2": ""
+   },
+   "pins": {
+    "1": "DBG_SW_EN",
+    "2": "GND"
+   },
+   "value": "1M"
+  },
+  "R6": {
+   "datasheet": "~",
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "QOD to VOUT",
+   "pin_names": {
+    "1": "",
+    "2": ""
+   },
+   "pins": {
+    "1": "SW_QOD",
+    "2": "SW_METER"
+   },
+   "value": "0R"
+  },
+  "R7": {
+   "datasheet": "~",
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "",
+   "pin_names": {
+    "1": "",
+    "2": ""
+   },
+   "pins": {
+    "1": "V3V3_AON",
+    "2": "SDA"
+   },
+   "value": "4.7k"
+  },
+  "R8": {
+   "datasheet": "~",
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "",
+   "pin_names": {
+    "1": "",
+    "2": ""
+   },
+   "pins": {
+    "1": "V3V3_AON",
+    "2": "SCL"
+   },
+   "value": "4.7k"
+  },
+  "R9": {
+   "datasheet": "~",
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "empty slot never wakes",
+   "pin_names": {
+    "1": "",
+    "2": ""
+   },
+   "pins": {
+    "1": "WAKE",
+    "2": "GND"
+   },
+   "value": "1M"
+  },
+  "TP1": {
+   "datasheet": "~",
+   "footprint": "TestPoint:TestPoint_Pad_D1.0mm",
+   "lib_id": "Connector:TestPoint",
+   "note": "",
+   "pin_names": {
+    "1": "1"
+   },
+   "pins": {
+    "1": "V3V3"
+   },
+   "value": "V3V3"
+  },
+  "TP10": {
+   "datasheet": "~",
+   "footprint": "TestPoint:TestPoint_Pad_D1.0mm",
+   "lib_id": "Connector:TestPoint",
+   "note": "",
+   "pin_names": {
+    "1": "1"
+   },
+   "pins": {
+    "1": "UART_TX"
+   },
+   "value": "UART_TX"
+  },
+  "TP11": {
+   "datasheet": "~",
+   "footprint": "TestPoint:TestPoint_Pad_D1.0mm",
+   "lib_id": "Connector:TestPoint",
+   "note": "",
+   "pin_names": {
+    "1": "1"
+   },
+   "pins": {
+    "1": "UART_RX"
+   },
+   "value": "UART_RX"
+  },
+  "TP12": {
+   "datasheet": "~",
+   "footprint": "TestPoint:TestPoint_Pad_D1.0mm",
+   "lib_id": "Connector:TestPoint",
+   "note": "",
+   "pin_names": {
+    "1": "1"
+   },
+   "pins": {
+    "1": "SDA"
+   },
+   "value": "SDA"
+  },
+  "TP13": {
+   "datasheet": "~",
+   "footprint": "TestPoint:TestPoint_Pad_D1.0mm",
+   "lib_id": "Connector:TestPoint",
+   "note": "",
+   "pin_names": {
+    "1": "1"
+   },
+   "pins": {
+    "1": "SCL"
+   },
+   "value": "SCL"
+  },
+  "TP14": {
+   "datasheet": "~",
+   "footprint": "TestPoint:TestPoint_Pad_D1.0mm",
+   "lib_id": "Connector:TestPoint",
+   "note": "",
+   "pin_names": {
+    "1": "1"
+   },
+   "pins": {
+    "1": "WAKE"
+   },
+   "value": "WAKE"
+  },
+  "TP15": {
+   "datasheet": "~",
+   "footprint": "TestPoint:TestPoint_Pad_D1.0mm",
+   "lib_id": "Connector:TestPoint",
+   "note": "",
+   "pin_names": {
+    "1": "1"
+   },
+   "pins": {
+    "1": "ALERT_N"
+   },
+   "value": "ALERT_N"
+  },
+  "TP16": {
+   "datasheet": "~",
+   "footprint": "TestPoint:TestPoint_Pad_D1.0mm",
+   "lib_id": "Connector:TestPoint",
+   "note": "",
+   "pin_names": {
+    "1": "1"
+   },
+   "pins": {
+    "1": "GND"
+   },
+   "value": "GND"
+  },
+  "TP2": {
+   "datasheet": "~",
+   "footprint": "TestPoint:TestPoint_Pad_D1.0mm",
+   "lib_id": "Connector:TestPoint",
+   "note": "",
+   "pin_names": {
+    "1": "1"
+   },
+   "pins": {
+    "1": "GND"
+   },
+   "value": "GND"
+  },
+  "TP3": {
+   "datasheet": "~",
+   "footprint": "TestPoint:TestPoint_Pad_D1.0mm",
+   "lib_id": "Connector:TestPoint",
+   "note": "",
+   "pin_names": {
+    "1": "1"
+   },
+   "pins": {
+    "1": "V3V3_AON"
+   },
+   "value": "V3V3_AON"
+  },
+  "TP4": {
+   "datasheet": "~",
+   "footprint": "TestPoint:TestPoint_Pad_D1.0mm",
+   "lib_id": "Connector:TestPoint",
+   "note": "",
+   "pin_names": {
+    "1": "1"
+   },
+   "pins": {
+    "1": "V3V3_SW"
+   },
+   "value": "V3V3_SW"
+  },
+  "TP5": {
+   "datasheet": "~",
+   "footprint": "TestPoint:TestPoint_Pad_D1.0mm",
+   "lib_id": "Connector:TestPoint",
+   "note": "",
+   "pin_names": {
+    "1": "1"
+   },
+   "pins": {
+    "1": "SCK"
+   },
+   "value": "SCK"
+  },
+  "TP6": {
+   "datasheet": "~",
+   "footprint": "TestPoint:TestPoint_Pad_D1.0mm",
+   "lib_id": "Connector:TestPoint",
+   "note": "",
+   "pin_names": {
+    "1": "1"
+   },
+   "pins": {
+    "1": "MOSI"
+   },
+   "value": "MOSI"
+  },
+  "TP7": {
+   "datasheet": "~",
+   "footprint": "TestPoint:TestPoint_Pad_D1.0mm",
+   "lib_id": "Connector:TestPoint",
+   "note": "",
+   "pin_names": {
+    "1": "1"
+   },
+   "pins": {
+    "1": "MISO"
+   },
+   "value": "MISO"
+  },
+  "TP8": {
+   "datasheet": "~",
+   "footprint": "TestPoint:TestPoint_Pad_D1.0mm",
+   "lib_id": "Connector:TestPoint",
+   "note": "",
+   "pin_names": {
+    "1": "1"
+   },
+   "pins": {
+    "1": "CS_N"
+   },
+   "value": "CS_N"
+  },
+  "TP9": {
+   "datasheet": "~",
+   "footprint": "TestPoint:TestPoint_Pad_D1.0mm",
+   "lib_id": "Connector:TestPoint",
+   "note": "",
+   "pin_names": {
+    "1": "1"
+   },
+   "pins": {
+    "1": "RESET_N"
+   },
+   "value": "RESET_N"
+  },
+  "U1": {
+   "datasheet": "https://www.st.com/resource/en/datasheet/usblc6-2.pdf",
+   "footprint": "Package_TO_SOT_SMD:SOT-23-6",
+   "lib_id": "Power_Protection:USBLC6-2SC6",
+   "note": "",
+   "pin_names": {
+    "1": "I/O1",
+    "2": "GND",
+    "3": "I/O2",
+    "4": "I/O2",
+    "5": "VBUS",
+    "6": "I/O1"
+   },
+   "pins": {
+    "1": "USB_DP",
+    "2": "GND",
+    "3": "USB_DN",
+    "4": "USB_DN",
+    "5": "USB_VBUS",
+    "6": "USB_DP"
+   },
+   "value": "USBLC6-2SC6"
+  },
+  "U2": {
+   "datasheet": "https://www.diodes.com/assets/Datasheets/AP2112.pdf",
+   "footprint": "Package_TO_SOT_SMD:SOT-23-5",
+   "lib_id": "Regulator_Linear:AP2112K-3.3",
+   "note": "",
+   "pin_names": {
+    "1": "VIN",
+    "2": "GND",
+    "3": "EN",
+    "4": "NC",
+    "5": "VOUT"
+   },
+   "pins": {
+    "1": "USB_VBUS",
+    "2": "GND",
+    "3": "USB_VBUS",
+    "4": null,
+    "5": "V3V3"
+   },
+   "value": "AP2112K-3.3TRG1"
+  },
+  "U3": {
+   "datasheet": "http://ww1.microchip.com/downloads/en/DeviceDoc/20005565B.pdf",
+   "footprint": "Package_SO:SOIC-14_3.9x8.7mm_P1.27mm",
+   "lib_id": "Interface_USB:MCP2221AxSL",
+   "note": "GP0 AON enable, GP2 SW enable, GP1 WAKE in (interrupt-on-change), GP3 ALERT_N in",
+   "pin_names": {
+    "1": "VDD",
+    "10": "SCL",
+    "11": "VUSB",
+    "12": "D-",
+    "13": "D+",
+    "14": "VSS",
+    "2": "GP0",
+    "3": "GP1",
+    "4": "~{RST}",
+    "5": "URx",
+    "6": "UTx",
+    "7": "GP2",
+    "8": "GP3",
+    "9": "SDA"
+   },
+   "pins": {
+    "1": "V3V3",
+    "10": "SCL",
+    "11": "V3V3",
+    "12": "USB_DN",
+    "13": "USB_DP",
+    "14": "GND",
+    "2": "DBG_AON_EN",
+    "3": "BRIDGE_WAKE",
+    "4": "BRIDGE_RST_N",
+    "5": "UART_RX",
+    "6": "BRIDGE_TX",
+    "7": "DBG_SW_EN",
+    "8": "BRIDGE_ALERT",
+    "9": "SDA"
+   },
+   "value": "MCP2221AT-I/SL"
+  },
+  "U4": {
+   "datasheet": "http://www.ti.com/lit/ds/symlink/tps22917.pdf",
+   "footprint": "Package_TO_SOT_SMD:SOT-23-6",
+   "lib_id": "Power_Management:TPS22917DBV",
+   "note": "card AON switch, default off on the adapter",
+   "pin_names": {
+    "1": "VIN",
+    "2": "GND",
+    "3": "ON",
+    "4": "CT",
+    "5": "QOD",
+    "6": "VOUT"
+   },
+   "pins": {
+    "1": "V3V3",
+    "2": "GND",
+    "3": "DBG_AON_EN",
+    "4": null,
+    "5": null,
+    "6": "AON_METER"
+   },
+   "value": "TPS22917DBVR"
+  },
+  "U5": {
+   "datasheet": "http://www.ti.com/lit/ds/symlink/tps22917.pdf",
+   "footprint": "Package_TO_SOT_SMD:SOT-23-6",
+   "lib_id": "Power_Management:TPS22917DBV",
+   "note": "card switched rail, default off",
+   "pin_names": {
+    "1": "VIN",
+    "2": "GND",
+    "3": "ON",
+    "4": "CT",
+    "5": "QOD",
+    "6": "VOUT"
+   },
+   "pins": {
+    "1": "V3V3",
+    "2": "GND",
+    "3": "DBG_SW_EN",
+    "4": null,
+    "5": "SW_QOD",
+    "6": "SW_METER"
+   },
+   "value": "TPS22917DBVR"
+  },
+  "U6": {
+   "datasheet": "https://www.ti.com/lit/ds/symlink/sn74lvc1g125.pdf",
+   "footprint": "Package_TO_SOT_SMD:SOT-23-5",
+   "lib_id": "74xGxx:74LVC1G125",
+   "note": "OE_N tied low; powered from the card rail",
+   "pin_names": {
+    "1": "",
+    "2": "",
+    "3": "GND",
+    "4": "",
+    "5": "VCC"
+   },
+   "pins": {
+    "1": "GND",
+    "2": "BRIDGE_TX",
+    "3": "GND",
+    "4": "UART_TX",
+    "5": "V3V3_AON"
+   },
+   "value": "SN74LVC1G125DBVR"
+  }
+ }
+}

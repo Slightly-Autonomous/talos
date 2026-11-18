@@ -17,7 +17,10 @@ flowchart LR
     M3["TL-MOD-003 LIS2DW12"]
     M4["TL-MOD-004 SHT4x"]
     T1["TL-TEST-001 test cartridge"]
+    DBG["TL-DBG-001 USB debug adapter"]
   end
+  PC["Developer PC"] -- USB --- DBG
+  DBG -- "1 × sensor_edge_v1" --- M1
   SN -- "4 × sensor_edge_v1" --- M1 & M2 & M3 & M4 & T1
   SN -- Thread/CoAP --> HUB
   VN -- IP --> HUB

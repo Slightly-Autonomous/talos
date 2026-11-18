@@ -18,11 +18,13 @@ These are the sources actually read for H0–H3, with the sections relied on. "R
 | EKMB110111x | Panasonic PaPIRs WL reference spec | Rev 7.1 | Dimensions (bottom view Vdd/OUT/GND), Vdd 2.3–4.0 V, Iw 1.0 µA typ, Iout ≤ 100 µA, warm-up ~25 s |
 | PESD5V0L5UV | JLCPCB/LCSC parametric listing C84255 only (Nexperia PDF blocked automated access) | 2026-11-17 | VRWM 5 V, IR 5 nA, Cd 16 pF, VBR 6.4 V, SOT-666. **Pinout not read: VERIFY** |
 | MEC8-EM / MEC1-EM | Samtec F-226 Micro Edge Card catalog page | F-226 | Key specs table (pitch, positions, 2.3 A/2.2 A), MEC8-EM ordering (10–70 positions per row, -L plating, 1.60 mm card) |
+| MCP2221A | Microchip DS20005565E | Rev E (2021) | Table 1-1 pins (SOIC: 1 VDD, 2 GP0, 3 GP1, 4 RST with internal pull-up, 5 URx, 6 UTx, 7 GP2, 8 GP3, 9 SDA, 10 SCL, 11 VUSB, 12 D-, 13 D+, 14 VSS); Registers 1-12..1-15 factory GP designations; §1.6.2.3 VDD = VUSB = 3.3 V; §1.7.1 SSPND/USBCFG/LED pin behaviour; VUSB bypass 0.22–0.47 µF; VBUS capacitance ≤ 10 µF |
+| HSEC8-EM2, AP2112K-3.3, SN74LVC1G125 | not read yet | — | Pin maps taken from KiCad stock symbols (SOT-23-5 VIN/GND/EN/NC/VOUT; DBV OE/A/GND/Y/VCC). **VERIFY against datasheets before ordering TL-DBG-001** |
 
 **Not yet sourced:**
 - SHT4x idle current and the 24AA025E standby current. Both use conservative placeholders.
 - Detailed TPS2121 application values (PR1/CP2 divider, ILIM, SS).
 - The USBLC6 and PESD leakage figures.
-- The MEC8-EM2 host-board thickness drawing.
+- The HSEC8-EM2 land pattern and host-board thickness drawing (HD-002).
 
 The raw PDFs were fetched from vendor sites into a local tool cache. They are not committed, because of copyright.

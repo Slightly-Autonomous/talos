@@ -3,7 +3,7 @@
 **Status:** Proposed. Needs connector samples and EE review before H4.
 
 ## Decision
-- **20 contacts at 0.80 mm pitch, 2 rows.** The card is a 1.60 mm PCB with gold fingers that slides into an **edge-mount** socket straddling the main-board edge, so card and main board are coplanar. Lead candidate: Samtec MEC8-110-02-L-D-EM2. Alternates are in [`../../mechanical/connector-shortlist.md`](../../mechanical/connector-shortlist.md).
+- **20 contacts at 0.80 mm pitch, 2 rows.** The card is a 1.60 mm PCB with gold fingers that slides into an **edge-mount** socket straddling the main-board edge, so card and main board are coplanar. Socket: Samtec HSEC8-110-01-S-D-EM2 (30 µin gold; chosen over the MEC8-EM in [HW-0007](0007-slot-socket-and-debug-adapter.md)). Alternates are in [`../../mechanical/connector-shortlist.md`](../../mechanical/connector-shortlist.md).
 - **Pinout:** see [`../../interfaces/sensor_edge_v1.md`](../../interfaces/sensor_edge_v1.md). It has:
   - 5 grounds
   - always-on and switched 3.3 V per slot

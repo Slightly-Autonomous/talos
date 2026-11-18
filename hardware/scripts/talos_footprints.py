@@ -9,8 +9,10 @@ Sources:
 - EKMB: Panasonic PaPIRs WL reference spec rev 7.1: three 0.45 mm leads on a 5.08 mm PCD; GND and OUT
   at +/-45 deg from the bottom vertical, Vdd opposite. Mapping VERIFY against a sample.
 - sensor_edge_v1 card fingers: 0.80 mm pitch, 2 x 10 (odd top, even bottom), for a 1.60 mm card.
-- MEC8-110-02-L-D-EM2: PLACEHOLDER. Samtec's edge-mount drawing was not available; pad sizes and
-  setback are assumptions so placement and routing can proceed. Replace before fabrication.
+- HSEC8-110-01-S-D-EM2: PLACEHOLDER. Samtec's edge-mount drawing was not available; pad sizes and
+  setback are assumptions so placement and routing can proceed. Replace before fabrication. (The
+  slot socket moved from MEC8-EM to HSEC8-EM2 for 30 µin gold; same 0.80 mm 2 x 10 straddle concept,
+  so the placeholder geometry is unchanged. HD-002.)
 """
 
 from __future__ import annotations
@@ -111,7 +113,7 @@ def card_fingers() -> str:
                       "smd", body, -3, 3)
 
 
-def mec8_placeholder() -> str:
+def hsec8_placeholder() -> str:
     body = ""
     for i in range(10):
         x = -3.6 + 0.8 * i
@@ -121,8 +123,8 @@ def mec8_placeholder() -> str:
     body += _rect(-6.75, -1.25, 6.75, 6.75, "F.CrtYd", 0.05)
     body += _rect(-6.75, -1.25, 6.75, 1.25, "B.CrtYd", 0.05)
     body += _line(-6.5, 1.0, 6.5, 1.0, "F.SilkS")
-    return _footprint("Samtec_MEC8-110-02-L-D-EM2_PLACEHOLDER",
-                      "PLACEHOLDER for Samtec MEC8-110-02-L-D-EM2 edge-mount socket: pads straddle the host edge (host edge at y=+1.0). "
+    return _footprint("Samtec_HSEC8-110-01-S-D-EM2_PLACEHOLDER",
+                      "PLACEHOLDER for Samtec HSEC8-110-01-S-D-EM2 edge-mount socket: pads straddle the host edge (host edge at y=+1.0). "
                       "Pad size and setback are ASSUMED; replace with the Samtec drawing before fabrication (HD-002).",
                       "smd", body, -2.5, 8)
 
@@ -160,7 +162,7 @@ FOOTPRINTS = {
     "Texas_DLH0010A_WSON-10-1EP_2.2x2mm_P0.4mm": dlh0010a,
     "PIR_Panasonic_EKMB_TO-5": ekmb,
     "CardEdge_sensor_edge_v1_2x10_P0.8mm": card_fingers,
-    "Samtec_MEC8-110-02-L-D-EM2_PLACEHOLDER": mec8_placeholder,
+    "Samtec_HSEC8-110-01-S-D-EM2_PLACEHOLDER": hsec8_placeholder,
     "ESP32-H2-MINI-1": esp32_h2_mini1,
 }
 
