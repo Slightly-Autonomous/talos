@@ -1,0 +1,16 @@
+{
+  "board": "TL-DBG-001",
+  "provisional": true,
+  "note": "MCP2221A GP roles on the TL-DBG-001 schematic (hardware/scripts/gen_schematics.py debug_adapter). Provisional until the adapter is built and bench-checked (HW-0007). test_manifest.py holds this file to the schematic netlist.",
+  "usb": {"vid": "0x04D8", "pid": "0x00DD", "product_string": "TL-DBG-001"},
+  "bridge_ref": "U3",
+  "gp": {
+    "GP0": {"net": "DBG_AON_EN", "role": "aon_enable", "direction": "output", "safe_value": 0},
+    "GP1": {"net": "BRIDGE_WAKE", "role": "wake", "direction": "input"},
+    "GP2": {"net": "DBG_SW_EN", "role": "sw_enable", "direction": "output", "safe_value": 0},
+    "GP3": {"net": "BRIDGE_ALERT", "role": "alert_n", "direction": "input"}
+  },
+  "i2c_hz": 100000,
+  "id_eeprom_address": "0x50",
+  "rail_settle_ms": 20
+}

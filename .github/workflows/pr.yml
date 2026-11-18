@@ -146,6 +146,9 @@ jobs:
         run: python3 hardware/scripts/power_budget.py --out /tmp/power-budget.md
       - name: JLCPCB sourcing (every assembled part stocked, offline snapshot)
         run: python3 hardware/scripts/jlc_sourcing.py check
+      - name: Debug-adapter host tool (simulated MCP2221A)
+        working-directory: tools/dbg
+        run: python3 -m unittest discover -s tests -t . -v
 
   esp-idf:
     name: ESP32-H2 firmware build

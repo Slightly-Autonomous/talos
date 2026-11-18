@@ -96,4 +96,4 @@ requirements:
     statement: Any single card can be powered, measured and exercised from a PC over USB in the same electrical environment as a main-board slot (same socket pinout, rail switches, pull-ups and ESD); rails default off
     board: TL-DBG-001
     status: designed
-    test: hardware/scripts/check_kicad.py cross-board check (HOSTS); bench bring-up not done
+    test: hardware/scripts/check_kicad.py cross-board check (HOSTS); tools/dbg tests (configure, rail sequencing, card ID, against a simulated MCP2221A); bench bring-up not done

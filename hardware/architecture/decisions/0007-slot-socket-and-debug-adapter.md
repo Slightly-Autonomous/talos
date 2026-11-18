@@ -36,7 +36,7 @@ slot. Industrial modular systems solve it with a vendor coupler, so Talos builds
    |---|---|
    | GP0 | AON enable |
    | GP2 | SW enable |
-   | GP1 | WAKE input (interrupt-on-change) |
+   | GP1 | WAKE input (GPIO level; interrupt-on-change is available) |
    | GP3 | ALERT_N input |
    | UART | UART_TX / UART_RX |
    | I²C | SDA / SCL |
@@ -68,8 +68,8 @@ slot. Industrial modular systems solve it with a vendor coupler, so Talos builds
     1-12 and 1-14).
 
   After configuration the settings load from flash at every power-up. The 1 MΩ pull-downs hold the
-  rails off until they do. The host harness owns this step and refuses to run card tests on an
-  unconfigured adapter.
+  rails off until they do. The host tool ([tools/dbg](../../../tools/dbg/README.md)) owns this step
+  (`configure --no-card-seated`) and refuses to run card commands on an unconfigured adapter.
 - What the adapter cannot test: SPI cards (none exist yet), the main board's I²C mux and UART mux
   paths, and multi-slot interactions. Those still need TL-SN-001 with TL-TEST-001 cartridges
   ([interface test matrix](../../requirements/interface-test-matrix.md)).
@@ -81,7 +81,8 @@ slot. Industrial modular systems solve it with a vendor coupler, so Talos builds
 - **MCP2221A (datasheet DS20005565E read):**
   - Confirmed: VUSB ties to VDD at 3.3 V (§1.6.2.3), RST has an internal pull-up, and GP1 supports
     interrupt-on-change.
-  - Still to check on the bench: what GP0/GP2 do between power-on and the flash load, and the URx
-    input leakage into an unpowered card.
+  - Still to check on the bench: what GP0/GP2 do between power-on and the flash load, the URx
+    input leakage into an unpowered card, and the host tool's I²C completion and NACK handling
+    (written from the datasheet, tested only against a model of the chip).
 - **AP2112K-3.3:** headroom from a weak USB port (VBUS droop).
 - **PESD5V0L5UV:** the pinout. The PESD3V3L5UV symbol is reused, as on the main board.
