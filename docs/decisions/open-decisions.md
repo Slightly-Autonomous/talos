@@ -4,7 +4,7 @@ A living register (spec §55). Nothing here is decided until an ADR, a test, a b
 
 | Pri | Topic | Open question / risk | How it gets decided |
 |---|---|---|---|
-| P0 | Sensor connector | Series chosen 2026-11-17: Samtec HSEC8-110-01-S-D-EM2, 20 contacts, 30 µin gold (hardware HW-0007). Still open: land pattern from Samtec's drawing, mating durability, enclosure clamping against fretting | Samtec drawing + samples + mechanical DFM |
+| P0 | Sensor connector | Series chosen 2026-11-17: Samtec HSEC8-110-01-S-D-EM2, 20 contacts, 30 µin gold (hardware HW-0007). Land pattern, host locating slot and card tongue now follow Samtec's drawing. Still open: check two drawing-read dimensions on a sample, mating durability, enclosure clamping against fretting | Samples + mechanical DFM |
 | P0 | GPIO/pin map | Exact ESP32-H2 module and pin mux, boot/flash/USB, deep-sleep wake on four slots | Datasheet + board validator + bench tests |
 | P0 | Mainboard power | USB/PV ORing, charger (BQ25186 is a candidate only), 1S pack/NTC, rails, per-slot protection | Schematic, lab stress and thermal tests |
 | P0 | Security trust | Owner-controlled signing, provisioning, eFuse flow, recovery, unique identities | Threat model + ESP-IDF reference + HIL |

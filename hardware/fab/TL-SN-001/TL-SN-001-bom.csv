@@ -2,10 +2,9 @@ qty,refs,value,symbol,footprint
 3,C1 C9 C11,10u,Device:C,Capacitor_SMD:C_0805_2012Metric
 10,C3 C10 C13 C14 C15 C16 C17 C18 C19 C20,1u,Device:C,Capacitor_SMD:C_0402_1005Metric
 1,C12,22u,Device:C,Capacitor_SMD:C_0805_2012Metric
-6,C2 C4 C21 C22 C23 C24,100n,Device:C,Capacitor_SMD:C_0402_1005Metric
+7,C2 C4 C7 C21 C22 C23 C24,100n,Device:C,Capacitor_SMD:C_0402_1005Metric
 1,C5,4.7u,Device:C,Capacitor_SMD:C_0805_2012Metric
 1,C6,10u/25V,Device:C,Capacitor_SMD:C_0805_2012Metric
-1,C7,TBD,Device:C,Capacitor_SMD:C_0402_1005Metric
 1,C8,4.7u/25V,Device:C,Capacitor_SMD:C_0805_2012Metric
 1,D1,STATUS,Device:LED,LED_SMD:LED_0603_1608Metric
 1,D2,SS34,Diode:SS34,Diode_SMD:D_SMA
@@ -14,15 +13,14 @@ qty,refs,value,symbol,footprint
 1,J1,USB-C sink,Connector:USB_C_Receptacle_USB2.0_16P,Connector_USB:USB_C_Receptacle_GCT_USB4105-xx-A_16P_TopMnt_Horizontal
 1,J2,PV in,Connector_Generic:Conn_01x02,Connector_JST:JST_PH_S2B-PH-SM4-TB_1x02-1MP_P2.00mm_Horizontal
 1,J3,"1S pack (BAT+, NTC, GND)",Connector_Generic:Conn_01x03,Connector_JST:JST_PH_S3B-PH-SM4-TB_1x03-1MP_P2.00mm_Horizontal
-1,J4,sensor_edge_v1 slot 0,Connector_Generic:Conn_02x10_Odd_Even,talos:Samtec_HSEC8-110-01-S-D-EM2_PLACEHOLDER
-1,J5,sensor_edge_v1 slot 1,Connector_Generic:Conn_02x10_Odd_Even,talos:Samtec_HSEC8-110-01-S-D-EM2_PLACEHOLDER
-1,J6,sensor_edge_v1 slot 2,Connector_Generic:Conn_02x10_Odd_Even,talos:Samtec_HSEC8-110-01-S-D-EM2_PLACEHOLDER
-1,J7,sensor_edge_v1 slot 3,Connector_Generic:Conn_02x10_Odd_Even,talos:Samtec_HSEC8-110-01-S-D-EM2_PLACEHOLDER
+1,J4,sensor_edge_v1 slot 0,Connector_Generic:Conn_02x10_Odd_Even,talos:Samtec_HSEC8-110-01-S-D-EM2
+1,J5,sensor_edge_v1 slot 1,Connector_Generic:Conn_02x10_Odd_Even,talos:Samtec_HSEC8-110-01-S-D-EM2
+1,J6,sensor_edge_v1 slot 2,Connector_Generic:Conn_02x10_Odd_Even,talos:Samtec_HSEC8-110-01-S-D-EM2
+1,J7,sensor_edge_v1 slot 3,Connector_Generic:Conn_02x10_Odd_Even,talos:Samtec_HSEC8-110-01-S-D-EM2
 1,L1,2.2u DFE252012F-2R2M,Device:L,Inductor_SMD:L_1008_2520Metric
-4,R1 R2 R3 R17,10k,Device:R,Resistor_SMD:R_0402_1005Metric
+5,R1 R2 R3 R15 R17,10k,Device:R,Resistor_SMD:R_0402_1005Metric
 2,R10 R11,5.1k,Device:R,Resistor_SMD:R_0402_1005Metric
-1,R12,TBD,Device:R,Resistor_SMD:R_0402_1005Metric
-25,R13 R15 R16 R21 R22 R23 R24 R33 R44 R46 R47 R48 R49 R51 R52 R53 R54 R56 R57 R58 R59 R61 R62 R63 R64,100k,Device:R,Resistor_SMD:R_0402_1005Metric
+25,R12 R13 R16 R21 R22 R23 R24 R33 R44 R46 R47 R48 R49 R51 R52 R53 R54 R56 R57 R58 R59 R61 R62 R63 R64,100k,Device:R,Resistor_SMD:R_0402_1005Metric
 1,R14,33k,Device:R,Resistor_SMD:R_0402_1005Metric
 1,R18,36.5k 1%,Device:R,Resistor_SMD:R_0402_1005Metric
 5,R19 R29 R30 R31 R32,0R,Device:R,Resistor_SMD:R_0402_1005Metric

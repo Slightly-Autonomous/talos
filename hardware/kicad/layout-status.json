@@ -1,7 +1,7 @@
 {
  "TL-SN-001": {
   "routing": "complete",
-  "note": "Autorouted plus two hand fixes (scripts/finish_sn.py). 0 DRC errors. Needs layout-engineer review before any order."
+  "note": "Autorouted, 0 DRC errors, no hand fixes. Needs layout-engineer review before any order."
  },
  "TL-MOD-001": {
   "routing": "complete"

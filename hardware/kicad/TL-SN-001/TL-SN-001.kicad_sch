@@ -11164,7 +11164,7 @@
 	)
 	(symbol
 		(lib_id "Diode:SMAJ12A")
-		(at 662.94 35.56 0)
+		(at 665.48 35.56 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
@@ -11172,7 +11172,7 @@
 		(dnp no)
 		(uuid "f1964975-76fa-5966-b2a3-d53929150da0")
 		(property "Reference" "D3"
-			(at 662.94 27.94 0)
+			(at 665.48 27.94 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -11180,7 +11180,7 @@
 			)
 		)
 		(property "Value" "SMAJ12A"
-			(at 662.94 43.18 0)
+			(at 665.48 43.18 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -11188,7 +11188,7 @@
 			)
 		)
 		(property "Footprint" "Diode_SMD:D_SMA"
-			(at 662.94 35.56 0)
+			(at 665.48 35.56 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -11197,7 +11197,7 @@
 			)
 		)
 		(property "Datasheet" "https://www.littelfuse.com/media?resourcetype=datasheets&itemid=75e32973-b177-4ee3-a0ff-cedaf1abdb93&filename=smaj-datasheet"
-			(at 662.94 35.56 0)
+			(at 665.48 35.56 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -11205,8 +11205,8 @@
 				(hide yes)
 			)
 		)
-		(property "Talos_Note" "TVS; orientation review item 4"
-			(at 662.94 35.56 0)
+		(property "Talos_Note" "TVS: pin 1 is the cathode (bar), so it sits on PV_IN and only conducts above breakdown"
+			(at 665.48 35.56 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -11231,8 +11231,8 @@
 	)
 	(wire
 		(pts
+			(xy 661.67 35.56)
 			(xy 659.13 35.56)
-			(xy 656.59 35.56)
 		)
 		(stroke
 			(width 0)
@@ -11240,8 +11240,8 @@
 		)
 		(uuid "1fc7d41f-274c-5231-996a-b45483581532")
 	)
-	(label "GND"
-		(at 656.59 35.56 180)
+	(label "PV_IN"
+		(at 659.13 35.56 180)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -11252,8 +11252,8 @@
 	)
 	(wire
 		(pts
-			(xy 666.75 35.56)
 			(xy 669.29 35.56)
+			(xy 671.83 35.56)
 		)
 		(stroke
 			(width 0)
@@ -11261,8 +11261,8 @@
 		)
 		(uuid "d91580ea-ae87-5d0f-9eb0-491b0ec8c802")
 	)
-	(label "PV_IN"
-		(at 669.29 35.56 0)
+	(label "GND"
+		(at 671.83 35.56 0)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -11728,7 +11728,7 @@
 				)
 			)
 		)
-		(property "Value" "TBD"
+		(property "Value" "100k"
 			(at 772.16 58.42 0)
 			(effects
 				(font
@@ -11754,7 +11754,7 @@
 				(hide yes)
 			)
 		)
-		(property "Talos_Note" "ILIM per SLVSEA3F equation (HD-007)"
+		(property "Talos_Note" "ILIM = 65.2/R^0.861 = 1.24 A typ (SLVSEA3F eq. 2; 18-100k range)"
 			(at 772.16 50.8 0)
 			(effects
 				(font
@@ -11837,7 +11837,7 @@
 				)
 			)
 		)
-		(property "Value" "TBD"
+		(property "Value" "100n"
 			(at 787.4 55.88 0)
 			(effects
 				(font
@@ -12155,7 +12155,7 @@
 				)
 			)
 		)
-		(property "Value" "100k"
+		(property "Value" "10k"
 			(at 58.42 127 0)
 			(effects
 				(font
@@ -12173,6 +12173,15 @@
 			)
 		)
 		(property "Datasheet" "~"
+			(at 58.42 119.38 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Talos_Note" "ST pull-up: datasheet range 6-20k"
 			(at 58.42 119.38 0)
 			(effects
 				(font
@@ -21379,7 +21388,7 @@
 				)
 			)
 		)
-		(property "Footprint" "talos:Samtec_HSEC8-110-01-S-D-EM2_PLACEHOLDER"
+		(property "Footprint" "talos:Samtec_HSEC8-110-01-S-D-EM2"
 			(at 271.78 261.62 0)
 			(effects
 				(font
@@ -21397,7 +21406,7 @@
 				(hide yes)
 			)
 		)
-		(property "Talos_Note" "HSEC8-110-01-S-D-EM2 (30 µin gold); PLACEHOLDER land pattern until the Samtec drawing is obtained (HD-002)"
+		(property "Talos_Note" "HSEC8-110-01-S-D-EM2 (30 µin gold); land pattern from Samtec drawing, host board needs the locating slot (HD-002)"
 			(at 271.78 261.62 0)
 			(effects
 				(font
@@ -22808,7 +22817,7 @@
 				)
 			)
 		)
-		(property "Footprint" "talos:Samtec_HSEC8-110-01-S-D-EM2_PLACEHOLDER"
+		(property "Footprint" "talos:Samtec_HSEC8-110-01-S-D-EM2"
 			(at 561.34 261.62 0)
 			(effects
 				(font
@@ -22826,7 +22835,7 @@
 				(hide yes)
 			)
 		)
-		(property "Talos_Note" "HSEC8-110-01-S-D-EM2 (30 µin gold); PLACEHOLDER land pattern until the Samtec drawing is obtained (HD-002)"
+		(property "Talos_Note" "HSEC8-110-01-S-D-EM2 (30 µin gold); land pattern from Samtec drawing, host board needs the locating slot (HD-002)"
 			(at 561.34 261.62 0)
 			(effects
 				(font
@@ -24237,7 +24246,7 @@
 				)
 			)
 		)
-		(property "Footprint" "talos:Samtec_HSEC8-110-01-S-D-EM2_PLACEHOLDER"
+		(property "Footprint" "talos:Samtec_HSEC8-110-01-S-D-EM2"
 			(at 78.74 355.6 0)
 			(effects
 				(font
@@ -24255,7 +24264,7 @@
 				(hide yes)
 			)
 		)
-		(property "Talos_Note" "HSEC8-110-01-S-D-EM2 (30 µin gold); PLACEHOLDER land pattern until the Samtec drawing is obtained (HD-002)"
+		(property "Talos_Note" "HSEC8-110-01-S-D-EM2 (30 µin gold); land pattern from Samtec drawing, host board needs the locating slot (HD-002)"
 			(at 78.74 355.6 0)
 			(effects
 				(font
@@ -25666,7 +25675,7 @@
 				)
 			)
 		)
-		(property "Footprint" "talos:Samtec_HSEC8-110-01-S-D-EM2_PLACEHOLDER"
+		(property "Footprint" "talos:Samtec_HSEC8-110-01-S-D-EM2"
 			(at 370.84 355.6 0)
 			(effects
 				(font
@@ -25684,7 +25693,7 @@
 				(hide yes)
 			)
 		)
-		(property "Talos_Note" "HSEC8-110-01-S-D-EM2 (30 µin gold); PLACEHOLDER land pattern until the Samtec drawing is obtained (HD-002)"
+		(property "Talos_Note" "HSEC8-110-01-S-D-EM2 (30 µin gold); land pattern from Samtec drawing, host board needs the locating slot (HD-002)"
 			(at 370.84 355.6 0)
 			(effects
 				(font

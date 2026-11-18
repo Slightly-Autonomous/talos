@@ -21,4 +21,4 @@
 
 ## Consequences
 - The validator checks the connector standard (`kConnectorMismatch`), reserved root I²C addresses (`kI2cRootConflict`) and UART concurrency (`kUartOversubscribed`).
-- The 0.25 µm gold (-L) plating and card-finger finish (hard gold vs ENIG) are open review items. Samtec marks some sizes and options "non-standard, non-returnable".
+- Socket and finger finish are settled by [HW-0007](0007-slot-socket-and-debug-adapter.md): HSEC8 with 30 µin gold, and card fingers in 30 µin hard gold with a 30° chamfer. Only a 9.25 mm tongue of each card enters the socket.

@@ -23,8 +23,8 @@ slot. Industrial modular systems solve it with a vendor coupler, so Talos builds
    with 30 µin gold on the contacts (`-S`). Pinout and card are unchanged. JLCPCB lists it
    (C4845888) with 0 stock, so it is bought from Samtec or a distributor and hand-soldered. That is
    an accepted exception to the JLCPCB-stocked rule, recorded as `not_placed` with HD-002. The
-   footprint stays a **placeholder** until Samtec's EM2 drawing is in hand.
-2. **TL-DBG-001 one-slot USB debug adapter** (2-layer, 36 × 32 mm). It mirrors one main-board slot:
+   footprint follows Samtec's drawings (added 2026-11-18, below).
+2. **TL-DBG-001 one-slot USB debug adapter** (2-layer, 40 × 36 mm). It mirrors one main-board slot:
    - the same socket;
    - the same TPS22917 rail switches;
    - pull-ups on the card's own AON rail;
@@ -56,6 +56,22 @@ slot. Industrial modular systems solve it with a vendor coupler, so Talos builds
    same contact roles as TL-SN-001 J4, contact for contact (`HOSTS`). Like every board, it must also
    pass ERC, netlist round-trip, DRC with schematic parity and the JLCPCB sourcing check.
 
+## Mechanical consequences of the Samtec drawing (2026-11-18)
+
+Samtec's drawings (recommended PCB, stencil and mating-card layout rev K; product drawing rev M)
+replaced the placeholder. Values are in [datasheet-register.md](../../requirements/datasheet-register.md).
+
+- **Host boards get a locating slot.** It is 1.549 mm wide and 4.375 mm deep, 3.750 mm outboard of
+  pin 1. `gen_pcbs.py` cuts it into TL-SN-001 and TL-DBG-001 from the footprint's own pads.
+- **The socket is 23.2 mm long and needs a 5 mm deep keep-out.** The footprint courtyard covers that
+  keep-out and the body, which reaches 7.8 mm beyond the edge. Two weld tabs per side are soldered.
+  TL-SN-001's slots on one edge are 26 mm apart, which still fits. TL-DBG-001 grew to 40 × 36 mm.
+- **Cards get a 9.25 mm tongue.** Only that tongue enters the socket: 8.5 mm deep, longer than the
+  7.8 mm body. Fingers are 0.55 mm wide, 30 µin hard gold, with a 30° chamfer, on 1.57 mm board.
+- **Pin 1 position was corrected.** In the placeholder it was mirrored. Samtec's top view puts pin 1
+  on the slot side. With the host edge facing the card, that is the +x end of the footprint, so card
+  finger 1 lands on socket contact 1.
+
 ## Consequences
 
 - The cards stay cheap: gold fingers only, no connector on the card.
@@ -76,8 +92,9 @@ slot. Industrial modular systems solve it with a vendor coupler, so Talos builds
 
 ## Needs datasheet or bench verification
 
-- **HSEC8-EM2:** the land pattern and host-board thickness (Samtec drawing), and the mating-cycle
-  rating at 30 µin.
+- **HSEC8-EM2:** the land pattern now follows Samtec's drawing. Check two values read from drawing
+  geometry against a sample socket: the slot depth and the 0.8 mm pad setback. Also confirm the
+  mating-cycle rating at 30 µin.
 - **MCP2221A (datasheet DS20005565E read):**
   - Confirmed: VUSB ties to VDD at 3.3 V (§1.6.2.3), RST has an internal pull-up, and GP1 supports
     interrupt-on-change.

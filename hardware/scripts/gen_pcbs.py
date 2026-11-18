@@ -24,6 +24,8 @@ import pcbnew
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import place_opt  # noqa: E402
+from talos_footprints import (CARD_TONGUE_DEPTH, CARD_TONGUE_WIDTH, HSEC8_EDGE_Y,  # noqa: E402
+                              HSEC8_PIN1_X, HSEC8_PITCH, HSEC8_SLOT)
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 KICAD = ROOT / "hardware" / "kicad"
@@ -78,7 +80,7 @@ def sn_spec() -> dict:
     # Only the parts whose position is set by the enclosure/RF/edge are pinned; every other fixed entry
     # is just a starting point for the placement optimiser (place_opt.py).
     pinned = {"U1", "J1", "J2", "J3", "J4", "J5", "J6", "J7"}
-    return {"size": (w, h), "layers": 4, "fixed": fixed, "keepout_top": 5.2, "near": near, "gap": 1.0,
+    return {"size": (w, h), "layers": 4, "slot_sockets": ["J4", "J5", "J6", "J7"], "fixed": fixed, "keepout_top": 5.2, "near": near, "gap": 1.0,
             "pinned": pinned, "optimize": True,
             # The 41-pin core rail is a plane: the autorouter could not build that tree as tracks.
             "plane_nets": {pcbnew.In2_Cu: "V3V3_CORE"}}
@@ -94,13 +96,19 @@ def card_spec(board: str) -> dict:
     near = {"C1": "U1", "C2": "U2", "C3": "U2"}  # decoupling next to the part it decouples
     if board == "TL-MOD-001":
         near.update({"C3": "U3", "R1": "U2"})
-    return {"size": (w, h), "layers": 2, "fixed": fixed, "finger_zone": 4.0, "near": near}
+    # Only a 9.25 mm tongue enters the HSEC8 socket; the card is cut back either side of it.
+    half = CARD_TONGUE_WIDTH / 2
+    cuts = [(0.0, h - CARD_TONGUE_DEPTH, w / 2 - half, h), (w / 2 + half, h - CARD_TONGUE_DEPTH, w, h)]
+    # Parts stay off the whole tongue: it goes into the socket body (7.8 mm past the host edge), so
+    # only tracks may run there. Vias and pour stay out of the 4 mm finger zone only.
+    return {"size": (w, h), "layers": 2, "fixed": fixed, "finger_zone": 4.0, "parts_clear_bottom": CARD_TONGUE_DEPTH,
+            "near": near, "cuts": cuts}
 
 
 def dbg_spec() -> dict:
     """TL-DBG-001: the slot socket straddles the top edge (card plugs in beside the adapter, coplanar,
     as on the main board); USB-C on the bottom edge; meter headers either side of the socket."""
-    w, h = 36.0, 32.0
+    w, h = 40.0, 36.0
     fixed = {
         "J2": (w / 2, 1.0, 180), "J1": (w / 2, h - 4.0, 0),
         "JP1": (4.0, 8.0, 0), "JP2": (w - 4.0, 8.0, 0),
@@ -110,7 +118,7 @@ def dbg_spec() -> dict:
     near = {"C1": "U2", "C2": "U2", "C3": "U3", "C4": "U3", "R3": "U3", "C5": "U4", "R4": "U4", "C6": "U5",
             "R5": "U5", "R6": "U5", "C7": "U6", "R1": "J1", "R2": "J1"}
     return {"size": (w, h), "layers": 2, "fixed": fixed, "near": near, "gap": 0.8,
-            "pinned": {"J1", "J2", "JP1", "JP2"}, "optimize": True}
+            "pinned": {"J1", "J2", "JP1", "JP2"}, "optimize": True, "slot_sockets": ["J2"]}
 
 
 SPECS = {"TL-SN-001": sn_spec()}
@@ -184,13 +192,54 @@ def anchor_of(ref: str, part: dict, parts: dict, fixed: dict) -> str | None:
     return best
 
 
-def add_outline(board, w, h) -> None:
-    corners = [(0, 0), (w, 0), (w, h), (0, h)]
-    for i in range(4):
+def _poly(points) -> pcbnew.SHAPE_POLY_SET:
+    ps = pcbnew.SHAPE_POLY_SET()
+    ps.NewOutline()
+    for x, y in points:
+        ps.Append(mm(ORIGIN[0] + x), mm(ORIGIN[1] + y))
+    return ps
+
+
+def slot_notch(fp: pcbnew.FOOTPRINT) -> list[tuple[float, float]]:
+    """The HSEC8 locating slot in board mm, mapped from the footprint frame through two of its pads
+    (so the rotation convention can't be got wrong)."""
+    pads = {p.GetNumber(): p for p in fp.Pads() if p.IsOnLayer(pcbnew.F_Cu)}
+    ly = HSEC8_EDGE_Y - 1.8
+    l1, l19 = (HSEC8_PIN1_X, ly), (HSEC8_PIN1_X - 9 * HSEC8_PITCH, ly)
+    b1, b19 = ((pcbnew.ToMM(pads[n].GetPosition().x) - ORIGIN[0], pcbnew.ToMM(pads[n].GetPosition().y) - ORIGIN[1])
+               for n in ("1", "19"))
+    ang = math.atan2(b19[1] - b1[1], b19[0] - b1[0]) - math.atan2(l19[1] - l1[1], l19[0] - l1[0])
+    c, s_ = math.cos(ang), math.sin(ang)
+
+    def to_board(x, y):
+        dx, dy = x - l1[0], y - l1[1]
+        return (b1[0] + c * dx - s_ * dy, b1[1] + s_ * dx + c * dy)
+
+    sx, r, depth = HSEC8_SLOT["x"], HSEC8_SLOT["width"] / 2, HSEC8_SLOT["depth"]
+    e = HSEC8_EDGE_Y
+    cy = e - depth + r  # centre of the full-radius end
+    local = [(sx + r, e + 1.0), (sx + r, cy)]
+    local += [(sx + r * math.cos(-math.pi * k / 12), cy + r * math.sin(-math.pi * k / 12)) for k in range(1, 12)]
+    local += [(sx - r, cy), (sx - r, e + 1.0)]
+    return [to_board(x, y) for x, y in local]
+
+
+def add_outline(board, w, h, cuts=(), notches=()) -> None:
+    """Board outline: the w x h rectangle minus rectangular cuts (card tongue) and socket slots."""
+    outline = _poly([(0, 0), (w, 0), (w, h), (0, h)])
+    for x0, y0, x1, y1 in cuts:
+        outline.BooleanSubtract(_poly([(x0, y0), (x1, y0), (x1, y1), (x0, y1)]))
+    for n in notches:
+        outline.BooleanSubtract(_poly(n))
+    if outline.OutlineCount() != 1 or outline.HoleCount(0):
+        raise SystemExit("board outline is not a single closed contour")
+    chain = outline.Outline(0)
+    pts = [chain.CPoint(i) for i in range(chain.PointCount())]
+    for i, a in enumerate(pts):
         seg = pcbnew.PCB_SHAPE(board)
         seg.SetShape(pcbnew.SHAPE_T_SEGMENT)
-        seg.SetStart(pt(*corners[i]))
-        seg.SetEnd(pt(*corners[(i + 1) % 4]))
+        seg.SetStart(a)
+        seg.SetEnd(pts[(i + 1) % len(pts)])
         seg.SetLayer(pcbnew.Edge_Cuts)
         seg.SetWidth(mm(0.1))
         board.Add(seg)
@@ -232,6 +281,32 @@ def add_rule_area(board, rect, layers, name, allow_tracks=False) -> None:
     for x, y in ((x0, y0), (x1, y0), (x1, y1), (x0, y1)):
         ol.Append(mm(ORIGIN[0] + x), mm(ORIGIN[1] + y))
     board.Add(z)
+
+
+def flip_two_pad_parts(fps: dict, pinned: set) -> None:
+    """Turn two-pad parts 180 degrees where that brings each pad nearer its own net.
+
+    Wirelength alone can't tell the two orientations apart: an inductor between two switch pins
+    costs the same either way, but one way round its nets have to cross (TPS63900 LX1/LX2 to L1).
+    The courtyard of a two-pad part is symmetric, so the flip never breaks the legal placement.
+    """
+    def cost(fp) -> float:
+        total = 0.0
+        for pad in fp.Pads():
+            others = [q.GetPosition() for f in fps.values() if f is not fp for q in f.Pads()
+                      if q.GetNetCode() == pad.GetNetCode() and pad.GetNetCode() > 0]
+            if others:
+                p = pad.GetPosition()
+                total += min(math.hypot(p.x - o.x, p.y - o.y) for o in others)
+        return total
+
+    for ref, fp in sorted(fps.items()):
+        if ref in pinned or len(fp.Pads()) != 2:
+            continue
+        before = cost(fp)
+        fp.SetOrientationDegrees(fp.GetOrientationDegrees() + 180)
+        if cost(fp) >= before - 1e-6:
+            fp.SetOrientationDegrees(fp.GetOrientationDegrees() - 180)
 
 
 def optimise_placement(spec, parts, fps, w, h, margin, keep_top, keep_bottom) -> None:
@@ -328,12 +403,15 @@ def build(board_name: str) -> dict:
         fp.SetOrientationDegrees(rot)
         placed[ref] = bbox(fp)
 
+    for i, c in enumerate(spec.get("cuts", ())):
+        placed[f"_cut{i}"] = c  # nothing may be placed where the outline is cut away
     margin = 1.0
     keep_top = spec.get("keepout_top", 0.0)
     keep_bottom = spec.get("finger_zone", 0.0)
+    parts_bottom = max(keep_bottom, spec.get("parts_clear_bottom", 0.0))
 
     def free(b) -> bool:
-        if b[0] < margin or b[2] > w - margin or b[1] < keep_top + margin or b[3] > h - keep_bottom - margin:
+        if b[0] < margin or b[2] > w - margin or b[1] < keep_top + margin or b[3] > h - parts_bottom - margin:
             return False
         return not any(overlaps(b, o, spec.get("gap", 0.6)) for o in placed.values())
 
@@ -373,8 +451,16 @@ def build(board_name: str) -> dict:
 
     if spec.get("optimize"):
         optimise_placement(spec, parts, fps, w, h, margin, keep_top, keep_bottom)
+        flip_two_pad_parts(fps, spec.get("pinned", set()))
 
-    add_outline(board, w, h)
+    if spec.get("parts_clear_bottom"):
+        intruders = [r for r, b in placed.items() if not r.startswith("_cut") and r != "J1"
+                     and b[3] > h - spec["parts_clear_bottom"]]
+        if intruders:
+            raise SystemExit(f"{board_name}: parts on the card tongue (inside the socket): {intruders}")
+
+    notches = [slot_notch(fps[r]) for r in spec.get("slot_sockets", ())]
+    add_outline(board, w, h, spec.get("cuts", ()), notches)
     ds.SetAuxOrigin(pt(0, h))  # fab/pick-and-place origin at the board's lower-left corner
     gnd = nets["GND"]
     copper = [pcbnew.F_Cu, pcbnew.B_Cu] if spec["layers"] == 2 else [pcbnew.F_Cu, pcbnew.In1_Cu, pcbnew.In2_Cu, pcbnew.B_Cu]
@@ -386,6 +472,12 @@ def build(board_name: str) -> dict:
     ring = 0.35
     for rect in ((0, 0, w, ring), (0, h - ring, w, h), (0, 0, ring, h), (w - ring, 0, w, h)):
         add_rule_area(board, rect, copper, "edge clearance ring")
+    for x0, y0, x1, y1 in spec.get("cuts", ()):
+        add_rule_area(board, (x0 - ring, y0 - ring, x1 + ring, y1), copper, "edge clearance ring (tongue)")
+    for n in notches:
+        xs, ys = [p[0] for p in n], [p[1] for p in n]
+        add_rule_area(board, (min(xs) - ring, min(ys) - ring, max(xs) + ring, max(ys) + ring), copper,
+                      "edge clearance ring (socket slot)")
     if keep_top:
         add_rule_area(board, (0, 0, w, keep_top), copper, "antenna keepout (ESP32-H2-MINI-1)")
     if keep_bottom:

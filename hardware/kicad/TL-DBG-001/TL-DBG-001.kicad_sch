@@ -6906,7 +6906,7 @@
 				)
 			)
 		)
-		(property "Footprint" "talos:Samtec_HSEC8-110-01-S-D-EM2_PLACEHOLDER"
+		(property "Footprint" "talos:Samtec_HSEC8-110-01-S-D-EM2"
 			(at 599.44 45.72 0)
 			(effects
 				(font
@@ -6924,7 +6924,7 @@
 				(hide yes)
 			)
 		)
-		(property "Talos_Note" "HSEC8-110-01-S-D-EM2 (30 µin gold); PLACEHOLDER land pattern until the Samtec drawing is obtained (HD-002)"
+		(property "Talos_Note" "HSEC8-110-01-S-D-EM2 (30 µin gold); land pattern from Samtec drawing, host board needs the locating slot (HD-002)"
 			(at 599.44 45.72 0)
 			(effects
 				(font

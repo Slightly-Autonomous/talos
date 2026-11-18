@@ -191,9 +191,9 @@
   },
   "J2": {
    "datasheet": "~",
-   "footprint": "talos:Samtec_HSEC8-110-01-S-D-EM2_PLACEHOLDER",
+   "footprint": "talos:Samtec_HSEC8-110-01-S-D-EM2",
    "lib_id": "Connector_Generic:Conn_02x10_Odd_Even",
-   "note": "HSEC8-110-01-S-D-EM2 (30 \u00b5in gold); PLACEHOLDER land pattern until the Samtec drawing is obtained (HD-002)",
+   "note": "HSEC8-110-01-S-D-EM2 (30 \u00b5in gold); land pattern from Samtec drawing, host board needs the locating slot (HD-002)",
    "pin_names": {
     "1": "Pin_1",
     "10": "Pin_10",

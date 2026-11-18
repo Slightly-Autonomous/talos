@@ -10,7 +10,7 @@ UART mux,TL-SN-001,TS3A5017RSVR,TI,UQFN-16,dual SP4T,(not sourced),SN74CBT3253,o
 USB ESD,TL-SN-001,USBLC6-2SC6,ST,SOT-23-6,,(not sourced),TPD2E2U06,KiCad library part,proposed
 PV TVS,TL-SN-001,SMAJ12A,various,SMA,12 V standoff,,SMAJ15A,clamp below TPS2121 24 V abs max,proposed (check Voc)
 PV reverse,TL-SN-001,SS34,various,SMA,40 V 3 A,,ideal-diode controller (Rev B),simple reverse-polarity block,proposed
-Slot connector,TL-SN-001 / TL-DBG-001,HSEC8-110-01-S-D-EM2,Samtec,edge mount 0.80 mm 2x10,30 µin gold; 1.57 mm card,,MEC8-110-02-L-D-EM2 (10 µin only); ERM8/ERF8 EM pair (JLC-stocked),thicker gold for outdoor fretting; same pinout (HW-0007),decided 2026-11-17 (samples + drawing needed)
+Slot connector,TL-SN-001 / TL-DBG-001,HSEC8-110-01-S-D-EM2,Samtec,edge mount 0.80 mm 2x10,30 µin gold; 1.57 mm card,,MEC8-110-02-L-D-EM2 (10 µin only); ERM8/ERF8 EM pair (JLC-stocked),thicker gold for outdoor fretting; same pinout (HW-0007),decided 2026-11-17; footprint from Samtec drawing 2026-11-18 (sample check needed)
 3-axis Hall,TL-MOD-001,TMAG5273A1QDBVR,TI,SOT-23-6,1.7-3.6 V; I2C 0x35; +/-40/80 mT; INT open-drain active-low,W&S 1.21 uA @5 s (SRC); ~2.9 uA @100 ms 1 axis (EST); standby 0.45 mA,SM351LT (in-plane AMR switch); DRV5032FB (z-axis only),orientation-independent contact sensing (HW-0006),proposed
 INT inverter,TL-MOD-001,SN74AUP1G04DBVR,TI,SOT-23-5,0.8-3.6 V,ICC 0.5 uA max 25 C (0.9 uA -40..85 C),74LVC1G04,turns TMAG5273 INT_N into idle-low push-pull WAKE,proposed
 PIR,TL-MOD-002,EKMB1101111,Panasonic,TO-5 3-pin THT,Vdd 2.3-4.0 V; Iout <= 100 uA,Iw 1.0 uA typ,EKMB1201111 (2 uA),1 uA digital-output PIR,proposed

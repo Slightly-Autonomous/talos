@@ -329,7 +329,7 @@
     "1": "PMUX_SS",
     "2": "GND"
    },
-   "value": "TBD"
+   "value": "100n"
   },
   "C8": {
    "datasheet": "~",
@@ -395,14 +395,14 @@
    "datasheet": "https://www.littelfuse.com/media?resourcetype=datasheets&itemid=75e32973-b177-4ee3-a0ff-cedaf1abdb93&filename=smaj-datasheet",
    "footprint": "Diode_SMD:D_SMA",
    "lib_id": "Diode:SMAJ12A",
-   "note": "TVS; orientation review item 4",
+   "note": "TVS: pin 1 is the cathode (bar), so it sits on PV_IN and only conducts above breakdown",
    "pin_names": {
     "1": "A1",
     "2": "A2"
    },
    "pins": {
-    "1": "GND",
-    "2": "PV_IN"
+    "1": "PV_IN",
+    "2": "GND"
    },
    "value": "SMAJ12A"
   },
@@ -577,9 +577,9 @@
   },
   "J4": {
    "datasheet": "~",
-   "footprint": "talos:Samtec_HSEC8-110-01-S-D-EM2_PLACEHOLDER",
+   "footprint": "talos:Samtec_HSEC8-110-01-S-D-EM2",
    "lib_id": "Connector_Generic:Conn_02x10_Odd_Even",
-   "note": "HSEC8-110-01-S-D-EM2 (30 \u00b5in gold); PLACEHOLDER land pattern until the Samtec drawing is obtained (HD-002)",
+   "note": "HSEC8-110-01-S-D-EM2 (30 \u00b5in gold); land pattern from Samtec drawing, host board needs the locating slot (HD-002)",
    "pin_names": {
     "1": "Pin_1",
     "10": "Pin_10",
@@ -628,9 +628,9 @@
   },
   "J5": {
    "datasheet": "~",
-   "footprint": "talos:Samtec_HSEC8-110-01-S-D-EM2_PLACEHOLDER",
+   "footprint": "talos:Samtec_HSEC8-110-01-S-D-EM2",
    "lib_id": "Connector_Generic:Conn_02x10_Odd_Even",
-   "note": "HSEC8-110-01-S-D-EM2 (30 \u00b5in gold); PLACEHOLDER land pattern until the Samtec drawing is obtained (HD-002)",
+   "note": "HSEC8-110-01-S-D-EM2 (30 \u00b5in gold); land pattern from Samtec drawing, host board needs the locating slot (HD-002)",
    "pin_names": {
     "1": "Pin_1",
     "10": "Pin_10",
@@ -679,9 +679,9 @@
   },
   "J6": {
    "datasheet": "~",
-   "footprint": "talos:Samtec_HSEC8-110-01-S-D-EM2_PLACEHOLDER",
+   "footprint": "talos:Samtec_HSEC8-110-01-S-D-EM2",
    "lib_id": "Connector_Generic:Conn_02x10_Odd_Even",
-   "note": "HSEC8-110-01-S-D-EM2 (30 \u00b5in gold); PLACEHOLDER land pattern until the Samtec drawing is obtained (HD-002)",
+   "note": "HSEC8-110-01-S-D-EM2 (30 \u00b5in gold); land pattern from Samtec drawing, host board needs the locating slot (HD-002)",
    "pin_names": {
     "1": "Pin_1",
     "10": "Pin_10",
@@ -730,9 +730,9 @@
   },
   "J7": {
    "datasheet": "~",
-   "footprint": "talos:Samtec_HSEC8-110-01-S-D-EM2_PLACEHOLDER",
+   "footprint": "talos:Samtec_HSEC8-110-01-S-D-EM2",
    "lib_id": "Connector_Generic:Conn_02x10_Odd_Even",
-   "note": "HSEC8-110-01-S-D-EM2 (30 \u00b5in gold); PLACEHOLDER land pattern until the Samtec drawing is obtained (HD-002)",
+   "note": "HSEC8-110-01-S-D-EM2 (30 \u00b5in gold); land pattern from Samtec drawing, host board needs the locating slot (HD-002)",
    "pin_names": {
     "1": "Pin_1",
     "10": "Pin_10",
@@ -843,7 +843,7 @@
    "datasheet": "~",
    "footprint": "Resistor_SMD:R_0402_1005Metric",
    "lib_id": "Device:R",
-   "note": "ILIM per SLVSEA3F equation (HD-007)",
+   "note": "ILIM = 65.2/R^0.861 = 1.24 A typ (SLVSEA3F eq. 2; 18-100k range)",
    "pin_names": {
     "1": "",
     "2": ""
@@ -852,7 +852,7 @@
     "1": "PMUX_ILIM",
     "2": "GND"
    },
-   "value": "TBD"
+   "value": "100k"
   },
   "R13": {
    "datasheet": "~",
@@ -888,7 +888,7 @@
    "datasheet": "~",
    "footprint": "Resistor_SMD:R_0402_1005Metric",
    "lib_id": "Device:R",
-   "note": "",
+   "note": "ST pull-up: datasheet range 6-20k",
    "pin_names": {
     "1": "",
     "2": ""
@@ -897,7 +897,7 @@
     "1": "V3V3_CORE",
     "2": "PMUX_ST"
    },
-   "value": "100k"
+   "value": "10k"
   },
   "R16": {
    "datasheet": "~",

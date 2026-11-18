@@ -6,7 +6,6 @@ value,footprint,assembly,lcsc,mpn,manufacturer,risk,note
 22u,C_0805_2012Metric,jlc,C45783,CL21A226MAQNNNE,Samsung,,25 V X5R basic; DC-bias derating applies
 4.7u,C_0805_2012Metric,jlc,C1779,CL21A475KAQNNNE,Samsung,,25 V X5R basic
 4.7u/25V,C_0805_2012Metric,jlc,C1779,CL21A475KAQNNNE,Samsung,,25 V X5R basic
-TBD,C_0402_1005Metric,not_placed,,,,HD-007,TPS2121 soft-start cap: value not chosen yet
 10k,R_0402_1005Metric,jlc,C25744,0402WGF1002TCE,Uniroyal,,1% basic
 5.1k,R_0402_1005Metric,jlc,C25905,0402WGF5101TCE,Uniroyal,,1% basic (USB-C CC)
 100k,R_0402_1005Metric,jlc,C25741,0402WGF1003TCE,Uniroyal,,1% basic
@@ -20,7 +19,6 @@ TBD,C_0402_1005Metric,not_placed,,,,HD-007,TPS2121 soft-start cap: value not cho
 4.7M,R_0402_1005Metric,jlc,C474132,0402WGF4704TCE,Uniroyal,,1% extended
 47k,R_0402_1005Metric,jlc,C25792,0402WGF4702TCE,Uniroyal,,1% basic
 330,R_0402_1005Metric,jlc,C25104,0402WGF3300TCE,Uniroyal,,1% basic
-TBD,R_0402_1005Metric,not_placed,,,,HD-007,TPS2121 ILIM resistor: value not chosen yet
 STATUS,LED_0603_1608Metric,jlc,C2286,KT-0603R,Hubei KENTO,,red basic
 SS34,D_SMA,jlc,C8678,SS34,MDD,,basic
 SMAJ12A,D_SMA,jlc,C113957,SMAJ12A,MDD,,
@@ -28,7 +26,7 @@ PESD5V0L5UV,SOT-666,jlc,C84255,"PESD5V0L5UV,115",Nexperia,,replaces PESD3V3L5UV 
 USB-C sink,USB_C_Receptacle_GCT_USB4105-xx-A_16P_TopMnt_Horizontal,jlc,C3020560,USB4105-GF-A,GCT,,
 PV in,JST_PH_S2B-PH-SM4-TB_1x02-1MP_P2.00mm_Horizontal,jlc,C54582899,XY-S2B-PH-SM4-TB,XYECONN,,JST original out of stock; footprint-compatible copy (VERIFY drawing)
 "1S pack (BAT+, NTC, GND)",JST_PH_S3B-PH-SM4-TB_1x03-1MP_P2.00mm_Horizontal,jlc,C265101,S3B-PH-SM4-TB(LF)(SN),JST,,
-sensor_edge_v1 slot *,Samtec_HSEC8-110-01-S-D-EM2_PLACEHOLDER,not_placed,C4845888,HSEC8-110-01-S-D-EM2,Samtec,HD-002,JLCPCB lists it with 0 stock: buy from Samtec/distributor and hand-solder (owner decision 2026-11-17)
+sensor_edge_v1 slot *,Samtec_HSEC8-110-01-S-D-EM2,not_placed,C4845888,HSEC8-110-01-S-D-EM2,Samtec,HD-002,JLCPCB lists it with 0 stock: buy from Samtec/distributor and hand-solder (owner decision 2026-11-17)
 2.2u DFE252012F-2R2M,L_1008_2520Metric,jlc,C576403,DFE252012F-2R2M=P2,Murata,,
 RESET,SW_SPST_PTS810,jlc,C221895,PTS810SJG250SMTRLFS,C&K,,SJM variant low stock; SJG is the same body
 BOOT,SW_SPST_PTS810,jlc,C221895,PTS810SJG250SMTRLFS,C&K,,SJM variant low stock; SJG is the same body

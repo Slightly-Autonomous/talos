@@ -82,6 +82,30 @@ def _rect_dist(px, py, box) -> float:
     return math.hypot(dx, dy)
 
 
+# Nets that leave a fine-pitch IC as wide current paths (gen_schematics.py Power/Rail netclasses).
+POWER_NETS = {"/SYS_PATH", "/USB_VBUS", "/CHG_IN", "/PV_IN", "/PV_RAW", "/REG_LX1", "/REG_LX2", "/VBAT"}
+
+
+def _crowds_power_pin(pad, plane_nets, radius_mm: float = 0.9) -> bool:
+    """True for a fine-pitch plane pin sitting next to a power pin of the same IC.
+
+    Its fanout via would land in the power pin's escape path: Freerouting then could not leave the
+    TPS63900 switch node or the BQ25186 VBAT pin (this replaced the old hand edits in finish_sn.py).
+    Such a pin is left to the router instead, which ties it to the exposed pad or a nearby plane via.
+    """
+    size = pad.GetSize()
+    if min(pcbnew.ToMM(size.x), pcbnew.ToMM(size.y)) > 0.35:
+        return False  # exposed pads and coarse pins keep their via
+    pos = pad.GetPosition()
+    for other in pad.GetParentFootprint().Pads():
+        if other is pad or other.GetNetCode() in plane_nets or other.GetNetname() not in POWER_NETS:
+            continue
+        d = other.GetPosition() - pos
+        if math.hypot(pcbnew.ToMM(d.x), pcbnew.ToMM(d.y)) <= radius_mm:
+            return True
+    return False
+
+
 def plane_fanout(board, via_d=0.6, drill=0.3, clear=0.2, track_w=0.25, stub_clear=0.17) -> int:
     """Give every SMD pad on a plane net (GND on In1, V3V3_CORE on In2) its own via before autorouting.
 
@@ -118,6 +142,8 @@ def plane_fanout(board, via_d=0.6, drill=0.3, clear=0.2, track_w=0.25, stub_clea
     for pad, box in [(p, b) for p, b in pads if p.GetNetCode() in plane_nets]:
         net = pad.GetNetCode()
         if pad.GetAttribute() != pcbnew.PAD_ATTRIB_SMD:
+            continue
+        if _crowds_power_pin(pad, plane_nets):
             continue
         layer = pcbnew.F_Cu if pad.IsOnLayer(pcbnew.F_Cu) else pcbnew.B_Cu
         px, py = to(pad.GetPosition().x), to(pad.GetPosition().y)

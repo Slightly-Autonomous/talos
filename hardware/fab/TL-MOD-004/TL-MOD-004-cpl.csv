@@ -1,6 +1,6 @@
 Ref,Val,Package,PosX,PosY,Rot,Side
-"C1","100n","C_0402_1005Metric",7.250500,5.579200,0.000000,top
+"C1","100n","C_0402_1005Metric",7.497700,10.034200,0.000000,top
 "C2","100n","C_0402_1005Metric",10.500000,18.000000,90.000000,top
 "J1","sensor_edge_v1 card fingers","CardEdge_sensor_edge_v1_2x10_P0.8mm",8.000000,1.650000,0.000000,top
-"U1","24AA025E48T-I/OT","SOT-23-6",11.145800,6.759200,0.000000,top
+"U1","24AA025E48T-I/OT","SOT-23-6",13.060700,11.816700,90.000000,top
 "U2","SHT40-AD1B","Sensirion_DFN-4_1.5x1.5mm_P0.8mm_SHT4x_CentralKeepout",8.000000,18.000000,0.000000,top

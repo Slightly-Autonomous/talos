@@ -55,3 +55,5 @@ bazel test //core/manifest:manifest_test //codec:yaml_loader_test   # manifest v
 - Do not order parts or boards, request binding quotes, create factory keys or burn eFuses without explicit owner approval.
 - Never hand-edit a generated `.kicad_sch`. Change the generator, regenerate, and re-run the checks.
 - A green ERC is not "validated". See `requirements/design-risks.md` for what still needs a reviewer or a bench.
+
+Vendor drawings marked proprietary (e.g. Samtec's HSEC8 prints) live in `hardware/vendor-docs/`, which git ignores. Re-download them from the vendor site; the register in `requirements/datasheet-register.md` names each one.

@@ -1,5 +1,7 @@
 # Interface test matrix (Rev A bring-up; nothing run yet)
 
+These are the slot-interface requirements. How each is run, with every other Rev A bench test, is in [bench-test-plan.md](../../docs/hardware/bench-test-plan.md) (Stage 6).
+
 | ID | What | How | Pass | Needs |
 |---|---|---|---|---|
 | IT-01 | Slot I²C isolation | TL-TEST-001 in all slots; enable one mux channel at a time; read EEPROM 0x50 and expander 0x27 | only the selected slot answers | 4 test cards |

@@ -1,16 +1,16 @@
 # KiCad check results (generated)
 
-`hardware/scripts/check_kicad.py`, kicad-cli **10.0.8**, 2026-11-17. This shows the schematics are self-consistent. **It is not an electrical design review.**
+`hardware/scripts/check_kicad.py`, kicad-cli **10.0.8**, 2026-11-18. This shows the schematics are self-consistent. **It is not an electrical design review.**
 
 | Board | Parts | ERC errors | ERC warnings | Waived | Netlist round-trip | Safe defaults | PCB DRC errors | PCB DRC warnings |
 |---|---:|---:|---:|---:|---|---|---:|---:|
-| TL-SN-001 | 134 | 0 | 0 | 0 | match | ok | 0 | 104 |
-| TL-MOD-001 | 10 | 0 | 0 | 0 | match | ok | 0 | 9 |
-| TL-MOD-002 | 7 | 0 | 0 | 0 | match | ok | 0 | 3 |
-| TL-MOD-003 | 8 | 0 | 0 | 1 | match | ok | 0 | 16 |
-| TL-MOD-004 | 7 | 0 | 0 | 0 | match | ok | 0 | 3 |
-| TL-TEST-001 | 14 | 0 | 0 | 0 | match | ok | 0 | 12 |
-| TL-DBG-001 | 51 | 0 | 0 | 0 | match | ok | 0 | 39 |
+| TL-SN-001 | 134 | 0 | 0 | 0 | match | ok | 0 | 71 |
+| TL-MOD-001 | 10 | 0 | 0 | 0 | match | ok | 0 | 7 |
+| TL-MOD-002 | 7 | 0 | 0 | 0 | match | ok | 0 | 1 |
+| TL-MOD-003 | 8 | 0 | 0 | 1 | match | ok | 0 | 13 |
+| TL-MOD-004 | 7 | 0 | 0 | 0 | match | ok | 0 | 2 |
+| TL-TEST-001 | 14 | 0 | 0 | 0 | match | ok | 0 | 14 |
+| TL-DBG-001 | 51 | 0 | 0 | 0 | match | ok | 0 | 30 |
 
 ## Cross-board connector check (sensor_edge_v1)
 
@@ -20,49 +20,42 @@
 
 - ERC: no violations
 - Netlist: KiCad export equals the intended netlist
-- PCB DRC (with schematic parity): silk_edge_clearance 6, silk_over_copper 62, silk_overlap 36
-- Footprints still to draw (H4):
-  - J4 (sensor_edge_v1 slot 0): placeholder land pattern talos:Samtec_HSEC8-110-01-S-D-EM2_PLACEHOLDER
-  - J5 (sensor_edge_v1 slot 1): placeholder land pattern talos:Samtec_HSEC8-110-01-S-D-EM2_PLACEHOLDER
-  - J6 (sensor_edge_v1 slot 2): placeholder land pattern talos:Samtec_HSEC8-110-01-S-D-EM2_PLACEHOLDER
-  - J7 (sensor_edge_v1 slot 3): placeholder land pattern talos:Samtec_HSEC8-110-01-S-D-EM2_PLACEHOLDER
+- PCB DRC (with schematic parity): silk_edge_clearance 6, silk_over_copper 28, silk_overlap 37
 
 ## TL-MOD-001
 
 - ERC: no violations
 - Netlist: KiCad export equals the intended netlist
-- PCB DRC (with schematic parity): silk_edge_clearance 2, silk_over_copper 5, silk_overlap 2
+- PCB DRC (with schematic parity): silk_edge_clearance 1, silk_over_copper 4, silk_overlap 2
 
 ## TL-MOD-002
 
 - ERC: no violations
 - Netlist: KiCad export equals the intended netlist
-- PCB DRC (with schematic parity): silk_over_copper 1, silk_overlap 2
+- PCB DRC (with schematic parity): silk_overlap 1
 
 ## TL-MOD-003
 
   - waived `pin_to_pin`: Pins of type Bidirectional and Power output are connected (Symbol U2 Pin 3 [SDO/SA0, Bidirectional, Line]; Symbol #FLG02 Pin 1 [Power output, Line]). Justification: LIS2DW12 SDO/SA0 is strapped to V3V3_AON to select I2C address 0x19; in I2C mode it is an address input, not a driver (DS11811 §6). Its internal pull-up cannot be disabled, so strapping low would waste current.
 - Netlist: KiCad export equals the intended netlist
-- PCB DRC (with schematic parity): silk_over_copper 10, silk_overlap 6
+- PCB DRC (with schematic parity): silk_edge_clearance 1, silk_over_copper 7, silk_overlap 5
 
 ## TL-MOD-004
 
 - ERC: no violations
 - Netlist: KiCad export equals the intended netlist
-- PCB DRC (with schematic parity): silk_over_copper 3
+- PCB DRC (with schematic parity): silk_over_copper 2
 
 ## TL-TEST-001
 
 - ERC: no violations
 - Netlist: KiCad export equals the intended netlist
-- PCB DRC (with schematic parity): silk_edge_clearance 1, silk_over_copper 7, silk_overlap 4
+- PCB DRC (with schematic parity): silk_over_copper 7, silk_overlap 7
 
 ## TL-DBG-001
 
 - ERC: no violations
 - Netlist: KiCad export equals the intended netlist
-- PCB DRC (with schematic parity): silk_edge_clearance 1, silk_over_copper 22, silk_overlap 16
-- Footprints still to draw (H4):
-  - J2 (sensor_edge_v1 slot (debug)): placeholder land pattern talos:Samtec_HSEC8-110-01-S-D-EM2_PLACEHOLDER
+- PCB DRC (with schematic parity): silk_edge_clearance 1, silk_over_copper 11, silk_overlap 18
 
 **Overall: PASS**

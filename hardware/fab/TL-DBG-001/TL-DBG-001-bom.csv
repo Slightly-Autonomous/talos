@@ -5,7 +5,7 @@ qty,refs,value,symbol,footprint
 1,D1,STATUS,Device:LED,LED_SMD:LED_0603_1608Metric
 1,D2,PESD5V0L5UV,Power_Protection:PESD3V3L5UV,Package_TO_SOT_SMD:SOT-666
 1,J1,USB-C sink,Connector:USB_C_Receptacle_USB2.0_16P,Connector_USB:USB_C_Receptacle_GCT_USB4105-xx-A_16P_TopMnt_Horizontal
-1,J2,sensor_edge_v1 slot (debug),Connector_Generic:Conn_02x10_Odd_Even,talos:Samtec_HSEC8-110-01-S-D-EM2_PLACEHOLDER
+1,J2,sensor_edge_v1 slot (debug),Connector_Generic:Conn_02x10_Odd_Even,talos:Samtec_HSEC8-110-01-S-D-EM2
 1,JP1,AON meter,Connector_Generic:Conn_01x02,Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical
 1,JP2,SW meter,Connector_Generic:Conn_01x02,Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical
 2,R1 R2,5.1k,Device:R,Resistor_SMD:R_0402_1005Metric

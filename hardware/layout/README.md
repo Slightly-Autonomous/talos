@@ -33,10 +33,10 @@ Freerouting is not committed. It is the GPL-3.0 macOS build: Freerouting 2.5.0, 
 
 | Board | Size | Layers | Notes |
 |---|---|---|---|
-| TL-SN-001 | 100 × 80 mm | 4: F signal / In1 solid GND plane / In2 solid V3V3_CORE plane / B signal | **Routed, 0 DRC errors.** Annealed placement, plane fanout (175 pads), Freerouting (40 passes, best of 3), then two hand fixes at fine-pitch power pins (`scripts/finish_sn.py`). Only silkscreen warnings remain. Module at the top edge with the antenna strip clear. Two slots per side edge. USB-C, PV and battery along the bottom |
-| TL-MOD-001..004 | 16 × 26 mm (PIR card 18 × 30) | 2 | Gold fingers on the bottom edge, stopping 0.15 mm short of the bevel. Tracks only in the finger zone (no pour, no vias) |
-| TL-TEST-001 | 22 × 32 mm | 2 | Same finger zone |
-| TL-DBG-001 | 36 × 32 mm | 2 | **Routed, 0 DRC errors**, no hand fixes. Slot socket straddles the top edge (card plugs in beside it), USB-C on the bottom edge, PPK2 meter headers either side of the socket ([HW-0007](../architecture/decisions/0007-slot-socket-and-debug-adapter.md)) |
+| TL-SN-001 | 100 × 80 mm | 4: F signal / In1 solid GND plane / In2 solid V3V3_CORE plane / B signal | **Routed, 0 DRC errors, no hand fixes.** Annealed placement, two-pad parts turned to face their nets, plane fanout except fine-pitch plane pins next to a power pin, Freerouting (200 passes). Four HSEC8 sockets with locating slots cut into the side edges. Only silkscreen warnings remain. Module at the top edge with the antenna strip clear. Two slots per side edge. USB-C, PV and battery along the bottom |
+| TL-MOD-001..004 | 16 × 26 mm (PIR card 18 × 30) | 2 | **Routed, 0 DRC errors.** A 9.25 mm wide, 8.5 mm deep tongue carries the gold fingers; the outline is cut back either side of it. Fingers stop 0.15 mm short of the bevel. No parts anywhere on the tongue, because it goes into the socket body (`gen_pcbs.py` refuses a placement that puts one there). Tracks only in the 4 mm finger zone (no pour, no vias) |
+| TL-TEST-001 | 22 × 32 mm | 2 | **Routed, 0 DRC errors.** Same tongue and finger zone |
+| TL-DBG-001 | 40 × 36 mm | 2 | **Routed, 0 DRC errors**, no hand fixes. Slot socket straddles the top edge with its locating slot cut beside pin 1 (card plugs in beside it), USB-C on the bottom edge, PPK2 meter headers either side of the socket ([HW-0007](../architecture/decisions/0007-slot-socket-and-debug-adapter.md)) |
 
 Design rules (project file):
 - 0.15 mm clearance
@@ -49,17 +49,17 @@ Design rules (project file):
 These sit inside typical 2- and 4-layer prototype-service limits. Confirm them against the chosen fab's capability sheet.
 
 ## Finishing the Sensor Node layout
-Reproduce: `gen_pcbs.py` (placement), then `route_pcbs.py TL-SN-001` (fanout + Freerouting, keeps the best attempt), then `finish_sn.py`, then `gen_schematics.py` again (a pcbnew save rewrites the `.kicad_pro`, and CI checks generated files are current). The `finish_sn.py` step makes two hand edits Freerouting could not find, because plane vias crowded 0.4–0.5 mm pitch pins:
-- U4 (BQ25186): pin 4 GND tied to the exposed pad instead of its own via, CHG_PG_N moved up, VBAT runs straight to C10.
-- U5 (TPS63900 buck-boost): pin 6 runs directly to output cap C12 instead of a plane via, pin 8 GND ties to the exposed pad, LX2 runs from pin 7 to L1.
+Reproduce: `gen_pcbs.py` (placement), then `route_pcbs.py TL-SN-001` (fanout + Freerouting, keeps the best attempt), then `gen_schematics.py` again (a pcbnew save rewrites the `.kicad_pro`, and CI checks generated files are current).
 
-`finish_sn.py` matches exact coordinates. After a reroute it may no longer apply; then make the same edits interactively in KiCad.
+Two placement and fanout rules replaced the hand edits that `finish_sn.py` used to make:
+- After annealing, `gen_pcbs.py` turns each two-pad part 180° when that brings its pads nearer their own nets. Wirelength can't tell the two orientations apart, but L1 the wrong way round forced LX2 to cross LX1.
+- `route_pcbs.py` gives no plane via to a fine-pitch plane pin that sits next to a power pin on the same IC (U4 pin 4, U5 pins 2/6/8, U3 pins 3/12). Those vias blocked the switch node and VBAT escapes. The router ties those pins to the exposed pad or a nearby via instead.
 
 Autorouted is not reviewed. A layout engineer still has to review the power section (switch-node loop area, charger thermal pad vias, current-path widths), the radio keepout and the return paths before any order.
 
 ## What a reviewer must check before any order
 
-1. **The HSEC8-EM2 socket footprint is a placeholder.** Pad size, setback and host-board thickness are assumed (HD-002). Do not order the Sensor Node or the debug adapter until it is replaced with Samtec's drawing.
+1. **HSEC8-EM2 socket.** The footprint, the host locating slot and the card tongue follow Samtec's drawings (HD-002). Two values were read from drawing geometry, not printed callouts: the slot depth (4.375 mm) and the 0.80 mm pad setback. Check both against a sample socket before ordering. Host and card boards must be 1.57 mm (1.6 mm nominal is within ±0.15 mm).
 2. **Check the EKMB pin mapping** (Vdd/OUT/GND on a 5.08 mm PCD) against a physical part.
 3. **RF:** the module sits on the top edge with Espressif's keepout honoured, but nobody has reviewed antenna ground clearance, enclosure or detuning.
 4. **Power layout:**
@@ -71,6 +71,6 @@ Autorouted is not reviewed. A layout engineer still has to review the power sect
    - no deliberate return paths
    - no length or matching constraints
    - no via stitching beyond the pours
-6. **Card fingers:** hard gold vs ENIG, bevel angle and card-thickness tolerance must match the socket datasheet.
+6. **Card fingers:** Samtec asks for 30 µin hard gold (130–200 Knoop) and a 30° edge chamfer. Order the cards with JLCPCB's gold-finger option and bevel, not ENIG.
 7. **JLCPCB order:** run `jlc_sourcing.py refresh` and `check` the day you order, since stock moves. Upload `-jlc-bom.csv` and `-jlc-cpl.csv`. **Check every part's rotation in JLCPCB's placement preview** (no rotation corrections have been verified yet; record any you find in `ROTATION_FIX`). Parts in `-not-assembled.csv` are not placed by JLCPCB.
 8. **Assembly:** everything is on one side except the bottom-layer finger pads. Check DFM with the assembler: 0402 parts, the 0.4 mm-pitch WSON, LGA-12 and DFN-4.

@@ -1,5 +1,7 @@
 # Dev-kit bring-up (Phase 8, step 1)
 
+This covers the ESP32-H2 dev kit. The Rev A board sequence, pass limits and fault trees are in [bench-test-plan.md](bench-test-plan.md).
+
 Goal: run the **same portable firmware** on real silicon with off-the-shelf breakouts, before any custom PCB. That answers the P0 hardware questions (pin map, wake lines, I2C behavior, sleep current, OTA fit) with measurements instead of guesses. See ADR 0016.
 
 ## 1. Wire the rig (`hardware/bom/devkit_rig_v0.csv`)

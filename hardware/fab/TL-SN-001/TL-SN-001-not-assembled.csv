@@ -1,7 +1,5 @@
 ref,value,mpn,risk,why
-C7,TBD,,HD-007,TPS2121 soft-start cap: value not chosen yet
 J4,sensor_edge_v1 slot 0,HSEC8-110-01-S-D-EM2,HD-002,JLCPCB lists it with 0 stock: buy from Samtec/distributor and hand-solder (owner decision 2026-11-17)
 J5,sensor_edge_v1 slot 1,HSEC8-110-01-S-D-EM2,HD-002,JLCPCB lists it with 0 stock: buy from Samtec/distributor and hand-solder (owner decision 2026-11-17)
 J6,sensor_edge_v1 slot 2,HSEC8-110-01-S-D-EM2,HD-002,JLCPCB lists it with 0 stock: buy from Samtec/distributor and hand-solder (owner decision 2026-11-17)
 J7,sensor_edge_v1 slot 3,HSEC8-110-01-S-D-EM2,HD-002,JLCPCB lists it with 0 stock: buy from Samtec/distributor and hand-solder (owner decision 2026-11-17)
-R12,TBD,,HD-007,TPS2121 ILIM resistor: value not chosen yet
