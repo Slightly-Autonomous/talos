@@ -230,7 +230,9 @@ TEST(CoapIngress, SignedOtaCampaignUpdatesTheNodeEndToEnd) {
   EXPECT_EQ(n.node.reboots(), 1u);
   EXPECT_EQ(n.node.runtime().running_version(), 2u);
   EXPECT_EQ(n.node.runtime().ota().active_version, 2u);
-  pump(f, n, 50);
+  // The confirming ACK has to reach the hub over real UDP: wait on it, not a fixed budget.
+  pump_until(f, n, 2000,
+             [&] { return f.hub->campaign(DeviceId("node-12")).value().state() == "done"; });
   EXPECT_EQ(f.hub->campaign(DeviceId("node-12")).value().state(), "done");
   EXPECT_GT(f.hub->metrics().ota_chunks_sent.load(), 0u);
 }
