@@ -243,8 +243,10 @@ Each tree runs the next test that separates causes. Example, "module in slot n n
 5. Root bus alive after selecting n? No → branch short (R34–R41, D4–D7, U14 channel).
 6. Otherwise → BoardSupport branch or wake mapping (firmware).
 
-Other trees to write: no USB enumeration, wrong core voltage, brown-out on TX, no charging, slot wake missing,
-sleep current high (bisect by AON_n off one slot at a time, then by the core split link if fitted).
+Implemented in `tools/bench/talos_bench/runner.py` and tested against every fault in
+`firmware/sim/sim_faults.h`: this tree, root-bus parts, slot loopback contacts (by finger), LIS2DW12 self-test
+and SHT40 heater. Still to write: no USB enumeration, wrong core voltage, brown-out on TX, no charging, sleep
+current high (bisect by AON_n off one slot at a time, then by the core split link if fitted).
 
 ## 6. Host tests to add
 
@@ -269,8 +271,8 @@ sleep current high (bisect by AON_n off one slot at a time, then by the core spl
 | ESP-IDF | **Done:** console and diag on USB-serial-JTAG, reset cause in the boot line, brown-out detector, battery ADC, `BoardIo` for source and rails. **Done:** CoAP over the console (`serial_link.h`, provisioned identity in NVS). **Open:** wake cause, coredump, custom partition table, never deep-sleep on USB |
 | Virtual board | **Done:** TCA9535 ×3, BQ25186, rail-gated branches, PRESENT/ALERT, busy-NACK, pulsed INT, polled stepping, per-device NACK, blank/corrupt IDs, `bench_node` with `--fault=` (`firmware/sim/sim_faults.h`). **Open:** EXP_INT line, stuck SDA, brown-out |
 | Twin | `IDeviceBackend` (L1/L2/L4), `binding` in the site proto, `--backend`, `skipped` reason, L1/L2 parity test; PIR mask/warm-up, humidity, magnet field, ODR-sampled impacts |
-| tools/dbg | `selftest --stage adapter|tl-test-001`, `id program` (refuses overwrite without `--expect-current`), `id --raw`, `reg`, `uart`, `watch` on the interrupt flag, AON cycle waits for SDA low, FW-B13 |
-| tools/bench, tools/hil | orchestrator (instruments, `plan.yaml`, JSONL, fault trees); `serial_bridge.py` to the hub; PPK2 wrapper |
+| tools/dbg | **Done:** `selftest adapter|tl-test-001|tmag|imu|sht`, `program-id` (refuses overwrite without `--expect-current`), `id --raw`, `reg`, `watch` on the edge detector, AON cycle waits for SDA low, FW-B13. **Open:** `uart` passthrough and the UART loopback steps (T-05/T-06) |
+| tools/bench, tools/hil | **Done:** `tools/bench` runner (stages 5-6 and cards in slots, JSONL, blocked-not-failed, fault trees tested against every injected fault in CI); `tools/hil` serial bridge and console client. **Open:** PPK2 wrapper, scope steps, stage 4 power tests, end-to-end E-02..E-05 |
 
 ## 8. Board changes
 
