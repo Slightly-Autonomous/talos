@@ -128,7 +128,9 @@ TEST(Binding, ExplicitBehaviouralBindingWinsOverFirmwareRun) {
   f.device("node_front").set_binding(v1::DEVICE_BINDING_BEHAVIOURAL);
   const auto r = run_scenario(f.sc, f.site, {Backend::kFirmware});
   for (const auto& [device, level] : r.bindings) {
-    if (device == "node_front") EXPECT_EQ(level, "L1");
+    if (device == "node_front") {
+      EXPECT_EQ(level, "L1");
+    }
   }
 }
 
