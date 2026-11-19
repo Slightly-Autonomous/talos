@@ -17,6 +17,9 @@ class IClock {
  public:
   virtual ~IClock() = default;
   virtual TimeMs now_ms() const = 0;
+  // Short blocking wait for datasheet delays during probing (a few ms at most).
+  // Measurements that take longer are split across steps instead.
+  virtual void delay_ms(std::uint32_t ms) = 0;
 };
 
 class IGpio {

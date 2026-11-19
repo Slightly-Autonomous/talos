@@ -21,6 +21,8 @@ namespace talos::fw::sim {
 class Clock final : public IClock {
  public:
   TimeMs now_ms() const override { return t_; }
+  // A blocking delay lets time pass inside a step, as it does on the chip.
+  void delay_ms(std::uint32_t ms) override { t_ += ms; }
   void advance(TimeMs ms) { t_ += ms; }
 
  private:
@@ -44,10 +46,13 @@ class I2cDevice {
 };
 
 // TCA9546A-style mux at a fixed address; exactly one branch must be selected
-// to reach a branch device. A broken branch fails every transaction on it.
+// to reach a branch device. A broken branch fails every transaction on it;
+// mux_nack makes the mux itself stop answering.
 class I2cBus final : public II2c {
  public:
   explicit I2cBus(std::uint8_t mux_address) : mux_(mux_address) {}
+  std::uint8_t mask() const { return mask_; }
+  bool mux_nack = false;
   void attach(std::uint8_t branch, std::uint8_t addr, I2cDevice* dev) {
     devices_[{branch, addr}] = dev;
   }
@@ -84,19 +89,33 @@ class IdEeprom final : public RegisterDevice {
   IdEeprom(ModuleCode code, std::uint8_t revision);
 };
 
+// LIS2DW12 (DS11811) as far as the driver depends on it: WHO_AM_I, soft reset,
+// the wake-up threshold, and the interrupt path. INT1 only carries the
+// wake-up event when CTRL4 routes it and CTRL7 INTERRUPTS_ENABLE is set; it is
+// a pulse of one ODR period unless CTRL3 LIR latches it. Outputs carry 1 g of
+// gravity on Z unless CTRL6 FDS selects the high-pass path.
 class Lis2dw12 final : public RegisterDevice {
  public:
-  Lis2dw12(Gpio& gpio, std::uint8_t int_line);
-  // A physical impact reaching the sensor: latches a wake-up and raises INT1
-  // when above the programmed threshold.
+  Lis2dw12(Gpio& gpio, std::uint8_t int_line, const Clock& clock);
+  // A physical impact reaching the sensor along X.
   void impact(std::int32_t mg);
+  // Advance to the current time (drops a pulsed INT1 after one ODR period).
+  void tick();
+  bool write(const std::uint8_t* data, std::size_t n) override;
+  bool int_stuck_high = false;  // fault: INT1 bridged to VDD
+  int read_only_reg = -1;       // fault: writes to this register do not take
 
  protected:
   void after_read(std::uint8_t reg) override;
 
  private:
+  void reset_registers();
+  void set_int(bool v);
   Gpio& gpio_;
   std::uint8_t line_;
+  const Clock& clock_;
+  TimeMs pulse_until_ = 0;
+  bool pulsing_ = false;
 };
 
 // TMAG5273A1 register model (SLYS045C): results at 820 LSB/mT, symmetric
@@ -105,32 +124,48 @@ class Lis2dw12 final : public RegisterDevice {
 // is the card's WAKE: INT_N through the on-card inverter, so high = asserted.
 class Tmag5273 final : public RegisterDevice {
  public:
-  Tmag5273(Gpio& gpio, std::uint8_t wake_line);
+  Tmag5273(Gpio& gpio, std::uint8_t wake_line, const Clock& clock);
   // The magnet moved: new field at the sensor, microtesla per axis.
   void set_field(std::int32_t x_ut, std::int32_t y_ut, std::int32_t z_ut);
   bool write(const std::uint8_t* data, std::size_t n) override;
   bool read(std::uint8_t* out, std::size_t n) override;
   bool in_wake_sleep() const { return (regs[0x01] & 0x03) == 0x03; }
+  std::uint8_t mode() const { return regs[0x01] & 0x03; }
+  bool never_converts = false;  // fault: RESULT_STATUS never sets
 
  private:
+  // Converts only the channels MAG_CH_EN enables; the others keep stale results.
   void update_results();
   void evaluate();
+  void settle_conversion();
   Gpio& gpio_;
   std::uint8_t line_;
+  const Clock& clock_;
+  TimeMs continuous_since_ = 0;
   std::array<std::int32_t, 3> field_ut_{};
 };
 
+// SHT40 (SHT4x datasheet): NACKs while a command is executing (high-precision
+// measurement 8.3 ms max, soft reset and serial ~1 ms), then returns six bytes
+// once. Supports measure (0xFD), soft reset (0x94) and serial number (0x89).
 class Sht40 final : public I2cDevice {
  public:
+  explicit Sht40(const Clock& clock) : clock_(clock) {}
   bool write(const std::uint8_t* data, std::size_t n) override;
   bool read(std::uint8_t* out, std::size_t n) override;
   double temperature_c = 21.5;
   double humidity_pct = 45.0;
-  bool corrupt_crc = false;
+  bool corrupt_crc = false;    // RH word CRC
+  bool corrupt_t_crc = false;  // temperature word CRC
+  TimeMs measure_ms = 8;       // high-precision conversion time
+  std::uint32_t serial = 0x1234ABCD;
 
  private:
+  void load(std::uint16_t a, std::uint16_t b);
+  const Clock& clock_;
   std::array<std::uint8_t, 6> out_{};
   bool ready_ = false;
+  TimeMs busy_until_ = 0;
 };
 
 class Power final : public IPower {
@@ -198,6 +233,7 @@ class Node {
   // Plug a module into a slot (ID EEPROM + its devices on the slot branch).
   void insert(std::uint8_t slot, ModuleCode code);
   Lis2dw12& imu(std::uint8_t slot) { return *imus_.at(slot); }
+  IdEeprom& id(std::uint8_t slot) { return *eeproms_.at(slot); }
   Sht40& sht(std::uint8_t slot) { return *shts_.at(slot); }
   Tmag5273& hall(std::uint8_t slot) { return *halls_.at(slot); }
 
@@ -212,6 +248,10 @@ class Node {
   NodeRuntime& runtime() { return *runtime_; }
   // Step every tick so an external link's replies are picked up promptly.
   bool poll_link = false;
+  // Step the way firmware/esp_idf/main.cc does: no interrupt on wake-line
+  // edges, just a poll every min(next_wake - now, 20 ms). Pulses shorter than
+  // the poll period are invisible unless a sensor latches them.
+  bool esp_polling = false;
   std::uint32_t reboots() const { return reboots_; }
 
   Clock clock;
@@ -225,6 +265,7 @@ class Node {
 
  private:
   std::array<bool, 32> last_lines_{};
+  TimeMs next_poll_ = 0;
   Platform platform_;
   std::optional<NodeRuntime> runtime_;
   std::map<std::uint8_t, std::unique_ptr<IdEeprom>> eeproms_;

@@ -46,6 +46,16 @@ const char* fault_name(fw::ModuleFault f) {
       return "disabled to save power";
     case fw::ModuleFault::kMissingResource:
       return "slot cannot host this module";
+    case fw::ModuleFault::kMuxFault:
+      return "slot bus switch fault";
+    case fw::ModuleFault::kIdBlank:
+      return "module id not programmed";
+    case fw::ModuleFault::kIdCorrupt:
+      return "module id corrupt";
+    case fw::ModuleFault::kStuckInterrupt:
+      return "module interrupt stuck";
+    case fw::ModuleFault::kWarmupTimeout:
+      return "module never settled after power-up";
   }
   return "fault";
 }

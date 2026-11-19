@@ -18,6 +18,12 @@ std::vector<DeviceEvent> of_kind(const std::vector<DeviceEvent>& v, EventKind k)
   return out;
 }
 
+// A PIR reports nothing until its warm-up has passed with the output at rest.
+void warm_up(Node& n) {
+  n.run_for(PirDriver::kWarmMinMs + PirDriver::kQuietMs);
+  n.drain_and_ack();
+}
+
 Node four_slot(PowerSource src = PowerSource::kUsb) {
   Node n(default_board());
   n.power.source_ = src;
@@ -181,18 +187,64 @@ TEST(HallContactCodes, ThresholdCodesAndBootOpen) {
   EXPECT_TRUE(boot[0].flag);
 }
 
-TEST(Pir, RisingAndFallingEdges) {
+TEST(Pir, RisingAndFallingEdgesAfterWarmUp) {
   Node n(default_board());
   n.insert(0, ModuleCode::kPirEkmb);
   n.boot();
+  warm_up(n);
   n.gpio.set(0, true);
-  n.run_for(10);
+  n.run_for(100);
   n.gpio.set(0, false);
   n.run_for(10);
   auto m = of_kind(n.drain_and_ack(), EventKind::kMotion);
   ASSERT_EQ(m.size(), 2u);
   EXPECT_TRUE(m[0].flag);
+  EXPECT_EQ(m[0].priority, Priority::kP0Critical);
   EXPECT_FALSE(m[1].flag);
+}
+
+TEST(Pir, WarmUpChatterIsNeverMotion) {
+  Node n(default_board());
+  n.insert(0, ModuleCode::kPirEkmb);
+  n.boot();
+  // The EKMB output is undefined for up to 210 s after power-up.
+  for (int i = 0; i < 10; ++i) {
+    n.gpio.set(0, i % 2 == 0);
+    n.run_for(2'000);
+  }
+  n.gpio.set(0, false);
+  n.run_for(100);
+  EXPECT_TRUE(of_kind(n.drain_and_ack(), EventKind::kMotion).empty());
+  EXPECT_TRUE(std::get<PirDriver>(n.runtime().slot(0).driver).warming());
+  // Settled: 30 s since power-up and 3 s at rest.
+  n.run_for(PirDriver::kWarmMinMs);
+  EXPECT_FALSE(std::get<PirDriver>(n.runtime().slot(0).driver).warming());
+}
+
+TEST(Pir, WarmUpThatNeverSettlesIsAFault) {
+  Node n(default_board());
+  n.insert(0, ModuleCode::kPirEkmb);
+  n.boot();
+  n.gpio.set(0, true);  // e.g. OUT and GND swapped: the output sits high
+  n.run_for(PirDriver::kWarmMaxMs + 1'000);
+  auto events = n.drain_and_ack();
+  EXPECT_TRUE(of_kind(events, EventKind::kMotion).empty());
+  auto faults = of_kind(events, EventKind::kModuleFault);
+  ASSERT_EQ(faults.size(), 1u);
+  EXPECT_EQ(faults[0].a, static_cast<std::int32_t>(ModuleFault::kWarmupTimeout));
+}
+
+TEST(Pir, SpikeShorterThanGlitchFilterIsIgnored) {
+  Node n(default_board());
+  n.insert(0, ModuleCode::kPirEkmb);
+  n.boot();
+  warm_up(n);
+  n.gpio.set(0, true);
+  n.run_for(PirDriver::kGlitchMs - 10);
+  n.gpio.set(0, false);
+  n.run_for(100);
+  EXPECT_TRUE(of_kind(n.drain_and_ack(), EventKind::kMotion).empty());
+  EXPECT_EQ(std::get<PirDriver>(n.runtime().slot(0).driver).glitches(), 1u);
 }
 
 TEST(Imu, ImpactAboveThresholdReportsPeakAndClearsInterrupt) {
@@ -233,7 +285,7 @@ TEST(Sht40, ReadsValuesAndReportsCrcFaults) {
   n.sht(3).temperature_c = 23.4;
   n.sht(3).humidity_pct = 51.0;
   n.boot();
-  n.run_for(5);
+  n.run_for(Sht40Driver::kMeasureMs + 2);
   auto env = of_kind(n.drain_and_ack(), EventKind::kEnvironment);
   ASSERT_EQ(env.size(), 1u);
   EXPECT_NEAR(env[0].a, 23'400, 10);
@@ -245,14 +297,168 @@ TEST(Sht40, ReadsValuesAndReportsCrcFaults) {
   EXPECT_EQ(faults.back().a, static_cast<std::int32_t>(ModuleFault::kBusError));
 }
 
+// --- Hardware-faithful driver behaviour (bench-test-plan.md FW-B1..B5, B10, B11) ---------------
+
+TEST(Sht40, WaitsOutTheConversionAndReportsEachFault) {
+  Node n(default_board());
+  n.insert(0, ModuleCode::kSht40);
+  n.sht(0).measure_ms = 8;  // the read header NACKs for 8 ms after 0xFD
+  n.boot();
+  EXPECT_EQ(std::get<Sht40Driver>(n.runtime().slot(0).driver).serial(), 0x1234ABCDu);
+  n.run_for(Sht40Driver::kMeasureMs + 1);
+  EXPECT_EQ(of_kind(n.drain_and_ack(), EventKind::kEnvironment).size(), 1u);
+  auto fault_detail = [&](auto setup) {
+    Node m(default_board());
+    m.insert(0, ModuleCode::kSht40);
+    m.boot();
+    m.run_for(Sht40Driver::kMeasureMs + 1);
+    m.drain_and_ack();
+    setup(m.sht(0));
+    m.run_for(300'100);
+    auto f = of_kind(m.drain_and_ack(), EventKind::kModuleFault);
+    return f.empty() ? 0u : f.back().b;
+  };
+  EXPECT_EQ(fault_detail([](Sht40& s) { s.corrupt_t_crc = true; }), 3u);
+  EXPECT_EQ(fault_detail([](Sht40& s) { s.corrupt_crc = true; }), 4u);
+  EXPECT_EQ(fault_detail([](Sht40& s) { s.measure_ms = 60; }), 2u);        // never answers in time
+  EXPECT_EQ(fault_detail([](Sht40& s) { s.temperature_c = -45.0; }), 5u);  // raw 0: stuck output
+}
+
+TEST(Sht40, SlowButInSpecConversionStillReads) {
+  Node n(default_board());
+  n.insert(0, ModuleCode::kSht40);
+  n.sht(0).measure_ms = 15;  // slower than the 9 ms wait, inside the retry grace
+  n.boot();
+  n.run_for(40);
+  EXPECT_EQ(of_kind(n.drain_and_ack(), EventKind::kEnvironment).size(), 1u);
+}
+
+TEST(Sht40, MissingSensorBehindAWorkingIdIsAnInitFault) {
+  Node n(default_board());
+  n.insert(0, ModuleCode::kSht40);
+  n.i2c.detach(0, Sht40Driver::kAddr);  // EEPROM answers, the sensor does not
+  n.boot();
+  EXPECT_EQ(n.runtime().slot(0).fault, ModuleFault::kInitFailed);
+  EXPECT_FALSE(n.runtime().slot(0).enabled);
+}
+
+TEST(Imu, LatchedImpactSurvivesTheEspPollingLoop) {
+  Node n(default_board());
+  n.insert(1, ModuleCode::kLis2dw12);
+  n.esp_polling = true;  // main.cc polls every <= 20 ms; the INT pulse is 10 ms at 100 Hz
+  n.boot();
+  EXPECT_EQ(n.imu(1).regs[Lis2dw12Driver::kCtrl7], Lis2dw12Driver::kCtrl7IntEnable);
+  EXPECT_EQ(n.imu(1).regs[Lis2dw12Driver::kCtrl3] & Lis2dw12Driver::kCtrl3Lir,
+            Lis2dw12Driver::kCtrl3Lir);
+  n.run_for(25);
+  n.drain_and_ack();
+  for (int i = 0; i < 5; ++i) {
+    n.imu(1).impact(900);
+    n.run_for(500);
+  }
+  auto imp = of_kind(n.drain_and_ack(), EventKind::kImpact);
+  ASSERT_EQ(imp.size(), 5u);
+  EXPECT_NEAR(imp[0].a, 900, 5);  // high-pass path: no 1 g of gravity in the peak
+}
+
+TEST(Imu, StaleLatchedEventFromBeforeAResetIsCleared) {
+  Node n(default_board());
+  n.insert(1, ModuleCode::kLis2dw12);
+  n.boot();
+  n.imu(1).impact(900);  // event latched, then the MCU resets before reading it
+  n.boot();
+  n.run_for(20);
+  EXPECT_TRUE(of_kind(n.drain_and_ack(), EventKind::kImpact).empty());
+  EXPECT_FALSE(n.gpio.read(1));
+}
+
+TEST(Imu, WakeHeldHighWithoutAnEventIsAStuckInterrupt) {
+  Node n(default_board());
+  n.insert(1, ModuleCode::kLis2dw12);
+  n.boot();
+  n.imu(1).int_stuck_high = true;
+  n.gpio.set(1, true);
+  n.run_for(1'000);
+  auto events = n.drain_and_ack();
+  EXPECT_TRUE(of_kind(events, EventKind::kImpact).empty());
+  auto faults = of_kind(events, EventKind::kModuleFault);
+  ASSERT_EQ(faults.size(), 1u);
+  EXPECT_EQ(faults[0].a, static_cast<std::int32_t>(ModuleFault::kStuckInterrupt));
+}
+
+TEST(Imu, RegisterThatDoesNotTakeWritesFailsInit) {
+  Node n(default_board());
+  n.insert(1, ModuleCode::kLis2dw12);
+  n.imu(1).read_only_reg = Lis2dw12Driver::kCtrl7;
+  n.boot();
+  EXPECT_EQ(n.runtime().slot(1).fault, ModuleFault::kInitFailed);
+}
+
+TEST(HallContact, ObliqueMagnetOpeningIsSeenDespiteStaleAxes) {
+  Node n(default_board());
+  n.insert(0, ModuleCode::kTmag5273Contact);
+  n.hall(0).set_field(6'000, 5'000, 0);  // magnet at an angle: X dominant, Y strong too
+  n.boot();
+  n.run_for(5);
+  n.drain_and_ack();
+  // Door opens. Only X is armed while closed, so Y's result register still
+  // holds 5 mT from the last full conversion.
+  n.hall(0).set_field(200, 150, 0);
+  n.run_for(10);
+  auto opened = of_kind(n.drain_and_ack(), EventKind::kContact);
+  ASSERT_EQ(opened.size(), 1u);
+  EXPECT_TRUE(opened[0].flag);
+}
+
+TEST(HallContact, SensorThatNeverConvertsFailsInitAndIsParkedInSleep) {
+  Node n(default_board());
+  n.insert(0, ModuleCode::kTmag5273Contact);
+  n.hall(0).never_converts = true;
+  n.boot();
+  EXPECT_EQ(n.runtime().slot(0).fault, ModuleFault::kInitFailed);
+  EXPECT_EQ(n.hall(0).mode(), Tmag5273ContactDriver::kModeSleep);  // 5 nA, not 0.45 mA standby
+}
+
+TEST(Discovery, BlankAndCorruptIdsAreFaultsNotEmptySlots) {
+  Node n(default_board());
+  n.insert(0, ModuleCode::kSht40);
+  n.insert(1, ModuleCode::kSht40);
+  n.id(0).regs[0] = n.id(0).regs[1] = 0xFF;  // never programmed
+  n.id(1).regs[0] = n.id(1).regs[1] = 0x00;  // erased to zero
+  n.boot();
+  EXPECT_EQ(n.runtime().slot(0).fault, ModuleFault::kIdBlank);
+  EXPECT_EQ(n.runtime().slot(1).fault, ModuleFault::kIdCorrupt);
+  EXPECT_FALSE(n.runtime().slot(0).enabled);
+  EXPECT_FALSE(n.runtime().slot(1).enabled);
+}
+
+TEST(Discovery, DeadMuxIsAFaultOnEverySlot) {
+  Node n = four_slot();
+  n.i2c.mux_nack = true;
+  n.boot();
+  for (std::uint8_t i = 0; i < 4; ++i) {
+    EXPECT_EQ(n.runtime().slot(i).fault, ModuleFault::kMuxFault) << int(i);
+  }
+}
+
+TEST(Discovery, MuxIsLeftDeselectedAfterEverySlotAccess) {
+  Node n = four_slot();
+  n.boot();
+  EXPECT_EQ(n.i2c.mask(), 0);
+  n.run_for(Sht40Driver::kMeasureMs + 2);
+  EXPECT_EQ(n.i2c.mask(), 0);
+  n.imu(1).impact(900);
+  n.run_for(10);
+  EXPECT_EQ(n.i2c.mask(), 0);
+}
+
 // --- Delivery -----------------------------------------------------------------------------------
 
 TEST(Delivery, RetriesWithBackoffUntilAcked) {
   Node n(default_board());
   n.insert(0, ModuleCode::kPirEkmb);
   n.boot();
-  n.run_for(5);
-  n.drain_and_ack();
+  warm_up(n);
   n.run_for(5);
   n.link.drop_next = 3;  // three transmissions lost in the air
   const auto before = n.link.attempts;
@@ -305,8 +511,7 @@ TEST(Persistence, UnackedCriticalEventSurvivesRebootWithItsIdentity) {
   Node n(default_board());
   n.insert(0, ModuleCode::kPirEkmb);
   n.boot();
-  n.run_for(5);
-  n.drain_and_ack();
+  warm_up(n);
   n.run_for(5);
   n.link.connected = false;  // radio down during the intrusion
   n.gpio.set(0, true);

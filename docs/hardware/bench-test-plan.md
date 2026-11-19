@@ -23,23 +23,23 @@ everything else get tested, in what order, and what is still missing to do it.
 
 ### Firmware bugs that pass in simulation but would fail on hardware
 
-The virtual board is kinder than the real chips in these places, so each needs a sim fix and a driver fix together.
+The virtual board was kinder than the real chips in these places, so each needs a sim fix and a driver fix together. **Fixed** rows have both, with a regression test in `firmware/sim/node_test.cc` that fails on the old driver.
 
-| ID | Where | Bug | Effect on hardware |
-|---|---|---|---|
-| FW-B1 | `modules.cc` Sht40Driver::poll | reads straight after 0xFD; the SHT40 NACKs for up to 8.3 ms | every reading is `kBusError` |
-| FW-B2 | `modules.cc` Lis2dw12Driver | CTRL7 INTERRUPTS_ENABLE (needs a bench check) and CTRL3 LIR not set | interrupts are 1/ODR pulses; impacts are lost |
-| FW-B3 | `modules.cc` Lis2dw12Driver | "peak" read from the low-pass path | reports ~1000 mg of gravity at rest |
-| FW-B4 | `modules.cc` Tmag5273ContactDriver | peak across all axes while only one is converted | an oblique magnet can hide an opening |
-| FW-B5 | `modules.cc` Tmag5273 init | reads before RESULT_STATUS | false "open" at boot |
-| FW-B6 | `modules.cc` PirDriver | no warm-up mask (25 s typ, 210 s max) | spurious P0 motion after every AON power-up |
-| FW-B7 | `esp_platform.cc:34` | internal pull-down on WAKE lines (~45 kΩ) | PIR output loaded to ~75 µA, near its 100 µA false-alarm limit |
-| FW-B8 | `esp_platform.cc:77-82` | `set_rail` ignores the 3V3 rails; no TCA9535 driver | SW rails never turn on; AON only on because of pull-ups |
-| FW-B9 | `esp_platform.h:42`, `.cc:84` | `source()` always USB, `battery_mv()` always 3900 | node never enters low-power mode |
-| FW-B10 | `runtime.cc:105` | any ID read failure, and code 0x0000, mean "empty slot" | dead mux, dead card, blank card all look empty; `kNoIdEeprom` never sent |
-| FW-B11 | `modules.cc:30-35` | mux never deselected after a slot access | one stuck branch takes down the root bus |
-| FW-B12 | `esp_platform.h:66` | `Link::send` always false | nothing leaves a real node: no end-to-end test possible |
-| FW-B13 | `tools/dbg/talos_dbg/adapter.py:141` | ALERT read as asserted when AON is off | `status` prints a false alert; must print unknown |
+| ID | Where | Bug | Effect on hardware | Status |
+|---|---|---|---|---|
+| FW-B1 | `modules.cc` Sht40Driver::poll | reads straight after 0xFD; the SHT40 NACKs for up to 8.3 ms | every reading is `kBusError` | Fixed |
+| FW-B2 | `modules.cc` Lis2dw12Driver | CTRL7 INTERRUPTS_ENABLE (needs a bench check) and CTRL3 LIR not set | interrupts are 1/ODR pulses; impacts are lost | Fixed (CTRL7 still needs a bench check) |
+| FW-B3 | `modules.cc` Lis2dw12Driver | "peak" read from the low-pass path | reports ~1000 mg of gravity at rest | Fixed |
+| FW-B4 | `modules.cc` Tmag5273ContactDriver | peak across all axes while only one is converted | an oblique magnet can hide an opening | Fixed |
+| FW-B5 | `modules.cc` Tmag5273 init | reads before RESULT_STATUS | false "open" at boot | Fixed |
+| FW-B6 | `modules.cc` PirDriver | no warm-up mask (25 s typ, 210 s max) | spurious P0 motion after every AON power-up | Fixed |
+| FW-B7 | `esp_platform.cc:34` | internal pull-down on WAKE lines (~45 kΩ) | PIR output loaded to ~75 µA, near its 100 µA false-alarm limit | Fixed |
+| FW-B8 | `esp_platform.cc:77-82` | `set_rail` ignores the 3V3 rails; no TCA9535 driver | SW rails never turn on; AON only on because of pull-ups | Open |
+| FW-B9 | `esp_platform.h:42`, `.cc:84` | `source()` always USB, `battery_mv()` always 3900 | node never enters low-power mode | Open |
+| FW-B10 | `runtime.cc:105` | any ID read failure, and code 0x0000, mean "empty slot" | dead mux, dead card, blank card all look empty; `kNoIdEeprom` never sent | Partly: mux fault, blank and corrupt IDs are now faults; dead card vs empty slot needs PRESENT_N |
+| FW-B11 | `modules.cc:30-35` | mux never deselected after a slot access | one stuck branch takes down the root bus | Fixed |
+| FW-B12 | `esp_platform.h:66` | `Link::send` always false | nothing leaves a real node: no end-to-end test possible | Open |
+| FW-B13 | `tools/dbg/talos_dbg/adapter.py:141` | ALERT read as asserted when AON is off | `status` prints a false alert; must print unknown | Open |
 
 ### Contract drift
 

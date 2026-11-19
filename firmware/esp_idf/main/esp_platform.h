@@ -14,6 +14,7 @@ namespace talos::fw::esp {
 class Clock final : public IClock {
  public:
   TimeMs now_ms() const override;
+  void delay_ms(std::uint32_t ms) override;
 };
 
 class Gpio final : public IGpio {

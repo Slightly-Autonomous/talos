@@ -102,14 +102,33 @@ void NodeRuntime::discover() {
     const SlotWiring& w = p_.board.slots[i];
     if (!w.present) continue;
     SlotIo io(p_, i);
-    st.code = read_module_code(io, p_.board.id_eeprom_address);
-    if (st.code == ModuleCode::kNone) continue;  // empty slot
-    const ModuleInfo* info = find_module(st.code);
+    struct Deselect {  // leave the root bus free whatever happens below
+      SlotIo& io;
+      ~Deselect() { io.deselect(); }
+    } deselect{io};
+    const IdRead id = read_module_id(io, p_.board.id_eeprom_address);
+    st.code = id.code;
     auto fault = [&](ModuleFault f) {
       st.fault = f;
       emit(i, EventKind::kModuleFault, Priority::kP2Health, false, static_cast<std::int32_t>(f),
            static_cast<std::uint32_t>(st.code));
     };
+    switch (id.status) {
+      case IdRead::Status::kAbsent:
+        continue;  // nothing answered on the ID address: empty slot
+      case IdRead::Status::kMuxFault:
+        fault(ModuleFault::kMuxFault);
+        continue;
+      case IdRead::Status::kBlank:
+        fault(ModuleFault::kIdBlank);  // never powered past AON
+        continue;
+      case IdRead::Status::kCorrupt:
+        fault(ModuleFault::kIdCorrupt);
+        continue;
+      case IdRead::Status::kOk:
+        break;
+    }
+    const ModuleInfo* info = find_module(st.code);
     if (!info) {
       fault(ModuleFault::kUnknownModule);  // unknown module: never powered
       continue;
@@ -228,6 +247,7 @@ void NodeRuntime::handle(const Downlink& d) {
       if (auto* imu = std::get_if<Lis2dw12Driver>(&slots_[i].driver)) {
         SlotIo io(p_, i);
         imu->set_threshold(io, config_.impact_threshold_mg);
+        io.deselect();
       }
     }
     emit(kNoSlot, EventKind::kConfigApplied, Priority::kP1State, false,
@@ -273,6 +293,7 @@ void NodeRuntime::step() {
           }
         },
         st.driver);
+    io.deselect();
   }
 
   if (now >= next_heartbeat_) {
@@ -300,25 +321,20 @@ void NodeRuntime::step() {
 
 TimeMs NodeRuntime::next_wake_ms() const {
   const TimeMs now = p_.clock.now_ms();
-  for (const auto& st : slots_) {
-    const bool busy = std::visit(
-        [](const auto& drv) {
-          if constexpr (std::is_same_v<std::decay_t<decltype(drv)>, std::monostate>) {
-            return false;
-          } else {
-            return drv.busy();
-          }
-        },
-        st.driver);
-    if (busy) return now;  // debouncing: stay awake
-  }
   TimeMs next = next_heartbeat_;
   if (auto due = queue_.earliest_due(); due && *due < next) next = *due;
   for (const auto& st : slots_) {
-    if (const auto* sht = std::get_if<Sht40Driver>(&st.driver);
-        sht && st.enabled && sht->next_at() < next) {
-      next = sht->next_at();
-    }
+    if (!st.enabled) continue;
+    const TimeMs due = std::visit(
+        [now](const auto& drv) -> TimeMs {
+          if constexpr (std::is_same_v<std::decay_t<decltype(drv)>, std::monostate>) {
+            return kNever;
+          } else {
+            return drv.due_ms(now);
+          }
+        },
+        st.driver);
+    if (due < next) next = due;
   }
   return next < now ? now : next;
 }

@@ -2,6 +2,7 @@
 
 #include "board_tl_sn_001.h"
 #include "driver/gpio.h"
+#include "esp_rom_sys.h"
 #include "esp_timer.h"
 #include "nvs_flash.h"
 
@@ -25,13 +26,18 @@ const char* key_name(StoreKey k) {
 
 TimeMs Clock::now_ms() const { return static_cast<TimeMs>(esp_timer_get_time() / 1000); }
 
+// Busy-wait: the FreeRTOS tick (10 ms) is too coarse for datasheet delays of 1-5 ms.
+void Clock::delay_ms(std::uint32_t ms) { esp_rom_delay_us(ms * 1000); }
+
 Gpio::Gpio(const BoardSupport& b) {
   for (const auto& s : b.slots) {
     if (s.wake_line == 0xFF) continue;
     gpio_config_t io{};
     io.pin_bit_mask = 1ULL << s.wake_line;
     io.mode = GPIO_MODE_INPUT;
-    io.pull_down_en = GPIO_PULLDOWN_ENABLE;
+    // The board has 1 MOhm pull-downs on every WAKE line. The internal ~45 kOhm
+    // pull-down would load a PIR output (100 uA max before false alarms) to ~75 uA.
+    io.pull_down_en = GPIO_PULLDOWN_DISABLE;
     gpio_config(&io);
   }
 }
