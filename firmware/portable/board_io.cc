@@ -1,0 +1,291 @@
+#include "firmware/portable/board_io.h"
+
+namespace talos::fw {
+
+// --- TCA9535 ----------------------------------------------------------------------------
+
+bool Tca9535::configure(std::uint16_t outputs, std::uint16_t inputs_mask) {
+  // Output register first: at power-on it holds 0xFFFF, so making a pin an
+  // output before writing it would drive a 1 (e.g. every SW rail on at once).
+  if (!write_outputs(outputs)) return false;
+  const std::uint8_t cfg[3] = {kConfig0, static_cast<std::uint8_t>(inputs_mask & 0xFF),
+                               static_cast<std::uint8_t>(inputs_mask >> 8)};
+  return i2c_.write(address_, cfg, 3);
+}
+
+bool Tca9535::write_outputs(std::uint16_t outputs) {
+  const std::uint8_t out[3] = {kOutput0, static_cast<std::uint8_t>(outputs & 0xFF),
+                               static_cast<std::uint8_t>(outputs >> 8)};
+  if (!i2c_.write(address_, out, 3)) return false;
+  outputs_ = outputs;
+  return true;
+}
+
+bool Tca9535::set_output(std::uint8_t pin, bool level) {
+  const auto bit = static_cast<std::uint16_t>(1u << pin);
+  return write_outputs(level ? static_cast<std::uint16_t>(outputs_ | bit)
+                             : static_cast<std::uint16_t>(outputs_ & ~bit));
+}
+
+std::optional<std::uint16_t> Tca9535::read_register_pair(std::uint8_t reg) {
+  std::uint8_t r[2] = {};
+  if (!i2c_.write_read(address_, &reg, 1, r, 2)) return std::nullopt;
+  return static_cast<std::uint16_t>(r[0] | (r[1] << 8));
+}
+
+std::optional<std::uint16_t> Tca9535::read_inputs() { return read_register_pair(kInput0); }
+
+// --- BQ25186 ----------------------------------------------------------------------------
+
+std::uint8_t Bq25186::ichg_code(std::uint32_t ma) {
+  if (ma <= 35) return static_cast<std::uint8_t>(ma < 5 ? 0 : ma - 5);
+  std::uint32_t code = 31 + (ma - 40 + 9) / 10;  // round up to the next 10 mA step
+  if (ma < 40) code = 31;
+  if (code > 127) code = 127;
+  return static_cast<std::uint8_t>(code);
+}
+
+std::array<Bq25186::Write, 9> Bq25186::configuration(std::uint32_t charge_ma) {
+  return {{
+      {kVbatCtrl, 0x46},  // PG pin = VIN power good; VBATREG 3.5 V + 70 x 10 mV = 4.20 V
+      {kIchgCtrl, ichg_code(charge_ma)},  // charging enabled
+      {kChargeCtrl0, 0x24},  // precharge 2x term, ITERM 10 %, VINDPM 4.5 V, thermal reg 100 C
+      {kChargeCtrl1, 0x56},  // IBAT_OCP 1 A, BUVLO 3.0 V, CHG/ILIM IRQ masked, VINDPM IRQ on
+      {kIcCtrl, 0x87},       // TS on, VLOWV 3 V, VRCH 100 mV, 6 h timer, watchdog disabled
+      {kTmrIlim, 0x4D},      // MR long press 10 s (unused), autowake 1 s, ILIM 500 mA
+      {kShipRst, 0x00},      // no push-button action, push button disabled: no ship mode from TS
+      {kSysReg, 0x40},       // SYS 4.5 V, never pass-through (TPS63900 VIN max 5.5 V)
+      {kTsControl, 0x00},    // JEITA defaults: 0/10/45/60 C, 0.5x ICHG when cool
+  }};
+}
+
+bool Bq25186::read(std::uint8_t reg, std::uint8_t& out) {
+  return i2c_.write_read(address_, &reg, 1, &out, 1);
+}
+
+bool Bq25186::configure(std::uint32_t charge_ma) {
+  for (const auto& w : configuration(charge_ma)) {
+    const std::uint8_t buf[2] = {w.reg, w.value};
+    if (!i2c_.write(address_, buf, 2)) return false;
+  }
+  charge_ma_ = charge_ma;
+  return verify();
+}
+
+bool Bq25186::verify() {
+  for (const auto& w : configuration(charge_ma_)) {
+    std::uint8_t got = 0;
+    if (!read(w.reg, got) || got != w.value) return false;
+  }
+  return true;
+}
+
+std::optional<ChargerStatus> Bq25186::status() {
+  // Single-register reads: burst auto-increment is not documented for this part.
+  std::uint8_t s0 = 0, s1 = 0, f0 = 0;
+  if (!read(kStat0, s0) || !read(kStat1, s1) || !read(kFlag0, f0)) return std::nullopt;
+  ChargerStatus st;
+  st.ts_open = (s0 & 0x80) != 0;
+  st.charge = static_cast<ChargerStatus::Charge>((s0 >> 5) & 0x3);
+  st.thermal_regulation = (s0 & 0x02) != 0;
+  st.vin_good = (s0 & 0x01) != 0;
+  st.vin_ovp = (s1 & 0x80) != 0;
+  st.battery_uvlo = (s1 & 0x40) != 0;
+  st.ts_zone = static_cast<std::uint8_t>((s1 >> 3) & 0x3);
+  st.safety_timer_fault = (s1 & 0x04) != 0;
+  st.flags = f0;
+  return st;
+}
+
+// --- BoardIo ----------------------------------------------------------------------------
+
+BoardIo::BoardIo(II2c& i2c, IClock& clock, IBatteryAdc& adc, const BoardSupport& board)
+    : i2c_(i2c), clock_(clock), adc_(adc), board_(board) {
+  auto add = [&](const ExpanderPin& p) {
+    if (!p.wired() || expander(p.address)) return;
+    for (auto& e : expanders_) {
+      if (!e) {
+        e.emplace(i2c_, p.address);
+        return;
+      }
+    }
+  };
+  for (const auto& s : board_.slot_io) {
+    for (const auto* p :
+         {&s.aon_enable, &s.sw_enable, &s.reset_n, &s.cs_n, &s.present_n, &s.alert_n}) {
+      add(*p);
+    }
+  }
+  for (const auto* p :
+       {&board_.present_probe, &board_.uart_sel0, &board_.uart_sel1, &board_.uart_mux_en_n,
+        &board_.charger_int_n, &board_.charger_pg_n, &board_.source_st}) {
+    add(*p);
+  }
+  if (board_.charger_address) charger_.emplace(i2c_, board_.charger_address);
+}
+
+Tca9535* BoardIo::expander(std::uint8_t address) {
+  for (auto& e : expanders_) {
+    if (e && e->address() == address) return &*e;
+  }
+  return nullptr;
+}
+
+BoardIo::PinRef BoardIo::ref(const ExpanderPin& p) {
+  if (!p.wired()) return {};
+  return {expander(p.address), p.pin};
+}
+
+bool BoardIo::drive(const ExpanderPin& p, bool level) {
+  const PinRef r = ref(p);
+  return r.chip && r.chip->set_output(r.pin, level);
+}
+
+std::optional<bool> BoardIo::sense(const ExpanderPin& p) {
+  const PinRef r = ref(p);
+  if (!r.chip) return std::nullopt;
+  const auto in = r.chip->read_inputs();
+  if (!in) return std::nullopt;
+  return ((*in >> r.pin) & 1u) != 0;
+}
+
+bool BoardIo::begin() {
+  // Safe state, per expander: outputs (level, is_output) for every driven pin;
+  // everything else, including unused pins, stays an input.
+  struct Plan {
+    std::uint16_t outputs = 0xFFFF;
+    std::uint16_t output_mask = 0;
+  };
+  std::array<Plan, 2> plans{};
+  auto plan = [&](const ExpanderPin& p, bool level) {
+    for (std::size_t i = 0; i < expanders_.size(); ++i) {
+      if (expanders_[i] && p.wired() && expanders_[i]->address() == p.address) {
+        const auto bit = static_cast<std::uint16_t>(1u << p.pin);
+        plans[i].output_mask = static_cast<std::uint16_t>(plans[i].output_mask | bit);
+        plans[i].outputs = level ? static_cast<std::uint16_t>(plans[i].outputs | bit)
+                                 : static_cast<std::uint16_t>(plans[i].outputs & ~bit);
+      }
+    }
+  };
+  for (std::uint8_t i = 0; i < kSlots; ++i) {
+    const auto& s = board_.slot_io[i];
+    // AON matches its hardware default (pull-up: on), SW stays off until asked.
+    plan(s.aon_enable, true);
+    plan(s.sw_enable, false);
+    plan(s.reset_n, true);  // AON is on, so the card's lines are deasserted (high)
+    plan(s.cs_n, true);
+    rails_[i] = {s.aon_enable.wired(), false};
+  }
+  plan(board_.present_probe, false);  // probe only while reading: saves 33 uA per card
+  plan(board_.uart_mux_en_n, true);   // UART mux parked
+  plan(board_.uart_sel0, false);
+  plan(board_.uart_sel1, false);
+  bool ok = true;
+  for (std::size_t i = 0; i < expanders_.size(); ++i) {
+    if (!expanders_[i]) continue;
+    ok &= expanders_[i]->configure(plans[i].outputs,
+                                   static_cast<std::uint16_t>(~plans[i].output_mask));
+  }
+  uart_slot_.reset();
+  if (charger_) {
+    last_source_ = source();
+    charger_ok_ =
+        charger_->configure(last_source_ == PowerSource::kUsb ? kUsbChargeMa : kSolarChargeMa);
+    ok &= charger_ok_;
+  }
+  return ok;
+}
+
+void BoardIo::set_rail(std::uint8_t slot, Rail rail, bool on) {
+  if (slot >= kSlots) return;
+  const auto& s = board_.slot_io[slot];
+  auto& state = rails_[slot];
+  if (rail == Rail::kSwitched3v3) {
+    if (on && !state[0]) return;  // S-2: SW only while AON is on
+    if (drive(s.sw_enable, on)) state[1] = on;
+    return;
+  }
+  if (rail != Rail::kAlwaysOn3v3) return;  // Rev A has no 5 V rail
+  if (on) {
+    if (!drive(s.aon_enable, true)) return;
+    state[0] = true;
+    clock_.delay_ms(1);  // TPS22917 rise ~0.1 ms at CT open
+    drive(s.reset_n, true);
+    drive(s.cs_n, true);
+    return;
+  }
+  // Off: SW first, then the card's lines low (no backfeed through its pull-ups).
+  if (state[1]) set_rail(slot, Rail::kSwitched3v3, false);
+  if (uart_slot_ == slot) select_uart(std::nullopt);
+  drive(s.cs_n, false);
+  drive(s.reset_n, false);
+  if (drive(s.aon_enable, false)) state[0] = false;
+}
+
+bool BoardIo::rail_on(std::uint8_t slot, Rail rail) const {
+  if (slot >= kSlots) return false;
+  if (rail == Rail::kAlwaysOn3v3) return rails_[slot][0];
+  if (rail == Rail::kSwitched3v3) return rails_[slot][1];
+  return false;
+}
+
+std::uint32_t BoardIo::battery_mv() {
+  const auto mv = adc_.battery_mv();
+  return mv ? *mv : 0;  // 0 = unknown: the runtime treats it as critical, never as healthy
+}
+
+PowerSource BoardIo::source() {
+  const auto pg = ref(board_.charger_pg_n);
+  const auto st = ref(board_.source_st);
+  if (!pg.chip || !st.chip || pg.chip != st.chip) return PowerSource::kUnknown;
+  const auto in = pg.chip->read_inputs();
+  if (!in) return PowerSource::kUnknown;
+  const bool pg_n = (*in >> pg.pin) & 1u;
+  const bool st_usb = (*in >> st.pin) & 1u;    // TPS2121 ST high = IN1 (USB) selected
+  if (pg_n) return PowerSource::kBatteryOnly;  // charger sees no input
+  return st_usb ? PowerSource::kUsb : PowerSource::kSolarBattery;
+}
+
+std::optional<bool> BoardIo::slot_present(std::uint8_t slot) {
+  if (slot >= kSlots || !board_.slot_io[slot].present_n.wired() || !board_.present_probe.wired()) {
+    return std::nullopt;
+  }
+  if (!drive(board_.present_probe, true)) return std::nullopt;
+  const auto level = sense(board_.slot_io[slot].present_n);
+  drive(board_.present_probe, false);
+  if (!level) return std::nullopt;
+  return !*level;  // the card ties PRESENT_N to GND
+}
+
+std::optional<ChargerStatus> BoardIo::charger_status() {
+  if (!charger_) return std::nullopt;
+  return charger_->status();
+}
+
+void BoardIo::service() {
+  if (!charger_) return;
+  const PowerSource src = source();
+  const std::uint32_t want = src == PowerSource::kUsb ? kUsbChargeMa : kSolarChargeMa;
+  // Re-apply on a register reset (watchdog, brown-out) or a source change.
+  if (src != last_source_ || want != charger_->charge_ma() || !charger_->verify()) {
+    charger_ok_ = charger_->configure(want);
+  }
+  last_source_ = src;
+}
+
+bool BoardIo::select_uart(std::optional<std::uint8_t> slot) {
+  if (!board_.uart_mux_en_n.wired()) return false;
+  if (slot && (*slot >= kSlots || !rails_[*slot][0])) return false;  // S-3: never an unpowered slot
+  // Disable, change the select lines, then enable: no glitch onto another slot.
+  if (!drive(board_.uart_mux_en_n, true)) return false;
+  uart_slot_.reset();
+  if (!slot) return drive(board_.uart_sel0, false) && drive(board_.uart_sel1, false);
+  if (!drive(board_.uart_sel0, (*slot & 1u) != 0) || !drive(board_.uart_sel1, (*slot & 2u) != 0) ||
+      !drive(board_.uart_mux_en_n, false)) {
+    return false;
+  }
+  uart_slot_ = slot;
+  return true;
+}
+
+}  // namespace talos::fw

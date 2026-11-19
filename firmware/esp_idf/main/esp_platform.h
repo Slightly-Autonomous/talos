@@ -6,6 +6,9 @@
 #include <array>
 
 #include "driver/i2c_master.h"
+#include "esp_adc/adc_cali.h"
+#include "esp_adc/adc_cali_scheme.h"
+#include "esp_adc/adc_oneshot.h"
 #include "firmware/portable/hal.h"
 #include "nvs.h"
 
@@ -36,11 +39,16 @@ class I2c final : public II2c {
   std::array<i2c_master_dev_handle_t, 128> devices_{};
 };
 
-class Power final : public IPower {
+// VBAT through the 4.7M/4.7M divider into ADC1 (board::kBatterySenseAdc). The
+// 2.35 MOhm source impedance is smoothed by C4 (100 nF); average a burst.
+class BatteryAdc final : public IBatteryAdc {
  public:
-  void set_rail(std::uint8_t slot, Rail rail, bool on) override;
-  std::uint32_t battery_mv() override;
-  PowerSource source() override { return PowerSource::kUsb; }  // until charger telemetry exists
+  BatteryAdc();
+  std::optional<std::uint32_t> battery_mv() override;
+
+ private:
+  adc_oneshot_unit_handle_t unit_ = nullptr;
+  adc_cali_handle_t cali_ = nullptr;
 };
 
 class Store final : public IStore {

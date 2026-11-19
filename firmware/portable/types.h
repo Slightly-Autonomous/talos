@@ -45,7 +45,14 @@ struct DeviceEvent {
 };
 
 enum class PowerMode : std::uint8_t { kNormal = 0, kLowPower = 1, kCritical = 2 };
-enum class PowerSource : std::uint8_t { kBatteryOnly = 0, kUsb = 1, kSolarBattery = 2 };
+// kUnknown: the source could not be read (expander or charger not answering).
+// Treated like battery-only for budgets, and reported as unknown, never as USB.
+enum class PowerSource : std::uint8_t {
+  kBatteryOnly = 0,
+  kUsb = 1,
+  kSolarBattery = 2,
+  kUnknown = 3
+};
 
 enum class ModuleFault : std::int32_t {
   kNone = 0,

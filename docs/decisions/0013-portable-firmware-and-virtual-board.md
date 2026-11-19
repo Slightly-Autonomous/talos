@@ -5,7 +5,7 @@
 ## Decision
 - **`firmware/portable`** holds the device firmware core. The host build (Bazel, strict warnings) and the ESP32-H2 build (ESP-IDF CMake) compile the **same sources**. Style rules: no heap in hot paths, no exceptions, no RTTI, fixed-size values. Drivers live in a per-slot `std::variant`.
   - **HAL** (`hal.h`): clock, GPIO, I2C, power/rails, an atomic key-value store, A/B flash, and the link. Board wiring is a `BoardSupport` table: per-slot wake line, I2C mux branch and 5 V rail. Nothing is a hard-coded pin in portable code.
-  - **Discovery:** each module has an ID EEPROM on its slot's mux branch (module code + revision). A static registry maps codes to drivers and declares each module's needs (wake line, 5 V), whether it is critical, and its average power.
+  - **Discovery:** each module has an ID EEPROM on its slot's mux branch (ID block v1: module code, revision, format, variant, CRC-8). Blank, corrupt and unreadable IDs are faults, distinct from an empty slot (PRESENT_N). A static registry maps codes to drivers and declares each module's needs (wake line, 5 V), whether it is critical, and its average power.
     - Unknown codes are never powered.
     - A missing resource, a failed probe or a broken branch is reported as a fault for that slot only; other slots keep working.
   - **Drivers:** PIR (edges), reed/Hall contact with **20 ms time-based debounce**, LIS2DW12 (WHO_AM_I probe, wake threshold, latched wake source, peak mg), SHT40 (command, CRC-8, conversion), and a smart-module presence driver for the camera. Register maps are provisional until validated on hardware.

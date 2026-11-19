@@ -7,6 +7,7 @@
 // PROVISIONAL until validated on hardware (ADR 0013).
 #pragma once
 
+#include <array>
 #include <cstdint>
 #include <variant>
 
@@ -15,15 +16,35 @@
 
 namespace talos::fw {
 
+// Module codes. 0x01xx contact/motion, 0x02xx vibration, 0x03xx environment,
+// 0x04xx intelligent modules, 0xF0xx bench fixtures. The 0x0101/0x0201/0x0301
+// codes are the dev-kit modules; the Rev A cards have their own codes so each
+// maps to its own manifest (contracts/manifests/modules/*.yaml).
 enum class ModuleCode : std::uint16_t {
   kNone = 0,
   kPirEkmb = 0x0101,
   kReedContact = 0x0102,
   kTmag5273Contact = 0x0103,  // TL-MOD-001: 3-axis Hall, orientation-independent
+  kTlMod002Pir = 0x0104,      // TL-MOD-002: EKMB PIR card
   kLis2dw12 = 0x0201,
+  kTlMod003Imu = 0x0202,  // TL-MOD-003: LIS2DW12 card
   kSht40 = 0x0301,
+  kTlMod004Env = 0x0302,  // TL-MOD-004: SHT40 card
   kSmartCameraS3 = 0x0401,
+  kTlTest001 = 0xF001,  // TL-TEST-001 slot test card (bench fixture)
 };
+
+// CRC-8, polynomial 0x31, init 0xFF (Sensirion's, also used for the ID block).
+std::uint8_t crc8(const std::uint8_t* data, std::size_t n);
+
+// Card ID block v1: page 0 (16 bytes) of the 24AA025E48.
+//   0-1 module code (big-endian), 2 hardware revision, 3 format (0x01),
+//   4 variant, 5-14 reserved (0xFF), 15 CRC-8 over bytes 0-14.
+// The EUI-48 at 0xFA-0xFF is the card's serial number.
+inline constexpr std::uint8_t kIdFormatV1 = 0x01;
+inline constexpr std::size_t kIdBlockSize = 16;
+std::array<std::uint8_t, kIdBlockSize> make_id_block(ModuleCode code, std::uint8_t revision,
+                                                     std::uint8_t variant = 0);
 
 struct ModuleInfo {
   ModuleCode code;
@@ -219,7 +240,7 @@ class Sht40Driver {
   void poll(SlotIo& io, IEventSink& sink, TimeMs now, std::uint32_t interval_ms);
   TimeMs due_ms(TimeMs) const { return measuring_ ? ready_at_ : next_at_; }
   std::uint32_t serial() const { return serial_; }
-  static std::uint8_t crc8(const std::uint8_t* data, std::size_t n);
+  static std::uint8_t crc8(const std::uint8_t* data, std::size_t n) { return fw::crc8(data, n); }
 
  private:
   void fail(SlotIo& io, IEventSink& sink, Fault f);
@@ -228,6 +249,17 @@ class Sht40Driver {
   TimeMs started_at_ = 0;
   bool measuring_ = false;
   std::uint32_t serial_ = 0;
+};
+
+// TL-TEST-001 slot test card: a TCA9535 at 0x27 on the slot branch that drives
+// and reads the slot's lines. In normal running it only proves it answers; the
+// bench self-test (diag) drives it.
+class TestCardDriver {
+ public:
+  static constexpr std::uint8_t kExpanderAddr = 0x27;
+  bool init(SlotIo& io, IEventSink& sink, TimeMs now);
+  void poll(SlotIo&, IEventSink&, TimeMs) {}
+  TimeMs due_ms(TimeMs) const { return kNever; }
 };
 
 // Intelligent module (camera): presence and power only; it has its own
@@ -240,7 +272,7 @@ class SmartModuleDriver {
 };
 
 using Driver = std::variant<std::monostate, PirDriver, ContactDriver, Tmag5273ContactDriver,
-                            Lis2dw12Driver, Sht40Driver, SmartModuleDriver>;
+                            Lis2dw12Driver, Sht40Driver, SmartModuleDriver, TestCardDriver>;
 
 struct SlotState {
   ModuleCode code = ModuleCode::kNone;
@@ -257,6 +289,7 @@ struct IdRead {
   Status status = Status::kAbsent;
   ModuleCode code = ModuleCode::kNone;
   std::uint8_t revision = 0;
+  std::uint8_t variant = 0;
 };
 
 IdRead read_module_id(SlotIo& io, std::uint8_t eeprom_addr);

@@ -21,11 +21,37 @@ inline constexpr int kExpanderInt = 14;     // TCA9535 INT wired-OR, LP GPIO
 inline constexpr int kStatusLed = 8;        // strap pin, active low, 10k pull-up
 inline constexpr int kBatterySenseAdc = 1;  // ADC1_CH0, 4.7M/4.7M divider
 
+// I/O expanders and charger on the root I2C bus (intended-netlist.json):
+//   EXP_A 0x20: P00-P03 SLOT_SW_EN0-3, P04-P07 SLOT_AON_EN0-3,
+//               P10-P13 SLOTn_RESET_N, P14-P17 SLOTn_CS_N
+//   EXP_B 0x21: P00-P03 SLOTn_PRESENT_N, P04-P07 SLOTn_ALERT_N, P10/P11 UART_SEL0/1,
+//               P12 UART_MUX_EN_N, P13 PRESENT_PROBE, P14 CHG_INT_N, P15 CHG_PG_N,
+//               P16 PMUX_ST, P17 spare
+//   BQ25186 0x6A. Pin n of port 1 is expander pin 8 + n.
+inline constexpr std::uint8_t kExpA = 0x20;
+inline constexpr std::uint8_t kExpB = 0x21;
+inline constexpr std::uint8_t kCharger = 0x6A;
+
 inline BoardSupport tl_sn_001() {
   BoardSupport b;
   for (std::uint8_t i = 0; i < kSlots; ++i) {
     b.slots[i] = SlotWiring{true, kSlotWake[i], i, kRail5vEnable[i] >= 0};
+    auto& io = b.slot_io[i];
+    io.sw_enable = {kExpA, i};
+    io.aon_enable = {kExpA, static_cast<std::uint8_t>(4 + i)};
+    io.reset_n = {kExpA, static_cast<std::uint8_t>(8 + i)};
+    io.cs_n = {kExpA, static_cast<std::uint8_t>(12 + i)};
+    io.present_n = {kExpB, i};
+    io.alert_n = {kExpB, static_cast<std::uint8_t>(4 + i)};
   }
+  b.uart_sel0 = {kExpB, 8};
+  b.uart_sel1 = {kExpB, 9};
+  b.uart_mux_en_n = {kExpB, 10};
+  b.present_probe = {kExpB, 11};
+  b.charger_int_n = {kExpB, 12};
+  b.charger_pg_n = {kExpB, 13};
+  b.source_st = {kExpB, 14};
+  b.charger_address = kCharger;
   return b;
 }
 

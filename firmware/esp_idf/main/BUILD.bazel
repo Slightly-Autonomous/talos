@@ -1,0 +1,10 @@
+load("@rules_cc//cc:defs.bzl", "cc_library")
+
+# The TL-SN-001 board table is header-only, so host tests and the virtual board
+# use exactly the wiring the ESP32 build uses.
+cc_library(
+    name = "board_tl_sn_001",
+    hdrs = ["board_tl_sn_001.h"],
+    visibility = ["//visibility:public"],
+    deps = ["//firmware/portable"],
+)

@@ -26,7 +26,7 @@ Twenty contacts, 0.80 mm pitch, 2 × 10. The card is a 1.60 mm PCB with gold fin
 | 20 | GND | – | ground | ground |
 
 ## Rules
-- **S-1:** Every card has an ID EEPROM at 0x50 on AON. Card I²C addresses must not use the reserved root addresses 0x20, 0x21, 0x6A or 0x70.
+- **S-1:** Every card has an ID EEPROM at 0x50 on AON, holding ID block v1 (code, revision, format, variant, CRC-8; `firmware/portable/modules.h`). Card I²C addresses must not use the reserved root addresses 0x20, 0x21, 0x6A or 0x70.
 - **S-2:** Devices on the branch I²C must be powered from AON, because the branch pull-ups go to AON. A device on SW needs an isolating buffer with I_off support.
 - **S-3:** Firmware holds SPI_SCK/MOSI low and keeps the UART mux disabled (`UART_MUX_EN_N` high) whenever the addressed slot's rails are off.
 - **S-4:** One card UART is active at a time (one UART1, one mux). The board manifest declares `uart_channels: 1`, and the validator rejects two UART cards that need concurrent operation.

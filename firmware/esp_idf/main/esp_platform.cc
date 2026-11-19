@@ -80,14 +80,41 @@ bool I2c::write_read(std::uint8_t addr, const std::uint8_t* w, std::size_t wn, s
   return i2c_master_transmit_receive(d, w, wn, r, rn, 50) == ESP_OK;
 }
 
-void Power::set_rail(std::uint8_t slot, Rail rail, bool on) {
-  if (rail != Rail::kSwitched5v || slot >= kSlots || board::kRail5vEnable[slot] < 0) return;
-  const auto pin = static_cast<gpio_num_t>(board::kRail5vEnable[slot]);
-  gpio_set_direction(pin, GPIO_MODE_OUTPUT);
-  gpio_set_level(pin, on ? 1 : 0);
+BatteryAdc::BatteryAdc() {
+  adc_oneshot_unit_init_cfg_t unit{};
+  unit.unit_id = ADC_UNIT_1;
+  if (adc_oneshot_new_unit(&unit, &unit_) != ESP_OK) {
+    unit_ = nullptr;
+    return;
+  }
+  adc_oneshot_chan_cfg_t chan{};
+  chan.atten = ADC_ATTEN_DB_12;  // ~0-3.1 V at the pin: VBAT/2 tops out at 2.1 V
+  chan.bitwidth = ADC_BITWIDTH_DEFAULT;
+  const auto channel = static_cast<adc_channel_t>(board::kBatterySenseAdc - 1);  // GPIO1 = CH0
+  if (adc_oneshot_config_channel(unit_, channel, &chan) != ESP_OK) return;
+  adc_cali_curve_fitting_config_t cal{};
+  cal.unit_id = ADC_UNIT_1;
+  cal.chan = channel;
+  cal.atten = ADC_ATTEN_DB_12;
+  cal.bitwidth = ADC_BITWIDTH_DEFAULT;
+  if (adc_cali_create_scheme_curve_fitting(&cal, &cali_) != ESP_OK) cali_ = nullptr;
 }
 
-std::uint32_t Power::battery_mv() { return 3900; }  // placeholder until ADC wiring exists
+std::optional<std::uint32_t> BatteryAdc::battery_mv() {
+  if (!unit_ || !cali_) return std::nullopt;  // unknown, never a made-up 3.9 V
+  const auto channel = static_cast<adc_channel_t>(board::kBatterySenseAdc - 1);
+  std::int64_t sum = 0;
+  constexpr int kSamples = 16;
+  for (int i = 0; i < kSamples; ++i) {
+    int raw = 0, mv = 0;
+    if (adc_oneshot_read(unit_, channel, &raw) != ESP_OK ||
+        adc_cali_raw_to_voltage(cali_, raw, &mv) != ESP_OK) {
+      return std::nullopt;
+    }
+    sum += mv;
+  }
+  return static_cast<std::uint32_t>(sum * 2 / kSamples);  // equal divider
+}
 
 Store::Store() {
   if (nvs_flash_init() != ESP_OK) {

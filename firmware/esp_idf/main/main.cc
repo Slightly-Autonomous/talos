@@ -4,6 +4,7 @@
 #include "board_tl_sn_001.h"
 #include "esp_log.h"
 #include "esp_platform.h"
+#include "firmware/portable/board_io.h"
 #include "firmware/portable/runtime.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -14,7 +15,8 @@ extern "C" void app_main(void) {
   static esp::Clock clock;
   static esp::Gpio gpio(board);
   static esp::I2c i2c(board::kI2cSda, board::kI2cScl);
-  static esp::Power power;
+  static esp::BatteryAdc adc;
+  static BoardIo power(i2c, clock, adc, board);  // expanders, rails, source, charger
   static esp::Store store;
   static esp::Flash flash;
   static esp::Link link;

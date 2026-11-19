@@ -49,6 +49,8 @@ class NodeRuntime final : public IEventSink {
   std::uint32_t running_version() const { return ota_.running_version(); }
   PowerMode power_mode() const { return mode_; }
   std::uint32_t dropped_events() const { return queue_.dropped(); }
+  // False if the board's expanders or charger did not take their safe state at boot.
+  bool board_ok() const { return board_ok_; }
 
  private:
   void discover();
@@ -72,6 +74,7 @@ class NodeRuntime final : public IEventSink {
   bool awake_ = true;
   bool reboot_requested_ = false;
   bool ota_progress_ = false;
+  bool board_ok_ = true;
 };
 
 }  // namespace talos::fw

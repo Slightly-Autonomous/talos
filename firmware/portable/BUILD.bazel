@@ -6,6 +6,7 @@ load("//bazel:copts.bzl", "TALOS_COPTS")
 cc_library(
     name = "portable",
     srcs = [
+        "board_io.cc",
         "coap_link.cc",
         "modules.cc",
         "ota.cc",
@@ -13,6 +14,7 @@ cc_library(
         "wire.cc",
     ],
     hdrs = [
+        "board_io.h",
         "coap_link.h",
         "event_queue.h",
         "hal.h",

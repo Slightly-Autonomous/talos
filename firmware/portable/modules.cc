@@ -11,9 +11,13 @@ constexpr ModuleInfo kRegistry[] = {
     {ModuleCode::kPirEkmb, "pir_ekmb_v1", true, false, true, 1},
     {ModuleCode::kReedContact, "reed_contact_v1", true, false, true, 0},
     {ModuleCode::kTmag5273Contact, "tl_mod_001_magnetic", true, false, true, 0},
+    {ModuleCode::kTlMod002Pir, "tl_mod_002_pir", true, false, true, 0},
     {ModuleCode::kLis2dw12, "vibration_lis2dw12_v1", true, false, true, 1},
+    {ModuleCode::kTlMod003Imu, "tl_mod_003_imu", true, false, true, 0},
     {ModuleCode::kSht40, "environment_sht40_v1", false, false, false, 1},
+    {ModuleCode::kTlMod004Env, "tl_mod_004_environment", false, false, false, 0},
     {ModuleCode::kSmartCameraS3, "smart_camera_s3_v1", false, true, false, 600},
+    {ModuleCode::kTlTest001, "tl_test_001", false, false, false, 0},
 };
 
 }  // namespace
@@ -23,6 +27,31 @@ const ModuleInfo* find_module(ModuleCode code) {
     if (m.code == code) return &m;
   }
   return nullptr;
+}
+
+std::uint8_t crc8(const std::uint8_t* data, std::size_t n) {
+  std::uint8_t crc = 0xFF;
+  for (std::size_t i = 0; i < n; ++i) {
+    crc ^= data[i];
+    for (int b = 0; b < 8; ++b) {
+      crc = static_cast<std::uint8_t>((crc & 0x80) ? (crc << 1) ^ 0x31 : crc << 1);
+    }
+  }
+  return crc;
+}
+
+std::array<std::uint8_t, kIdBlockSize> make_id_block(ModuleCode code, std::uint8_t revision,
+                                                     std::uint8_t variant) {
+  std::array<std::uint8_t, kIdBlockSize> b{};
+  b.fill(0xFF);
+  const auto c = static_cast<std::uint16_t>(code);
+  b[0] = static_cast<std::uint8_t>(c >> 8);
+  b[1] = static_cast<std::uint8_t>(c & 0xFF);
+  b[2] = revision;
+  b[3] = kIdFormatV1;
+  b[4] = variant;
+  b[15] = crc8(b.data(), 15);
+  return b;
 }
 
 // --- SlotIo -----------------------------------------------------------------------------
@@ -69,13 +98,17 @@ IdRead read_module_id(SlotIo& io, std::uint8_t eeprom_addr) {
     r.status = IdRead::Status::kMuxFault;
     return r;
   }
-  std::uint8_t id[3] = {};
-  if (!io.reg_read(eeprom_addr, 0x00, id, 3)) return r;  // nothing answered: empty slot
+  std::uint8_t id[kIdBlockSize] = {};
+  if (!io.reg_read(eeprom_addr, 0x00, id, kIdBlockSize)) return r;  // nothing answered: empty
+  bool all_ff = true;
+  for (auto b : id) all_ff &= b == 0xFF;
   const auto code = static_cast<std::uint16_t>((id[0] << 8) | id[1]);
   r.revision = id[2];
-  if (code == 0xFFFF) {
+  r.variant = id[4];
+  if (all_ff) {
     r.status = IdRead::Status::kBlank;
-  } else if (code == 0x0000) {
+  } else if (id[3] != kIdFormatV1 || crc8(id, kIdBlockSize - 1) != id[kIdBlockSize - 1] ||
+             code == 0x0000 || code == 0xFFFF) {
     r.status = IdRead::Status::kCorrupt;
   } else {
     r.status = IdRead::Status::kOk;
@@ -345,18 +378,15 @@ void Lis2dw12Driver::poll(SlotIo& io, IEventSink& sink, TimeMs now) {
   sink.emit(io.slot(), EventKind::kImpact, Priority::kP0Critical, true, peak, 0);
 }
 
-// --- SHT40 ------------------------------------------------------------------------------
+// --- TL-TEST-001 -----------------------------------------------------------------------
 
-std::uint8_t Sht40Driver::crc8(const std::uint8_t* data, std::size_t n) {
-  std::uint8_t crc = 0xFF;
-  for (std::size_t i = 0; i < n; ++i) {
-    crc ^= data[i];
-    for (int b = 0; b < 8; ++b) {
-      crc = static_cast<std::uint8_t>((crc & 0x80) ? (crc << 1) ^ 0x31 : crc << 1);
-    }
-  }
-  return crc;
+bool TestCardDriver::init(SlotIo& io, IEventSink&, TimeMs) {
+  // Every expander pin an input: the card drives nothing until a test asks it to
+  // (MISO is shared between slots and must stay released).
+  return io.reg_write(kExpanderAddr, 0x06, 0xFF) && io.reg_write(kExpanderAddr, 0x07, 0xFF);
 }
+
+// --- SHT40 ------------------------------------------------------------------------------
 
 bool Sht40Driver::init(SlotIo& io, IEventSink&, TimeMs now) {
   // Probe: soft reset (tSR <= 1 ms), then the serial number with both CRCs.

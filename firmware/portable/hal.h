@@ -38,12 +38,28 @@ class II2c {
 
 enum class Rail : std::uint8_t { kAlwaysOn3v3 = 0, kSwitched3v3 = 1, kSwitched5v = 2 };
 
+// Board power and slot plumbing. Boards with I/O expanders implement this with
+// fw::BoardIo (board_io.h); simple boards and tests use a direct model.
 class IPower {
  public:
   virtual ~IPower() = default;
+  // Called once at boot before discovery: put every output in its safe state.
+  virtual bool begin() { return true; }
   virtual void set_rail(std::uint8_t slot, Rail rail, bool on) = 0;
   virtual std::uint32_t battery_mv() = 0;
   virtual PowerSource source() = 0;
+  // Card seated in the slot (PRESENT_N), or nullopt when the board can't tell.
+  virtual std::optional<bool> slot_present(std::uint8_t /*slot*/) { return std::nullopt; }
+  // Periodic housekeeping (heartbeat): re-check charger config and status.
+  virtual void service() {}
+};
+
+// Battery voltage measurement (ADC behind the VBAT divider on the ESP32).
+class IBatteryAdc {
+ public:
+  virtual ~IBatteryAdc() = default;
+  // Millivolts at the battery, or nullopt if the conversion failed.
+  virtual std::optional<std::uint32_t> battery_mv() = 0;
 };
 
 // Small atomic key/value store (NVS on ESP32). put() is all-or-nothing.
@@ -94,11 +110,34 @@ struct SlotWiring {
   bool has_5v = false;
 };
 
+// One pin on a TCA9535-style expander: 16 pins, port 0 = pins 0-7, port 1 = 8-15.
+struct ExpanderPin {
+  std::uint8_t address = 0;  // 0 = not wired on this board
+  std::uint8_t pin = 0;      // 0-15
+  bool wired() const { return address != 0; }
+};
+
+// Per-slot control and status lines on the expanders (all active as named).
+struct SlotIoPins {
+  ExpanderPin aon_enable;  // TPS22917 ON, AON rail
+  ExpanderPin sw_enable;   // TPS22917 ON, SW rail
+  ExpanderPin reset_n;     // to the card, pulled up to the slot's AON
+  ExpanderPin cs_n;        // to the card, pulled up to the slot's AON
+  ExpanderPin present_n;   // card ties it to GND; pulled up to present_probe
+  ExpanderPin alert_n;     // card open-drain, pulled up to the slot's AON
+};
+
 struct BoardSupport {
   std::array<SlotWiring, kSlots> slots{};
   std::uint8_t mux_address = 0x70;  // TCA9546A-style mux (provisional)
   std::uint8_t id_eeprom_address = 0x50;
-  std::uint32_t battery_sustained_mw = 15;  // provisional budgets per source
+  // Expander-driven plumbing (TL-SN-001). Unwired pins leave the feature off.
+  std::array<SlotIoPins, kSlots> slot_io{};
+  ExpanderPin present_probe;  // drives the PRESENT_N pull-ups while probing
+  ExpanderPin uart_sel0, uart_sel1, uart_mux_en_n;
+  ExpanderPin charger_int_n, charger_pg_n, source_st;  // BQ25186 /INT, /PG; TPS2121 ST
+  std::uint8_t charger_address = 0;                    // BQ25186 on the root bus, 0 = none
+  std::uint32_t battery_sustained_mw = 15;             // provisional budgets per source
   std::uint32_t usb_sustained_mw = 2500;
   std::uint32_t solar_sustained_mw = 300;
 };

@@ -34,18 +34,17 @@ The virtual board was kinder than the real chips in these places, so each needs 
 | FW-B5 | `modules.cc` Tmag5273 init | reads before RESULT_STATUS | false "open" at boot | Fixed |
 | FW-B6 | `modules.cc` PirDriver | no warm-up mask (25 s typ, 210 s max) | spurious P0 motion after every AON power-up | Fixed |
 | FW-B7 | `esp_platform.cc:34` | internal pull-down on WAKE lines (~45 kΩ) | PIR output loaded to ~75 µA, near its 100 µA false-alarm limit | Fixed |
-| FW-B8 | `esp_platform.cc:77-82` | `set_rail` ignores the 3V3 rails; no TCA9535 driver | SW rails never turn on; AON only on because of pull-ups | Open |
-| FW-B9 | `esp_platform.h:42`, `.cc:84` | `source()` always USB, `battery_mv()` always 3900 | node never enters low-power mode | Open |
-| FW-B10 | `runtime.cc:105` | any ID read failure, and code 0x0000, mean "empty slot" | dead mux, dead card, blank card all look empty; `kNoIdEeprom` never sent | Partly: mux fault, blank and corrupt IDs are now faults; dead card vs empty slot needs PRESENT_N |
+| FW-B8 | `esp_platform.cc:77-82` | `set_rail` ignores the 3V3 rails; no TCA9535 driver | SW rails never turn on; AON only on because of pull-ups | Fixed: `BoardIo` drives the expanders; rails follow S-2/S-3 |
+| FW-B9 | `esp_platform.h:42`, `.cc:84` | `source()` always USB, `battery_mv()` always 3900 | node never enters low-power mode | Fixed: source from CHG_PG_N + PMUX_ST (unknown if unreadable), ADC for VBAT |
+| FW-B10 | `runtime.cc:105` | any ID read failure, and code 0x0000, mean "empty slot" | dead mux, dead card, blank card all look empty; `kNoIdEeprom` never sent | Fixed: PRESENT_N separates a dead card (kNoIdEeprom) from an empty slot |
 | FW-B11 | `modules.cc:30-35` | mux never deselected after a slot access | one stuck branch takes down the root bus | Fixed |
 | FW-B12 | `esp_platform.h:66` | `Link::send` always false | nothing leaves a real node: no end-to-end test possible | Open |
 | FW-B13 | `tools/dbg/talos_dbg/adapter.py:141` | ALERT read as asserted when AON is off | `status` prints a false alert; must print unknown | Open |
 
 ### Contract drift
 
-- Module codes 0x0101/0x0201/0x0301 map to the dev-kit manifests (`pir_ekmb_v1`, `vibration_lis2dw12_v1`,
-  `environment_sht40_v1`), not the Rev A card manifests. TL-TEST-001 has no module code, so the node reports it as
-  unknown. `environment_sht40_v1` says the sensor is on the SW rail (it is on AON).
+- **Fixed:** the Rev A cards and TL-TEST-001 now have their own codes (0x0104, 0x0202, 0x0302, 0xF001) mapped to
+  their own manifests; a contract test checks firmware, `tools/dbg` and the manifest files agree. `environment_sht40_v1` says the sensor is on the SW rail (it is on AON).
 - `core/manifest/manifest.cc:182` rejects more than one UART card, so four TL-TEST-001 cards (IT-01) fail validation.
 - The manifest lets slots draw 380 mA plus a 123 mA radio peak; the TPS63900 gives 400 mA.
 

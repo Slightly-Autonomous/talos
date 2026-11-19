@@ -75,6 +75,7 @@ void NodeRuntime::boot() {
 
   const BootDecision d = ota_.boot();
   restore_pending_critical();
+  board_ok_ = p_.power.begin();  // safe outputs before anything touches a slot
   mode_ = compute_mode();
   discover();
   admit_power();
@@ -113,9 +114,12 @@ void NodeRuntime::discover() {
       emit(i, EventKind::kModuleFault, Priority::kP2Health, false, static_cast<std::int32_t>(f),
            static_cast<std::uint32_t>(st.code));
     };
+    const std::optional<bool> seated = p_.power.slot_present(i);
     switch (id.status) {
       case IdRead::Status::kAbsent:
-        continue;  // nothing answered on the ID address: empty slot
+        // A seated card whose ID does not answer is a fault, not an empty slot.
+        if (seated.value_or(false)) fault(ModuleFault::kNoIdEeprom);
+        continue;
       case IdRead::Status::kMuxFault:
         fault(ModuleFault::kMuxFault);
         continue;
@@ -140,7 +144,11 @@ void NodeRuntime::discover() {
     bool ok = false;
     switch (st.code) {
       case ModuleCode::kPirEkmb:
+      case ModuleCode::kTlMod002Pir:
         ok = st.driver.emplace<PirDriver>().init(io, *this, now);
+        break;
+      case ModuleCode::kTlTest001:
+        ok = st.driver.emplace<TestCardDriver>().init(io, *this, now);
         break;
       case ModuleCode::kReedContact:
         ok = st.driver.emplace<ContactDriver>().init(io, *this, now);
@@ -149,9 +157,11 @@ void NodeRuntime::discover() {
         ok = st.driver.emplace<Tmag5273ContactDriver>().init(io, *this, now);
         break;
       case ModuleCode::kLis2dw12:
+      case ModuleCode::kTlMod003Imu:
         ok = st.driver.emplace<Lis2dw12Driver>().init(io, *this, now, config_.impact_threshold_mg);
         break;
       case ModuleCode::kSht40:
+      case ModuleCode::kTlMod004Env:
         ok = st.driver.emplace<Sht40Driver>().init(io, *this, now);
         break;
       case ModuleCode::kSmartCameraS3:
@@ -178,6 +188,7 @@ std::uint32_t NodeRuntime::sustained_budget_mw() {
     case PowerSource::kSolarBattery:
       return p_.board.solar_sustained_mw;
     case PowerSource::kBatteryOnly:
+    case PowerSource::kUnknown:  // can't tell: budget as if on battery
       break;
   }
   return p_.board.battery_sustained_mw;
@@ -297,6 +308,7 @@ void NodeRuntime::step() {
   }
 
   if (now >= next_heartbeat_) {
+    p_.power.service();
     const PowerMode m = compute_mode();
     if (m != mode_) {
       mode_ = m;

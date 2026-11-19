@@ -423,8 +423,8 @@ TEST(Discovery, BlankAndCorruptIdsAreFaultsNotEmptySlots) {
   Node n(default_board());
   n.insert(0, ModuleCode::kSht40);
   n.insert(1, ModuleCode::kSht40);
-  n.id(0).regs[0] = n.id(0).regs[1] = 0xFF;  // never programmed
-  n.id(1).regs[0] = n.id(1).regs[1] = 0x00;  // erased to zero
+  n.id(0).blank();                                                        // never programmed
+  n.id(1).regs[15] = static_cast<std::uint8_t>(n.id(1).regs[15] ^ 0x5A);  // CRC broken
   n.boot();
   EXPECT_EQ(n.runtime().slot(0).fault, ModuleFault::kIdBlank);
   EXPECT_EQ(n.runtime().slot(1).fault, ModuleFault::kIdCorrupt);
@@ -450,6 +450,144 @@ TEST(Discovery, MuxIsLeftDeselectedAfterEverySlotAccess) {
   n.imu(1).impact(900);
   n.run_for(10);
   EXPECT_EQ(n.i2c.mask(), 0);
+}
+
+// --- TL-SN-001 board I/O (expanders, rails, presence, source, charger) ------------------------
+
+Node rev_a() { return Node(tl_sn_001_board()); }
+
+TEST(BoardIo, BootLeavesEveryOutputSafeAndNeverPulsesARail) {
+  Node n = rev_a();
+  n.boot();
+  EXPECT_TRUE(n.runtime().board_ok());
+  for (std::uint8_t s = 0; s < 4; ++s) {
+    EXPECT_TRUE(n.rev_a().aon_on(s)) << int(s);
+    EXPECT_FALSE(n.rev_a().sw_on(s)) << int(s);
+    EXPECT_TRUE(n.rev_a().reset_n(s)) << int(s);
+    EXPECT_TRUE(n.rev_a().cs_n(s)) << int(s);
+  }
+  // Output latches were written before the pins became outputs: no SW_EN ever drove high.
+  EXPECT_EQ(n.rev_a().exp_a.ever_driven_high & 0x000F, 0);
+  EXPECT_TRUE(n.rev_a().exp_b.is_output(10));  // UART mux enable, parked high
+  EXPECT_TRUE(n.rev_a().exp_b.level(10));
+  EXPECT_FALSE(n.rev_a().exp_b.level(11));  // presence probe idles low (no pull-up current)
+}
+
+TEST(BoardIo, SeatedCardWithDeadIdIsAFaultEmptySlotIsNot) {
+  Node n = rev_a();
+  n.insert(0, ModuleCode::kTlMod004Env);
+  n.insert(1, ModuleCode::kTlMod004Env);
+  n.i2c.detach(1, 0x50);  // card seated, its ID EEPROM not answering
+  n.boot();
+  EXPECT_TRUE(n.runtime().slot(0).enabled);
+  EXPECT_EQ(n.runtime().slot(1).fault, ModuleFault::kNoIdEeprom);
+  EXPECT_EQ(n.runtime().slot(2).fault, ModuleFault::kNone);  // empty
+  EXPECT_FALSE(n.rev_a().exp_b.level(11));
+}
+
+TEST(BoardIo, RailSequencingFollowsS2AndS3) {
+  Node n = rev_a();
+  n.insert(0, ModuleCode::kTlTest001);
+  n.boot();
+  BoardIo& io = n.board_io();
+  io.set_rail(0, Rail::kSwitched3v3, true);
+  EXPECT_TRUE(n.rev_a().sw_on(0));
+  io.set_rail(0, Rail::kAlwaysOn3v3, false);  // SW goes off first, card lines go low
+  EXPECT_FALSE(n.rev_a().sw_on(0));
+  EXPECT_FALSE(n.rev_a().aon_on(0));
+  EXPECT_FALSE(n.rev_a().cs_n(0));
+  EXPECT_FALSE(n.rev_a().reset_n(0));
+  io.set_rail(0, Rail::kSwitched3v3, true);  // refused: AON is off
+  EXPECT_FALSE(n.rev_a().sw_on(0));
+  EXPECT_FALSE(io.select_uart(0));  // never route the UART into an unpowered slot
+  io.set_rail(0, Rail::kAlwaysOn3v3, true);
+  EXPECT_TRUE(n.rev_a().aon_on(0));
+  EXPECT_TRUE(n.rev_a().cs_n(0));
+  EXPECT_TRUE(io.select_uart(0));
+  EXPECT_FALSE(n.rev_a().exp_b.level(10));  // mux enabled
+  io.set_rail(0, Rail::kAlwaysOn3v3, false);
+  EXPECT_FALSE(io.uart_slot().has_value());  // rail off parks the mux first
+  EXPECT_TRUE(n.rev_a().exp_b.level(10));
+}
+
+TEST(BoardIo, UnpoweredSlotsDevicesDoNotAnswer) {
+  Node n = rev_a();
+  n.insert(2, ModuleCode::kTlMod004Env);
+  n.boot();
+  auto read_id = [&] {
+    const std::uint8_t mask = 1u << 2, reg = 0;
+    std::uint8_t b = 0;
+    const bool ok = n.i2c.write(0x70, &mask, 1) && n.i2c.write_read(0x50, &reg, 1, &b, 1);
+    const std::uint8_t none = 0;
+    n.i2c.write(0x70, &none, 1);
+    return ok;
+  };
+  EXPECT_TRUE(read_id());
+  n.board_io().set_rail(2, Rail::kAlwaysOn3v3, false);
+  EXPECT_FALSE(read_id());
+  n.board_io().set_rail(2, Rail::kAlwaysOn3v3, true);
+  EXPECT_TRUE(read_id());
+}
+
+TEST(BoardIo, PowerSourceFromChargerAndMuxStatusUnknownWhenUnreadable) {
+  Node n = rev_a();
+  n.boot();
+  EXPECT_EQ(n.board_io().source(), PowerSource::kUsb);
+  n.rev_a().source = RevABoard::Source::kSolar;
+  EXPECT_EQ(n.board_io().source(), PowerSource::kSolarBattery);
+  n.rev_a().charger.vin_good = false;
+  n.rev_a().source = RevABoard::Source::kBatteryOnly;
+  EXPECT_EQ(n.board_io().source(), PowerSource::kBatteryOnly);
+  n.rev_a().exp_b.nack = true;
+  EXPECT_EQ(n.board_io().source(), PowerSource::kUnknown);  // never assumed to be USB
+}
+
+TEST(BoardIo, ChargerConfiguredExplicitlyAndReappliedAfterARegisterReset) {
+  Node n = rev_a();
+  n.boot();
+  auto& regs = n.rev_a().charger.regs;
+  EXPECT_EQ(regs[Bq25186::kIchgCtrl], Bq25186::ichg_code(300));  // USB: 300 mA
+  EXPECT_EQ(Bq25186::ichg_code(300), 0x39);
+  EXPECT_EQ(Bq25186::ichg_code(200), 0x2F);
+  EXPECT_EQ(Bq25186::ichg_code(10), 0x05);
+  EXPECT_EQ(regs[Bq25186::kShipRst], 0x00);        // no ship mode from a shorted TS
+  EXPECT_EQ(regs[Bq25186::kSysReg] & 0xE0, 0x40);  // SYS 4.5 V, never pass-through
+  EXPECT_EQ(regs[Bq25186::kIcCtrl] & 0x03, 0x03);  // watchdog off: config does not revert
+  n.rev_a().charger.reset_registers();             // brown-out / watchdog
+  n.run_for(61'000);                               // next heartbeat services the board
+  EXPECT_EQ(regs[Bq25186::kIchgCtrl], Bq25186::ichg_code(300));
+  EXPECT_EQ(regs[Bq25186::kShipRst], 0x00);
+  // On solar the charge current drops to 200 mA at the next service.
+  n.rev_a().source = RevABoard::Source::kSolar;
+  n.run_for(61'000);
+  EXPECT_EQ(regs[Bq25186::kIchgCtrl], Bq25186::ichg_code(200));
+  EXPECT_TRUE(n.board_io().charger_ok());
+}
+
+TEST(BoardIo, DeadChargerIsReportedNotHidden) {
+  Node n = rev_a();
+  n.rev_a().charger.nack = true;
+  n.boot();
+  EXPECT_FALSE(n.runtime().board_ok());
+  EXPECT_FALSE(n.board_io().charger_ok());
+  EXPECT_FALSE(n.board_io().charger_status().has_value());
+}
+
+TEST(BoardIo, UnknownSourceBudgetsLikeBattery) {
+  Node n = rev_a();
+  n.adc.mv = 3400;  // low battery
+  n.rev_a().exp_b.nack = true;
+  n.boot();
+  EXPECT_EQ(n.runtime().power_mode(), PowerMode::kLowPower);
+}
+
+TEST(BoardIo, TestCardIsDiscoveredWithEveryPinReleased) {
+  Node n = rev_a();
+  n.insert(3, ModuleCode::kTlTest001);
+  n.boot();
+  EXPECT_TRUE(n.runtime().slot(3).enabled);
+  EXPECT_EQ(n.runtime().slot(3).code, ModuleCode::kTlTest001);
+  for (std::uint8_t pin = 0; pin < 16; ++pin) EXPECT_FALSE(n.test_card(3).is_output(pin));
 }
 
 // --- Delivery -----------------------------------------------------------------------------------

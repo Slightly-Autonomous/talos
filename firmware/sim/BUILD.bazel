@@ -7,7 +7,10 @@ cc_library(
     hdrs = ["virtual_board.h"],
     copts = TALOS_COPTS,
     visibility = ["//visibility:public"],
-    deps = ["//firmware/portable"],
+    deps = [
+        "//firmware/esp_idf/main:board_tl_sn_001",
+        "//firmware/portable",
+    ],
 )
 
 cc_library(

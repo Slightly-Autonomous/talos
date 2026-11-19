@@ -8,11 +8,13 @@
 #include <array>
 #include <cstdint>
 #include <deque>
+#include <functional>
 #include <map>
 #include <memory>
 #include <optional>
 #include <vector>
 
+#include "firmware/portable/board_io.h"
 #include "firmware/portable/hal.h"
 #include "firmware/portable/runtime.h"
 
@@ -50,9 +52,12 @@ class I2cDevice {
 // mux_nack makes the mux itself stop answering.
 class I2cBus final : public II2c {
  public:
+  static constexpr std::uint8_t kRoot = 0xFF;  // devices upstream of the mux
   explicit I2cBus(std::uint8_t mux_address) : mux_(mux_address) {}
   std::uint8_t mask() const { return mask_; }
   bool mux_nack = false;
+  // Branch devices only answer while their slot is powered (AON). Unset = always.
+  std::function<bool(std::uint8_t branch)> branch_powered;
   void attach(std::uint8_t branch, std::uint8_t addr, I2cDevice* dev) {
     devices_[{branch, addr}] = dev;
   }
@@ -84,9 +89,74 @@ class RegisterDevice : public I2cDevice {
   std::uint8_t ptr_ = 0;
 };
 
+// 24AA025E48: ID block v1 in page 0, EUI-48 at 0xFA.
 class IdEeprom final : public RegisterDevice {
  public:
   IdEeprom(ModuleCode code, std::uint8_t revision);
+  void blank() { regs.fill(0xFF); }
+};
+
+// TCA9535 (SCPS201F): input registers read the pin level (the output latch for
+// pins configured as outputs, the external level otherwise); POR outputs 0xFFFF,
+// all pins inputs. `external` supplies the level of each pin when it is an input.
+class Tca9535Model final : public RegisterDevice {
+ public:
+  Tca9535Model();
+  bool read(std::uint8_t* out, std::size_t n) override;
+  // Level the pin is at: the output latch if configured as output, else external(pin).
+  bool level(std::uint8_t pin) const;
+  bool is_output(std::uint8_t pin) const;
+  void power_on_reset();
+  std::function<bool(std::uint8_t pin)> external = [](std::uint8_t) { return true; };
+  bool nack = false;  // fault: the expander stops answering
+  bool write(const std::uint8_t* data, std::size_t n) override;
+  // Every pin that has ever driven a 1 as an output (catches config-before-output).
+  std::uint16_t ever_driven_high = 0;
+};
+
+// BQ25186 (SLUSF69A): reset values, STAT0/STAT1 from the modelled input and
+// battery, FLAG0 read-to-clear, register reset (watchdog or brown-out).
+class Bq25186Model final : public RegisterDevice {
+ public:
+  Bq25186Model();
+  bool read(std::uint8_t* out, std::size_t n) override;
+  void reset_registers();
+  bool vin_good = true;
+  bool ts_open = false;
+  std::uint8_t ts_zone = 0;
+  bool nack = false;
+  bool write(const std::uint8_t* data, std::size_t n) override {
+    return !nack && RegisterDevice::write(data, n);
+  }
+};
+
+class Adc final : public IBatteryAdc {
+ public:
+  std::optional<std::uint32_t> battery_mv() override { return mv; }
+  std::optional<std::uint32_t> mv = 3950;
+};
+
+// TL-SN-001 plumbing around the expanders: who powers what, what each input
+// pin sees. Mirrors hardware/kicad/TL-SN-001 (pull-ups and pull-downs included).
+class RevABoard {
+ public:
+  enum class Source : std::uint8_t { kUsb, kSolar, kBatteryOnly };
+  explicit RevABoard(const BoardSupport& board);
+  Tca9535Model exp_a, exp_b;
+  Bq25186Model charger;
+  std::array<bool, kSlots> seated{};     // a card grounds PRESENT_N
+  std::array<bool, kSlots> alert_low{};  // a card pulls ALERT_N low
+  Source source = Source::kUsb;
+  bool aon_on(std::uint8_t slot) const;  // TPS22917 ON level (100k pull-up when not driven)
+  bool sw_on(std::uint8_t slot) const;   // 1M pull-down when not driven
+  // Line level at the card for RESET_N / CS_N (pulled up to the slot's AON).
+  bool reset_n(std::uint8_t slot) const;
+  bool cs_n(std::uint8_t slot) const;
+
+ private:
+  bool expander_pin(const ExpanderPin& p, bool undriven) const;
+  std::uint8_t exp_a_address() const { return board_.slot_io[0].aon_enable.address; }
+  const BoardSupport& board_;
 };
 
 // LIS2DW12 (DS11811) as far as the driver depends on it: WHO_AM_I, soft reset,
@@ -234,6 +304,13 @@ class Node {
   void insert(std::uint8_t slot, ModuleCode code);
   Lis2dw12& imu(std::uint8_t slot) { return *imus_.at(slot); }
   IdEeprom& id(std::uint8_t slot) { return *eeproms_.at(slot); }
+  Tca9535Model& test_card(std::uint8_t slot) { return *test_cards_.at(slot); }
+  // Present on boards with expanders (tl_sn_001_board()): the real BoardIo runs
+  // against these models and is the platform's IPower.
+  RevABoard& rev_a() { return *rev_a_; }
+  BoardIo& board_io() { return *board_io_; }
+  bool has_board_io() const { return board_io_.has_value(); }
+  void remove(std::uint8_t slot);
   Sht40& sht(std::uint8_t slot) { return *shts_.at(slot); }
   Tmag5273& hall(std::uint8_t slot) { return *halls_.at(slot); }
 
@@ -258,6 +335,7 @@ class Node {
   Gpio gpio;
   I2cBus i2c;
   Power power;
+  Adc adc;
   Store store;
   Flash flash;
   Link link;
@@ -266,17 +344,23 @@ class Node {
  private:
   std::array<bool, 32> last_lines_{};
   TimeMs next_poll_ = 0;
+  IPower& select_power();
+  std::optional<RevABoard> rev_a_;
+  std::optional<BoardIo> board_io_;
   Platform platform_;
   std::optional<NodeRuntime> runtime_;
   std::map<std::uint8_t, std::unique_ptr<IdEeprom>> eeproms_;
   std::map<std::uint8_t, std::unique_ptr<Lis2dw12>> imus_;
   std::map<std::uint8_t, std::unique_ptr<Sht40>> shts_;
   std::map<std::uint8_t, std::unique_ptr<Tmag5273>> halls_;
+  std::map<std::uint8_t, std::unique_ptr<Tca9535Model>> test_cards_;
   std::uint32_t reboots_ = 0;
 };
 
 // Four-slot board shape from the provisional manifest (ADR 0013): slot i has
-// wake line i, I2C branch i; only slot 2 has a 5 V rail.
+// wake line i, I2C branch i; only slot 2 has a 5 V rail. No expanders.
 BoardSupport default_board();
+// TL-SN-001 Rev A: the ESP build's board table (expanders, charger, presence).
+BoardSupport tl_sn_001_board();
 
 }  // namespace talos::fw::sim
