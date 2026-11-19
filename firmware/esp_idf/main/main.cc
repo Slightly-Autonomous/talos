@@ -11,13 +11,14 @@
 #include "firmware/portable/board_io.h"
 #include "firmware/portable/diag.h"
 #include "firmware/portable/runtime.h"
+#include "firmware/portable/serial_link.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
 namespace {
 
-// Diag replies go to stdout, which is the USB-serial-JTAG console.
-class ConsoleOut final : public talos::fw::IDiagOut {
+// Diag replies and datagram frames go to stdout, which is the USB-serial-JTAG console.
+class ConsoleOut final : public talos::fw::IDiagOut, public talos::fw::ILineSink {
  public:
   void write(const char* s, std::size_t n) override {
     std::fwrite(s, 1, n, stdout);
@@ -26,28 +27,37 @@ class ConsoleOut final : public talos::fw::IDiagOut {
 };
 
 // Collects console bytes into lines without blocking the runtime loop. Reads a
-// byte at a time and stops at a newline, so a second queued command is never lost.
+// byte at a time and stops at a newline, so a second queued line is never lost.
+// Long enough for a datagram frame ("@F <base64>").
 class LineReader {
  public:
-  bool poll(char* out, std::size_t cap) {
+  // Returns the line length (0 = no complete line yet).
+  std::size_t poll() {
     std::uint8_t c = 0;
     while (usb_serial_jtag_read_bytes(&c, 1, 0) == 1) {
       if (c == '\n' || c == '\r') {
         if (len_ == 0) continue;
-        const std::size_t m = len_ < cap - 1 ? len_ : cap - 1;
-        for (std::size_t k = 0; k < m; ++k) out[k] = buf_[k];
-        out[m] = 0;
+        const std::size_t n = overflow_ ? 0 : len_;
+        line_[len_] = 0;
         len_ = 0;
-        return true;
+        overflow_ = false;
+        if (n) return n;
+        continue;  // an over-long line is dropped whole, never half-parsed
       }
-      if (len_ < sizeof buf_) buf_[len_++] = static_cast<char>(c);
+      if (len_ < sizeof line_ - 1) {
+        line_[len_++] = static_cast<char>(c);
+      } else {
+        overflow_ = true;
+      }
     }
-    return false;
+    return 0;
   }
+  const char* line() const { return line_; }
 
  private:
-  char buf_[talos::fw::Diag::kMaxLine];
+  char line_[talos::fw::SerialDatagram::kMaxLine + 1];
   std::size_t len_ = 0;
+  bool overflow_ = false;
 };
 
 }  // namespace
@@ -65,7 +75,9 @@ extern "C" void app_main(void) {
   static BoardIo power(i2c, clock, adc, board);  // expanders, rails, source, charger
   static esp::Store store;
   static esp::Flash flash;
-  static esp::Link link;
+  static ConsoleOut console;
+  static SerialDatagram serial_net(console);
+  static ProvisionedLink link(serial_net, store);  // CoAP over the console until Thread lands
   static Platform platform{clock, gpio, i2c, power, store, flash, link, board};
   static NodeRuntime runtime(platform);
 
@@ -77,8 +89,9 @@ extern "C" void app_main(void) {
            static_cast<unsigned long>(runtime.running_version()),
            static_cast<int>(esp_reset_reason()), runtime.board_ok() ? 1 : 0);
   static Diag diag(platform, runtime, &power);
-  static ConsoleOut console;
   static LineReader reader;
+  ESP_LOGI(kTag, "talos link %s device=%s", link.provisioned() ? "serial" : "unprovisioned",
+           link.provisioned() ? link.device_id() : "-");
   for (std::uint8_t i = 0; i < kSlots; ++i) {
     const auto& st = runtime.slot(i);
     ESP_LOGI(kTag, "talos slot %u module=0x%04x enabled=%d fault=%d", i,
@@ -86,8 +99,10 @@ extern "C" void app_main(void) {
   }
   TimeMs next_log = clock.now_ms();
   for (;;) {
-    char line[Diag::kMaxLine];
-    if (reader.poll(line, sizeof line)) diag.handle_line(line, console);
+    if (const std::size_t n = reader.poll()) {
+      if (!serial_net.push_line(reader.line(), n)) diag.handle_line(reader.line(), console);
+      if (diag.reboot_requested()) esp_restart();
+    }
     runtime.step();
     if (runtime.reboot_requested()) esp_restart();
     const TimeMs now = clock.now_ms();

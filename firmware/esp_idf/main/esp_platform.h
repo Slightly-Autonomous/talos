@@ -73,11 +73,4 @@ class Flash final : public IFlash {
   bool read(std::uint8_t, std::uint32_t, std::uint8_t*, std::size_t) override { return false; }
 };
 
-// Thread/CoAP transport arrives in Phase 6; until then events stay queued.
-class Link final : public ILink {
- public:
-  bool send(const DeviceEvent&) override { return false; }
-  std::optional<Downlink> receive() override { return std::nullopt; }
-};
-
 }  // namespace talos::fw::esp

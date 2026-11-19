@@ -40,6 +40,15 @@ jobs:
           # Linux keeps the alignment check that .bazelrc disables for macOS.
           if [ "${{ matrix.config }}" = "ubsan" ]; then extra="$extra --copt=-fsanitize=alignment"; fi
           bazel test --config=ci $extra //...
+      - name: Bench tools against the virtual board
+        # tools/hil and tools/bench drive firmware/sim:bench_node exactly as they drive a real
+        # board over USB, including the serial bridge into a real hub.
+        if: matrix.config == 'default'
+        run: |
+          bazel build --config=ci //firmware/sim:bench_node //server:talos_hub
+          export TALOS_BENCH_NODE=$PWD/bazel-bin/firmware/sim/bench_node TALOS_HUB=$PWD/bazel-bin/server/talos_hub
+          (cd tools/hil && python3 -m unittest discover -s tests -t . -v)
+          if [ -d tools/bench ]; then (cd tools/bench && python3 -m unittest discover -s tests -t . -v); fi
       - name: Upload scenario traces
         if: failure()
         uses: actions/upload-artifact@v7

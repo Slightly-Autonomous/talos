@@ -12,6 +12,7 @@ cc_library(
         "modules.cc",
         "ota.cc",
         "runtime.cc",
+        "serial_link.cc",
         "wire.cc",
     ],
     hdrs = [
@@ -23,6 +24,7 @@ cc_library(
         "modules.h",
         "ota.h",
         "runtime.h",
+        "serial_link.h",
         "types.h",
         "wire.h",
     ],

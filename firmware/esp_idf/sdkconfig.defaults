@@ -11,3 +11,5 @@ CONFIG_COMPILER_CXX_RTTI=n
 CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
 # Brown-outs must reset and be reported (bench-test-plan S-P15/S-P16).
 CONFIG_ESP_BROWNOUT_DET=y
+# Datagram frames over the console are ~1.5 KB on the stack (serial_link.h).
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192

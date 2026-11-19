@@ -17,6 +17,7 @@
 //   uart <slot>|off
 //   selftest i2c
 //   selftest slot|imu|sht <slot>
+//   provision <device_id> <key hex, 16-32 bytes> | identity | reboot
 #pragma once
 
 #include <cstddef>
@@ -61,6 +62,8 @@ class Diag {
   // `board_io` may be null on boards without expanders.
   Diag(Platform& p, NodeRuntime& runtime, BoardIo* board_io) : p_(p), rt_(runtime), io_(board_io) {}
   void handle_line(const char* line, IDiagOut& out);
+  // Set by `reboot` (and after `provision`): the platform restarts the MCU.
+  bool reboot_requested() const { return reboot_; }
 
  private:
   struct Args {
@@ -75,6 +78,8 @@ class Diag {
   bool cmd_exp(const Args& a, IDiagOut& out, const char*& err);
   bool cmd_rail(const Args& a, IDiagOut& out, const char*& err);
   bool cmd_uart(const Args& a, IDiagOut& out, const char*& err);
+  bool cmd_provision(const Args& a, IDiagOut& out, const char*& err);
+  bool cmd_identity(IDiagOut& out);
   bool selftest_i2c(IDiagOut& out);
   bool selftest_slot(std::uint8_t slot, IDiagOut& out, const char*& err);
   bool selftest_imu(std::uint8_t slot, IDiagOut& out, const char*& err);
@@ -88,6 +93,7 @@ class Diag {
   Platform& p_;
   NodeRuntime& rt_;
   BoardIo* io_;
+  bool reboot_ = false;
 };
 
 }  // namespace talos::fw

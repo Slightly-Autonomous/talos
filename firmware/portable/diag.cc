@@ -5,6 +5,9 @@
 #include <cstdlib>
 #include <cstring>
 
+#include "common/sha256/sha256.h"
+#include "firmware/portable/serial_link.h"
+
 namespace talos::fw {
 
 // --- JsonLine ---------------------------------------------------------------------------
@@ -169,7 +172,8 @@ void Diag::handle_line(const char* line, IDiagOut& out) {
   if (is("help")) {
     JsonLine()
         .str("t", "help")
-        .str("cmds", "id slots power i2c mux exp rail uart rescan selftest")
+        .str("cmds",
+             "id slots power i2c mux exp rail uart rescan selftest provision identity reboot")
         .emit(out);
     ok = true;
   } else if (is("id")) {
@@ -188,6 +192,13 @@ void Diag::handle_line(const char* line, IDiagOut& out) {
     ok = cmd_rail(a, out, err);
   } else if (is("uart")) {
     ok = cmd_uart(a, out, err);
+  } else if (is("provision")) {
+    ok = cmd_provision(a, out, err);
+  } else if (is("identity")) {
+    ok = cmd_identity(out);
+  } else if (is("reboot")) {
+    reboot_ = true;
+    ok = true;
   } else if (is("rescan")) {
     rt_.rescan();
     ok = cmd_slots(out);
@@ -277,6 +288,68 @@ bool Diag::cmd_power(IDiagOut& out, const char*& err) {
       .num("flags", st->flags)
       .emit(out);
   return io_->charger_ok();
+}
+
+// --- identity ---------------------------------------------------------------------------
+
+namespace {
+int hex_digit(char c) {
+  if (c >= '0' && c <= '9') return c - '0';
+  if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+  if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+  return -1;
+}
+// First 4 bytes of SHA-256(key): enough to match the hub's key file without showing the key.
+std::uint32_t fingerprint(const std::uint8_t* key, std::size_t n) {
+  Sha256 h;
+  h.update(key, n);
+  const auto d = h.finish();
+  return (std::uint32_t{d[0]} << 24) | (std::uint32_t{d[1]} << 16) | (std::uint32_t{d[2]} << 8) |
+         d[3];
+}
+}  // namespace
+
+bool Diag::cmd_provision(const Args& a, IDiagOut& out, const char*& err) {
+  DeviceIdentity id;
+  const std::size_t id_len = a.n >= 3 ? std::strlen(a.v[1]) : 0;
+  const std::size_t hex_len = a.n >= 3 ? std::strlen(a.v[2]) : 0;
+  if (a.n != 3 || id_len == 0 || id_len > DeviceIdentity::kMaxId || hex_len % 2 != 0 ||
+      hex_len / 2 < 16 || hex_len / 2 > DeviceIdentity::kMaxKey) {
+    err = "usage: provision <device_id, 1-31 chars> <key: 16-32 bytes as hex>";
+    return false;
+  }
+  std::memcpy(id.device_id, a.v[1], id_len);
+  for (std::size_t i = 0; i < hex_len / 2; ++i) {
+    const int hi = hex_digit(a.v[2][2 * i]), lo = hex_digit(a.v[2][2 * i + 1]);
+    if (hi < 0 || lo < 0) {
+      err = "key must be hex";
+      return false;
+    }
+    id.key[i] = static_cast<std::uint8_t>(hi * 16 + lo);
+  }
+  id.key_len = static_cast<std::uint8_t>(hex_len / 2);
+  if (!save_identity(p_.store, id)) {
+    err = "store write failed";
+    return false;
+  }
+  reboot_ = true;  // the link is built at boot from the stored identity
+  JsonLine()
+      .str("t", "identity")
+      .str("device_id", id.device_id)
+      .hex("key_fingerprint", fingerprint(id.key, id.key_len))
+      .boolean("reboot", true)
+      .emit(out);
+  return true;
+}
+
+bool Diag::cmd_identity(IDiagOut& out) {
+  const auto id = load_identity(p_.store);
+  JsonLine line;
+  line.str("t", "identity").boolean("provisioned", id.has_value());
+  if (id)
+    line.str("device_id", id->device_id).hex("key_fingerprint", fingerprint(id->key, id->key_len));
+  line.emit(out);
+  return true;
 }
 
 // --- raw bus access ---------------------------------------------------------------------

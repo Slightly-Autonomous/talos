@@ -38,7 +38,7 @@ The virtual board was kinder than the real chips in these places, so each needs 
 | FW-B9 | `esp_platform.h:42`, `.cc:84` | `source()` always USB, `battery_mv()` always 3900 | node never enters low-power mode | Fixed: source from CHG_PG_N + PMUX_ST (unknown if unreadable), ADC for VBAT |
 | FW-B10 | `runtime.cc:105` | any ID read failure, and code 0x0000, mean "empty slot" | dead mux, dead card, blank card all look empty; `kNoIdEeprom` never sent | Fixed: PRESENT_N separates a dead card (kNoIdEeprom) from an empty slot |
 | FW-B11 | `modules.cc:30-35` | mux never deselected after a slot access | one stuck branch takes down the root bus | Fixed |
-| FW-B12 | `esp_platform.h:66` | `Link::send` always false | nothing leaves a real node: no end-to-end test possible | Open |
+| FW-B12 | `esp_platform.h:66` | `Link::send` always false | nothing leaves a real node: no end-to-end test possible | Fixed: CoAP datagrams over the console (`@F` lines) and `tools/hil` serial bridge; tested end to end against the real hub |
 | FW-B13 | `tools/dbg/talos_dbg/adapter.py:141` | ALERT read as asserted when AON is off | `status` prints a false alert; must print unknown | Open |
 
 ### Contract drift
@@ -266,7 +266,7 @@ sleep current high (bisect by AON_n off one slot at a time, then by the core spl
 | Area | Work |
 |---|---|
 | Portable firmware | **Done:** `board_io` (TCA9535, BQ25186, rails with S-2/S-3, presence, source), ID block v1 with CRC, driver fixes FW-B1..B11, `PowerSource::kUnknown`, `diag` console (`@T {json}` lines; self-tests for the root bus, the TL-TEST-001 slot loopback, LIS2DW12 self-test and SHT40 heater). **Open:** mux reset line (needs the board decision), SPI/UART loopback lines (need GPIO output in the HAL) |
-| ESP-IDF | **Done:** console and diag on USB-serial-JTAG, reset cause in the boot line, brown-out detector, battery ADC, `BoardIo` for source and rails. **Open:** serial datagram transport (COBS) behind `IDatagram`, wake cause, coredump, custom partition table, never deep-sleep on USB |
+| ESP-IDF | **Done:** console and diag on USB-serial-JTAG, reset cause in the boot line, brown-out detector, battery ADC, `BoardIo` for source and rails. **Done:** CoAP over the console (`serial_link.h`, provisioned identity in NVS). **Open:** wake cause, coredump, custom partition table, never deep-sleep on USB |
 | Virtual board | **Done:** TCA9535 ×3, BQ25186, rail-gated branches, PRESENT/ALERT, busy-NACK, pulsed INT, polled stepping, per-device NACK, blank/corrupt IDs, `bench_node` with `--fault=` (`firmware/sim/sim_faults.h`). **Open:** EXP_INT line, stuck SDA, brown-out |
 | Twin | `IDeviceBackend` (L1/L2/L4), `binding` in the site proto, `--backend`, `skipped` reason, L1/L2 parity test; PIR mask/warm-up, humidity, magnet field, ODR-sampled impacts |
 | tools/dbg | `selftest --stage adapter|tl-test-001`, `id program` (refuses overwrite without `--expect-current`), `id --raw`, `reg`, `uart`, `watch` on the interrupt flag, AON cycle waits for SDA low, FW-B13 |

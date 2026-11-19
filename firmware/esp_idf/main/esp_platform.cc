@@ -19,6 +19,8 @@ const char* key_name(StoreKey k) {
       return "ota";
     case StoreKey::kPendingCritical:
       return "pend";
+    case StoreKey::kIdentity:
+      return "ident";
   }
   return "x";
 }

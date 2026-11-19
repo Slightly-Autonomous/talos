@@ -65,7 +65,13 @@ class IBatteryAdc {
 };
 
 // Small atomic key/value store (NVS on ESP32). put() is all-or-nothing.
-enum class StoreKey : std::uint8_t { kBootEpoch = 0, kConfig = 1, kOta = 2, kPendingCritical = 3 };
+enum class StoreKey : std::uint8_t {
+  kBootEpoch = 0,
+  kConfig = 1,
+  kOta = 2,
+  kPendingCritical = 3,
+  kIdentity = 4,  // device ID + link key (serial_link.h), set with diag `provision`
+};
 
 class IStore {
  public:

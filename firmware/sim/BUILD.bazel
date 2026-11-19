@@ -71,3 +71,14 @@ cc_binary(
     visibility = ["//visibility:public"],
     deps = [":sim"],
 )
+
+cc_test(
+    name = "serial_link_test",
+    size = "small",
+    srcs = ["serial_link_test.cc"],
+    copts = TALOS_COPTS,
+    deps = [
+        ":sim",
+        "@googletest//:gtest_main",
+    ],
+)

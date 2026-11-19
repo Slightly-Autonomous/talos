@@ -7,11 +7,15 @@
 #include <atomic>
 #include <chrono>
 #include <cstdlib>
+#include <cstring>
 #include <filesystem>
+#include <string>
 #include <thread>
+#include <vector>
 
 #include "codec/yaml_loader.h"
 #include "firmware/portable/coap_link.h"
+#include "firmware/portable/serial_link.h"
 #include "firmware/portable/wire.h"
 #include "firmware/sim/udp_datagram.h"
 #include "firmware/sim/virtual_board.h"
@@ -294,6 +298,86 @@ TEST(CoapIngress, ForgedUnknownBadPathDuplicateAndRateLimited) {
   EXPECT_EQ(reply_code(limited.handle(request("node-12", kNodeKey, 21, 3), "x")), coap::kChanged);
   EXPECT_EQ(reply_code(limited.handle(request("node-12", kNodeKey, 22, 4), "x")),
             coap::kTooManyRequests);
+}
+
+// The bench path before Thread: the node's CoAP datagrams travel as "@F <base64>" console
+// lines; a host relay (tools/hil serial_bridge.py on a real board) moves them to the hub's
+// UDP port and writes the replies back as lines.
+struct SerialRelayNode {
+  struct ToHost final : fw::ILineSink {
+    std::vector<std::string> lines;
+    void write(const char* s, std::size_t n) override { lines.emplace_back(s, n); }
+  };
+  struct ToNode final : fw::ILineSink {
+    fw::SerialDatagram* node_side = nullptr;
+    void write(const char* s, std::size_t n) override { node_side->push_line(s, n); }
+  };
+
+  explicit SerialRelayNode(int port)
+      : udp("127.0.0.1", static_cast<std::uint16_t>(port)),
+        node_net(to_host),
+        host_net(to_node),
+        link(node_net, provisioned_store()),
+        node(fw::sim::default_board(), 64 * 1024, &link) {
+    to_node.node_side = &node_net;
+    node.poll_link = true;
+    node.insert(0, fw::ModuleCode::kReedContact);
+  }
+
+  fw::sim::Store& provisioned_store() {
+    fw::DeviceIdentity id;
+    std::strcpy(id.device_id, "node-12");
+    id.key_len = static_cast<std::uint8_t>(kNodeKey.size());
+    std::copy(kNodeKey.begin(), kNodeKey.end(), id.key);
+    fw::save_identity(identity_store, id);
+    return identity_store;
+  }
+
+  // What the host bridge does each tick: frames to UDP, UDP replies to frames.
+  void relay() {
+    std::uint8_t buf[fw::SerialDatagram::kMaxDatagram];
+    for (const auto& line : to_host.lines) {
+      if (host_net.push_line(line.data(), line.size())) {
+        while (const auto n = host_net.receive(buf, sizeof buf)) udp.send(buf, n);
+      }
+    }
+    to_host.lines.clear();
+    while (const auto n = udp.receive(buf, sizeof buf)) host_net.send(buf, n);
+  }
+
+  fw::sim::Store identity_store;
+  ToHost to_host;
+  ToNode to_node;
+  fw::sim::UdpDatagram udp;
+  fw::SerialDatagram node_net;
+  fw::SerialDatagram host_net;
+  fw::ProvisionedLink link;
+  fw::sim::Node node;
+};
+
+TEST(CoapIngress, SerialConsoleFramesReachTheHubAndAcksComeBack) {
+  Fixture f;
+  SerialRelayNode n(f.port);
+  ASSERT_TRUE(n.link.provisioned());
+  n.node.boot();
+  auto tick = [&](int ticks) {
+    for (int i = 0; i < ticks; ++i) {
+      n.node.run_for(10);
+      n.relay();
+      f.clock.advance(10);
+      std::this_thread::sleep_for(std::chrono::microseconds(300));
+    }
+  };
+  tick(50);
+  n.node.gpio.set(0, true);  // door opens
+  bool seen = false;
+  for (int i = 0; i < 400 && !seen; ++i) {
+    tick(1);
+    seen = journaled(*f.hub, "contact.opened") == 1;
+  }
+  EXPECT_TRUE(seen);
+  for (int i = 0; i < 400 && n.node.runtime().queued() > 0; ++i) tick(1);
+  EXPECT_EQ(n.node.runtime().queued(), 0u);  // every event ACKed through the console path
 }
 
 }  // namespace
