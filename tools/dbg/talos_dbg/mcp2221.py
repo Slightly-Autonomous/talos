@@ -32,6 +32,7 @@ FLASH_PRODUCT = 0x03
 FLASH_FACTORY_SERIAL = 0x05
 
 DESIGNATION_GPIO = 0b000
+DESIGNATION_GP1_INTERRUPT = 0b100  # GP1 alternate function 2
 NOT_GPIO = 0xEE
 I2C_CHUNK = 60
 POLL_LIMIT = 50
@@ -106,6 +107,15 @@ class Mcp2221:
     def cancel_i2c(self) -> None:
         self._xfer(CMD_STATUS, 0x00, 0x10)
 
+    def line_levels(self) -> tuple[bool, bool]:
+        """(SCL, SDA) as read from the pins (Table 3-2 bytes 22/23)."""
+        st = self.status()
+        return bool(st[22]), bool(st[23])
+
+    def interrupt_flag(self) -> bool:
+        """GP1 interrupt-on-change detector state (Table 3-2 byte 24)."""
+        return bool(self.status()[24])
+
     # --- Flash (Tables 3-3 to 3-16) ----------------------------------------------------
 
     def _read_flash(self, sub: int) -> bytes:
@@ -145,6 +155,11 @@ class Mcp2221:
         # Bytes 2-6 leave clock, DAC, ADC and interrupt settings alone (bit 7 clear).
         # Byte 7 bit 7 says "load the GP designations that follow".
         self._xfer(CMD_SET_SRAM, 0x00, 0, 0, 0, 0, 0, 0x80, *(s.encode() for s in gp))
+
+    def set_interrupt(self, rising: bool, falling: bool, clear: bool = True) -> None:
+        """Configure the GP1 edge detector (Table 3-36 byte 6) without touching GP settings."""
+        b6 = 0x80 | 0x10 | (0x08 if rising else 0) | 0x04 | (0x02 if falling else 0) | (0x01 if clear else 0)
+        self._xfer(CMD_SET_SRAM, 0x00, 0, 0, 0, 0, b6, 0x00)
 
     # --- GPIO (Tables 3-32 to 3-35) ----------------------------------------------------
 

@@ -90,8 +90,10 @@ class Rails(unittest.TestCase):
         fake.wake, fake.alert_n = True, False
         ln = a.lines()
         self.assertTrue(ln.wake)
-        self.assertTrue(ln.alert_asserted)
+        self.assertIsNone(ln.alert_asserted)  # ALERT_N is pulled up to AON: unknown while it is off
         self.assertFalse(ln.aon_on)
+        a.set_rail("aon", True)
+        self.assertTrue(a.lines().alert_asserted)
 
 
 class CardIdentity(unittest.TestCase):
@@ -119,7 +121,7 @@ class CardIdentity(unittest.TestCase):
         self.assertIn("UNKNOWN", cid.describe())
 
     def test_scan(self):
-        fake, a = configured({0x50: IdEeprom(PIR, 1), 0x19: IdEeprom(0, 0)})
+        fake, a = configured({0x50: IdEeprom(PIR, 1), 0x19: IdEeprom(None)})
         a.set_rail("aon", True)
         self.assertEqual(a.scan(), [0x19, 0x50])
 

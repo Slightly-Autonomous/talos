@@ -590,6 +590,16 @@ TEST(BoardIo, TestCardIsDiscoveredWithEveryPinReleased) {
   for (std::uint8_t pin = 0; pin < 16; ++pin) EXPECT_FALSE(n.test_card(3).is_output(pin));
 }
 
+TEST(IdBlock, GoldenVectors) {
+  // Same vectors as tools/dbg/tests/test_bench.py, so the two encoders never drift.
+  const std::uint8_t beef[2] = {0xBE, 0xEF};
+  EXPECT_EQ(crc8(beef, 2), 0x92);  // Sensirion's published check value
+  const auto block = make_id_block(ModuleCode::kTlMod004Env, 1);
+  const std::array<std::uint8_t, 16> want = {0x03, 0x02, 0x01, 0x01, 0x00, 0xFF, 0xFF, 0xFF,
+                                             0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xB0};
+  EXPECT_EQ(block, want);
+}
+
 // --- Delivery -----------------------------------------------------------------------------------
 
 TEST(Delivery, RetriesWithBackoffUntilAcked) {
