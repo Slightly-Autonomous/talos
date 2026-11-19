@@ -140,8 +140,11 @@ TEST(CoapIngress, DebouncedDoorReachesTheJournalOnceAndHealthIsProjected) {
     pump(f, n, 1);
   }
   n.node.gpio.set(0, true);
+  // Wait on the outcome, not a fixed tick budget: a slow runner can delay a UDP reply
+  // past a retry. Then keep pumping so a duplicate would have time to show up.
+  EXPECT_TRUE(pump_until(f, n, 2000, [&] { return journaled(*f.hub, "contact.opened") >= 1; }));
   pump(f, n, 100);
-  EXPECT_EQ(journaled(*f.hub, "contact.opened"), 1u);
+  EXPECT_EQ(journaled(*f.hub, "contact.opened"), 1u);  // bounce and retries dedupe to one
   EXPECT_EQ(journaled(*f.hub, "contact.state"), 1u);
   EXPECT_EQ(n.link.rejected_replies(), 0u);
 
