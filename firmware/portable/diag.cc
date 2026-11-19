@@ -763,7 +763,8 @@ bool Diag::selftest_sht(std::uint8_t slot, IDiagOut& out, const char*& err) {
            Sht40Driver::crc8(r, 2) == r[2] && Sht40Driver::crc8(r + 3, 2) == r[5];
   };
   auto milli_c = [](const std::uint8_t (&r)[6]) {
-    return static_cast<std::int32_t>(-45'000 + 175'000 * ((r[0] << 8) | r[1]) / 65'535);
+    const std::int64_t raw = (r[0] << 8) | r[1];  // 64-bit: 175000 * raw overflows int
+    return static_cast<std::int32_t>(-45'000 + 175'000 * raw / 65'535);
   };
   std::uint8_t r[6] = {};
   const bool serial_ok = command(Sht40Driver::kSerial, 2, r);
