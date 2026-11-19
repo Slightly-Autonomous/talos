@@ -9,6 +9,7 @@ cc_library(
         "world.cc",
     ],
     hdrs = [
+        "backend.h",
         "devices.h",
         "transport.h",
         "world.h",
@@ -20,5 +21,19 @@ cc_library(
         "//core/events",
         "//core/execution",
         "//simulation/base",
+    ],
+)
+
+# L2: the portable firmware on the virtual board behind the same IDeviceBackend seam.
+cc_library(
+    name = "firmware_backend",
+    srcs = ["firmware_device.cc"],
+    hdrs = ["firmware_device.h"],
+    copts = TALOS_PROTO_COPTS,
+    visibility = ["//simulation:__subpackages__"],
+    deps = [
+        ":twin",
+        "//firmware/bridge:hub_bridge",
+        "//firmware/sim",
     ],
 )

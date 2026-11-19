@@ -101,6 +101,18 @@ message NotifierSpec {
   uint32 latency_ms = 1;
 }
 
+// Which twin backend plays a device (bench-test-plan §3, ADR 0018).
+enum DeviceBinding {
+  // Follow the run's --backend.
+  DEVICE_BINDING_UNSPECIFIED = 0;
+  // L1: the behavioural model in simulation/twin.
+  DEVICE_BINDING_BEHAVIOURAL = 1;
+  // L2: the real portable firmware on the virtual board (firmware/sim).
+  DEVICE_BINDING_FIRMWARE = 2;
+  // L4: a real node on the bench. Not runnable in the twin yet; the scenario is skipped.
+  DEVICE_BINDING_HARDWARE = 3;
+}
+
 message SiteDevice {
   string id = 1;
   Point position = 2;
@@ -112,6 +124,7 @@ message SiteDevice {
   uint32 heartbeat_interval_ms = 7;
   uint32 battery_mv = 8;
   optional NotifierSpec notifier = 9;
+  DeviceBinding binding = 10;
 }
 
 message Site {

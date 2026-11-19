@@ -13,6 +13,7 @@
 #include "codec/yaml_loader.h"
 #include "core/engine/engine.h"
 #include "simulation/twin/devices.h"
+#include "simulation/twin/firmware_device.h"
 #include "simulation/twin/transport.h"
 #include "simulation/twin/world.h"
 
@@ -193,9 +194,10 @@ std::string_view freshness_name(Freshness f) {
 
 class Run {
  public:
-  Run(const v1::Scenario& sc, const v1::Site& site)
+  Run(const v1::Scenario& sc, const v1::Site& site, RunOptions options)
       : sc_(sc),
         site_(site),
+        options_(options),
         start_(Timestamp{sc.start_unix_ms()}),
         clock_(start_),
         world_(site),
@@ -208,9 +210,7 @@ class Run {
     if (!cfg) return fail_early("invalid config: " + cfg.error().message);
     config_ = cfg.value();
     engine_ = std::make_unique<HubEngine>(config_, journal_, clock_);
-    for (const auto& d : site_.devices()) {
-      devices_.emplace(d.id(), VirtualDevice(d, config_.property.id, sc_.seed()));
-    }
+    if (!bind_devices()) return report_;
 
     std::vector<const v1::Stimulus*> stimuli;
     for (const auto& s : sc_.stimuli()) stimuli.push_back(&s);
@@ -219,7 +219,7 @@ class Run {
     std::size_t next = 0;
 
     std::vector<Uplink> up;
-    for (auto& [id, dev] : devices_) dev.boot(0, clock_.now(), world_, up);
+    for (auto& [id, dev] : devices_) dev->boot(0, clock_.now(), world_, up);
     send_uplinks(0, up);
 
     for (std::int64_t t = 0; t <= sc_.duration_ms(); t += kStepMs) {
@@ -228,7 +228,7 @@ class Run {
       world_.step(t, kStepMs / 1000.0);
       const auto impacts = world_.take_impacts();
       up.clear();
-      for (auto& [id, dev] : devices_) dev.sample(t, clock_.now(), world_, impacts, up);
+      for (auto& [id, dev] : devices_) dev->sample(t, clock_.now(), world_, impacts, up);
       send_uplinks(t, up);
       for (auto& m : transport_.due(t)) deliver(t, m);
       engine_->tick();
@@ -243,6 +243,51 @@ class Run {
   }
 
  private:
+  // Chooses each device's backend. False (and a skipped report) when a device is bound to
+  // one that cannot play it.
+  bool bind_devices() {
+    bool any_firmware = false;
+    for (const auto& d : site_.devices()) {
+      auto binding = d.binding();
+      const bool explicit_binding = binding != v1::DEVICE_BINDING_UNSPECIFIED;
+      if (!explicit_binding) {
+        binding = options_.backend == Backend::kFirmware ? v1::DEVICE_BINDING_FIRMWARE
+                                                         : v1::DEVICE_BINDING_BEHAVIOURAL;
+      }
+      if (binding == v1::DEVICE_BINDING_HARDWARE) {
+        return skip(d.id() + " is bound to hardware (L4), which the twin cannot run yet");
+      }
+      if (binding == v1::DEVICE_BINDING_FIRMWARE) {
+        const std::string why = FirmwareDevice::unsupported_reason(d);
+        if (why.empty()) {
+          devices_.emplace(d.id(),
+                           std::make_unique<FirmwareDevice>(d, config_.property.id, sc_.seed()));
+          any_firmware = true;
+        } else if (explicit_binding) {
+          return skip(d.id() + " is bound to firmware (L2), but " + why);
+        }
+      }
+      if (!devices_.contains(d.id())) {
+        devices_.emplace(d.id(),
+                         std::make_unique<VirtualDevice>(d, config_.property.id, sc_.seed()));
+      }
+      report_.bindings.emplace_back(d.id(), devices_.at(d.id())->level());
+    }
+    if (options_.backend == Backend::kFirmware && !any_firmware) {
+      return skip("no device in this site can run on the firmware (L2)");
+    }
+    return true;
+  }
+
+  bool skip(std::string why) {
+    report_.skipped = true;
+    report_.skip_reason = std::move(why);
+    report_.bindings.clear();
+    finish();
+    report_.passed = false;
+    return false;
+  }
+
   ScenarioReport fail_early(std::string why) {
     report_.failures.push_back(std::move(why));
     finish();
@@ -261,14 +306,16 @@ class Run {
   }
 
   void deliver(std::int64_t t, Message& m) {
+    auto it = devices_.find(m.device);
     if (!m.uplink) {
-      if (auto it = devices_.find(m.device); it != devices_.end()) {
-        it->second.receive(t, std::get<Command>(m.body), world_);
-      }
+      if (it != devices_.end()) it->second->receive(t, std::get<Command>(m.body), world_);
       return;
     }
     if (const auto* env = std::get_if<ObservationEnvelope>(&m.body)) {
-      engine_->on_observation(*env);
+      const auto r = engine_->on_observation(*env);
+      if (r.status != IngestStatus::kRejected && it != devices_.end()) {
+        it->second->delivered(env->position);
+      }
     } else if (const auto* ack = std::get_if<CommandAck>(&m.body)) {
       (void)engine_->on_ack(*ack);
     }
@@ -310,12 +357,12 @@ class Run {
       case v1::Stimulus::kDeviceReboot:
         if (auto it = devices_.find(s.device_reboot().device_id()); it != devices_.end()) {
           world_.record(t, "device.reboot", it->first);
-          it->second.reboot(t, clock_.now(), world_, up);
+          it->second->reboot(t, clock_.now(), world_, up);
         }
         break;
       case v1::Stimulus::kDeviceClockSkew:
         if (auto it = devices_.find(s.device_clock_skew().device_id()); it != devices_.end()) {
-          it->second.set_clock_skew(s.device_clock_skew().skew_ms());
+          it->second->set_clock_skew(s.device_clock_skew().skew_ms());
         }
         break;
       case v1::Stimulus::kTemperatureSet:
@@ -339,7 +386,7 @@ class Run {
         break;
       case v1::Stimulus::kActuatorFault:
         if (auto it = devices_.find(s.actuator_fault().device_id()); it != devices_.end()) {
-          it->second.set_fault(s.actuator_fault().fault());
+          it->second->set_fault(s.actuator_fault().fault());
         }
         break;
       case v1::Stimulus::KIND_NOT_SET:
@@ -520,7 +567,14 @@ class Run {
     report_.passed = report_.failures.empty();
     std::ostringstream trace;
     trace << "{\"scenario\":\"" << json_escape(report_.name) << "\",\"seed\":" << report_.seed
-          << ",\"passed\":" << (report_.passed ? "true" : "false") << ",\"failures\":[";
+          << ",\"passed\":" << (report_.passed ? "true" : "false");
+    if (report_.skipped) trace << ",\"skipped\":\"" << json_escape(report_.skip_reason) << "\"";
+    trace << ",\"bindings\":{";
+    for (std::size_t i = 0; i < report_.bindings.size(); ++i) {
+      trace << (i ? "," : "") << "\"" << json_escape(report_.bindings[i].first) << "\":\""
+            << report_.bindings[i].second << "\"";
+    }
+    trace << "},\"failures\":[";
     for (std::size_t i = 0; i < report_.failures.size(); ++i) {
       trace << (i ? "," : "") << "\"" << json_escape(report_.failures[i]) << "\"";
     }
@@ -536,6 +590,9 @@ class Run {
     std::uint64_t h = 1469598103934665603ull;
     first = true;
     for (const auto& entry : read_all(journal_)) {
+      if (const auto* o = std::get_if<ObservationRecorded>(&entry.event)) {
+        ++report_.observations[o->envelope.source.device.str() + " " + o->envelope.event_type];
+      }
       const auto p = codec::to_proto(entry);
       std::string bytes;
       (void)p.SerializeToString(&bytes);
@@ -556,6 +613,7 @@ class Run {
 
   const v1::Scenario& sc_;
   const v1::Site& site_;
+  RunOptions options_;
   Timestamp start_;
   VirtualClock clock_;
   World world_;
@@ -563,23 +621,24 @@ class Run {
   EngineConfig config_;
   InMemoryJournal journal_;
   std::unique_ptr<HubEngine> engine_;
-  std::map<std::string, VirtualDevice> devices_;
+  std::map<std::string, std::unique_ptr<IDeviceBackend>> devices_;
   ScenarioReport report_;
 };
 
 }  // namespace
 
-ScenarioReport run_scenario(const v1::Scenario& scenario, const v1::Site& site) {
-  return Run(scenario, site).execute();
+ScenarioReport run_scenario(const v1::Scenario& scenario, const v1::Site& site,
+                            RunOptions options) {
+  return Run(scenario, site, options).execute();
 }
 
 Result<ScenarioReport> run_scenario_file(const std::string& scenario_path,
-                                         const std::string& corpus_root) {
+                                         const std::string& corpus_root, RunOptions options) {
   v1::Scenario sc;
   if (Status s = codec::load_yaml_file(scenario_path, sc); !s) return s.error();
   v1::Site site;
   if (Status s = codec::load_yaml_file(corpus_root + "/" + sc.site(), site); !s) return s.error();
-  return run_scenario(sc, site);
+  return run_scenario(sc, site, options);
 }
 
 Status write_text(const std::string& path, const std::string& text) {

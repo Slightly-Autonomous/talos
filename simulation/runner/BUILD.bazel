@@ -13,6 +13,7 @@ cc_library(
         "//contracts/proto/talos/sim/v1:sim_cc_proto",
         "//core/engine",
         "//simulation/twin",
+        "//simulation/twin:firmware_backend",
         "@protobuf//:json_util",
     ],
 )
@@ -29,6 +30,19 @@ cc_test(
     name = "scenario_test",
     size = "medium",
     srcs = ["scenario_test.cc"],
+    copts = TALOS_PROTO_COPTS,
+    data = ["//simulation/scenarios"],
+    deps = [
+        ":runner",
+        "//codec:yaml_loader",
+        "@googletest//:gtest_main",
+    ],
+)
+
+cc_test(
+    name = "backend_parity_test",
+    size = "medium",
+    srcs = ["backend_parity_test.cc"],
     copts = TALOS_PROTO_COPTS,
     data = ["//simulation/scenarios"],
     deps = [

@@ -1,9 +1,49 @@
 #include "simulation/twin/devices.h"
 
+#include <limits>
+
 namespace talos::sim {
 
 namespace {
 constexpr std::int64_t kTickMs = 100;
+}
+
+PirOptics::PirOptics(Vec2 position, const v1::PirSpec& spec)
+    : position_(position),
+      spec_(spec),
+      wedge_(position, spec.heading_deg(), spec.half_angle_deg(), spec.range_m()) {}
+
+bool PirOptics::step(std::int64_t t_ms, const World& world, Rng& rng) {
+  bool raw = false;
+  for (const auto& [aid, actor] : world.actors()) {
+    if (!actor.moved_this_tick || !wedge_.contains(actor.position) ||
+        !line_of_sight(position_, actor.position, world.walls())) {
+      continue;
+    }
+    if (actor.kind == ActorKind::kPet) {
+      auto [it, inserted] = pet_visible_.try_emplace(aid, false);
+      if (inserted) it->second = rng.chance(spec_.pet_sensitivity());
+      if (!it->second) continue;
+    }
+    raw = true;
+  }
+  const double false_p = spec_.false_triggers_per_hour() * kTickMs / 3'600'000.0;
+  if (!raw && !active_ && rng.chance(false_p)) raw = true;
+
+  if (raw) {
+    if (!active_ && !suppressed_) {
+      if (rng.chance(spec_.miss_probability())) {
+        suppressed_ = true;
+      } else {
+        active_ = true;
+      }
+    }
+    hold_until_ = t_ms + spec_.hold_ms();
+  } else {
+    suppressed_ = false;
+    if (active_ && t_ms >= hold_until_) active_ = false;
+  }
+  return active_;
 }
 
 VirtualDevice::VirtualDevice(const v1::SiteDevice& spec, PropertyId property, std::uint64_t seed)
@@ -17,14 +57,7 @@ VirtualDevice::VirtualDevice(const v1::SiteDevice& spec, PropertyId property, st
     const auto slot = static_cast<std::uint8_t>(s.slot());
     switch (s.kind_case()) {
       case v1::SensorSpec::kPir:
-        pirs_.push_back(Pir{
-            slot,
-            s.pir(),
-            Wedge(position_, s.pir().heading_deg(), s.pir().half_angle_deg(), s.pir().range_m()),
-            false,
-            false,
-            0,
-            {}});
+        pirs_.push_back(Pir{slot, PirOptics(position_, s.pir())});
         break;
       case v1::SensorSpec::kContact:
         contacts_.push_back({slot, s.contact().portal_id(), {}});
@@ -87,6 +120,12 @@ void VirtualDevice::report_initial_state(Timestamp now, const World& world,
 
 void VirtualDevice::boot(std::int64_t t_ms, Timestamp now, const World& world,
                          std::vector<Uplink>& out) {
+  start(t_ms, now, world, out);
+  boot_ms_ = std::numeric_limits<std::int32_t>::min();  // installed earlier: already warm
+}
+
+void VirtualDevice::start(std::int64_t t_ms, Timestamp now, const World& world,
+                          std::vector<Uplink>& out) {
   boot_ms_ = t_ms;
   next_heartbeat_ = t_ms + heartbeat_interval_ms_;
   for (auto& e : environments_) e.next_at = t_ms;
@@ -98,11 +137,8 @@ void VirtualDevice::reboot(std::int64_t t_ms, Timestamp now, const World& world,
   ++boot_epoch_;
   sequence_ = 0;
   pending_.clear();
-  for (auto& p : pirs_) {
-    p.active = false;
-    p.suppressed = false;
-  }
-  boot(t_ms, now, world, out);
+  for (auto& p : pirs_) p.optics.reset();
+  start(t_ms, now, world, out);
 }
 
 void VirtualDevice::sample(std::int64_t t_ms, Timestamp now, World& world,
@@ -110,39 +146,13 @@ void VirtualDevice::sample(std::int64_t t_ms, Timestamp now, World& world,
                            std::vector<Uplink>& out) {
   // PIR: moving, visible actors inside the wedge.
   for (auto& pir : pirs_) {
-    if (t_ms - boot_ms_ < pir.spec.warmup_ms()) continue;
-    bool raw = false;
-    for (const auto& [aid, actor] : world.actors()) {
-      if (!actor.moved_this_tick || !pir.wedge.contains(actor.position) ||
-          !line_of_sight(position_, actor.position, world.walls())) {
-        continue;
-      }
-      if (actor.kind == ActorKind::kPet) {
-        auto [it, inserted] = pir.pet_visible.try_emplace(aid, false);
-        if (inserted) it->second = rng_.chance(pir.spec.pet_sensitivity());
-        if (!it->second) continue;
-      }
-      raw = true;
-    }
-    const double false_p = pir.spec.false_triggers_per_hour() * kTickMs / 3'600'000.0;
-    if (!raw && !pir.active && rng_.chance(false_p)) raw = true;
-
-    if (raw) {
-      if (!pir.active && !pir.suppressed) {
-        if (rng_.chance(pir.spec.miss_probability())) {
-          pir.suppressed = true;
-        } else {
-          pir.active = true;
-          emit(out, envelope(now, pir.slot, "motion.detect", "motion.detected", MotionState{true}));
-        }
-      }
-      pir.hold_until = t_ms + pir.spec.hold_ms();
-    } else {
-      pir.suppressed = false;
-      if (pir.active && t_ms >= pir.hold_until) {
-        pir.active = false;
-        emit(out, envelope(now, pir.slot, "motion.detect", "motion.cleared", MotionState{false}));
-      }
+    if (t_ms - boot_ms_ < pir.optics.spec().warmup_ms()) continue;
+    const bool was = pir.optics.active();
+    const bool now_active = pir.optics.step(t_ms, world, rng_);
+    if (now_active != was) {
+      emit(out,
+           envelope(now, pir.slot, "motion.detect",
+                    now_active ? "motion.detected" : "motion.cleared", MotionState{now_active}));
     }
   }
 

@@ -169,3 +169,9 @@ requirements:
     test: hardware/scripts/check_kicad.py -> hardware/results/
     severity: high
     status: implemented
+  - id: REQ-029
+    statement: Every twin scenario that a firmware-capable device appears in passes with that device running the real portable firmware (L2), and the device reports the same transitions as its behavioural model (L1)
+    subsystem: simulation, firmware.portable
+    test: //simulation/runner:backend_parity_test
+    severity: high
+    status: verified_sim

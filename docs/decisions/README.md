@@ -21,5 +21,6 @@ Short records of why each choice was made. A decision is changed by adding a new
 | [0015](0015-integrations-and-remote-access.md) | Integrations, AI connector and remote access | Accepted |
 | [0016](0016-hardware-bring-up-and-hil.md) | Hardware bring-up path and HIL testing | Accepted |
 | [0017](0017-custom-hardware-workstream.md) | Custom hardware workstream (H0–H3); hardware ADRs in `hardware/architecture/decisions/` | Accepted |
+| [0018](0018-twin-backend-seam.md) | Twin backend seam (L1 behavioural, L2 firmware, L4 hardware) and L1/L2 parity | Accepted |
 
 Open questions live in [open-decisions.md](open-decisions.md).
