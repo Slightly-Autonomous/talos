@@ -1,10 +1,13 @@
-load("@rules_cc//cc:defs.bzl", "cc_library", "cc_test")
+load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library", "cc_test")
 load("//bazel:copts.bzl", "TALOS_COPTS")
 
 cc_library(
     name = "sim",
     srcs = ["virtual_board.cc"],
-    hdrs = ["virtual_board.h"],
+    hdrs = [
+        "sim_faults.h",
+        "virtual_board.h",
+    ],
     copts = TALOS_COPTS,
     visibility = ["//visibility:public"],
     deps = [
@@ -46,4 +49,25 @@ cc_test(
         "//core/testing:fixtures",
         "@googletest//:gtest_main",
     ],
+)
+
+cc_test(
+    name = "diag_test",
+    size = "small",
+    srcs = ["diag_test.cc"],
+    copts = TALOS_COPTS,
+    deps = [
+        ":sim",
+        "@googletest//:gtest_main",
+    ],
+)
+
+# The bench console on the virtual board: what tools/bench drives in CI before
+# any board exists. stdin: diag commands, or "sim ..." fault-injection lines.
+cc_binary(
+    name = "bench_node",
+    srcs = ["bench_node.cc"],
+    copts = TALOS_COPTS,
+    visibility = ["//visibility:public"],
+    deps = [":sim"],
 )

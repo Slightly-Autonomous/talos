@@ -111,6 +111,10 @@ class BoardIo final : public IPower {
   bool select_uart(std::optional<std::uint8_t> slot);
   std::optional<std::uint8_t> uart_slot() const { return uart_slot_; }
   Tca9535* expander(std::uint8_t address);
+  // Direct pin access for bench diagnostics (diag.h).
+  bool drive(const ExpanderPin& p, bool level);
+  std::optional<bool> sense(const ExpanderPin& p);
+  const BoardSupport& board() const { return board_; }
 
  private:
   struct PinRef {
@@ -118,8 +122,6 @@ class BoardIo final : public IPower {
     std::uint8_t pin = 0;
   };
   PinRef ref(const ExpanderPin& p);
-  bool drive(const ExpanderPin& p, bool level);
-  std::optional<bool> sense(const ExpanderPin& p);
 
   II2c& i2c_;
   IClock& clock_;

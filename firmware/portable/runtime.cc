@@ -97,88 +97,98 @@ void NodeRuntime::emit_ota_status(Priority priority) {
 
 void NodeRuntime::discover() {
   const TimeMs now = p_.clock.now_ms();
+  for (std::uint8_t i = 0; i < kSlots; ++i) discover_slot(i, now);
+}
+
+void NodeRuntime::rescan(std::optional<std::uint8_t> slot) {
+  const TimeMs now = p_.clock.now_ms();
   for (std::uint8_t i = 0; i < kSlots; ++i) {
-    SlotState& st = slots_[i];
-    st = SlotState{};
-    const SlotWiring& w = p_.board.slots[i];
-    if (!w.present) continue;
-    SlotIo io(p_, i);
-    struct Deselect {  // leave the root bus free whatever happens below
-      SlotIo& io;
-      ~Deselect() { io.deselect(); }
-    } deselect{io};
-    const IdRead id = read_module_id(io, p_.board.id_eeprom_address);
-    st.code = id.code;
-    auto fault = [&](ModuleFault f) {
-      st.fault = f;
-      emit(i, EventKind::kModuleFault, Priority::kP2Health, false, static_cast<std::int32_t>(f),
-           static_cast<std::uint32_t>(st.code));
-    };
-    const std::optional<bool> seated = p_.power.slot_present(i);
-    switch (id.status) {
-      case IdRead::Status::kAbsent:
-        // A seated card whose ID does not answer is a fault, not an empty slot.
-        if (seated.value_or(false)) fault(ModuleFault::kNoIdEeprom);
-        continue;
-      case IdRead::Status::kMuxFault:
-        fault(ModuleFault::kMuxFault);
-        continue;
-      case IdRead::Status::kBlank:
-        fault(ModuleFault::kIdBlank);  // never powered past AON
-        continue;
-      case IdRead::Status::kCorrupt:
-        fault(ModuleFault::kIdCorrupt);
-        continue;
-      case IdRead::Status::kOk:
-        break;
-    }
-    const ModuleInfo* info = find_module(st.code);
-    if (!info) {
-      fault(ModuleFault::kUnknownModule);  // unknown module: never powered
-      continue;
-    }
-    if ((info->needs_wake && w.wake_line == 0xFF) || (info->needs_5v && !w.has_5v)) {
-      fault(ModuleFault::kMissingResource);
-      continue;
-    }
-    bool ok = false;
-    switch (st.code) {
-      case ModuleCode::kPirEkmb:
-      case ModuleCode::kTlMod002Pir:
-        ok = st.driver.emplace<PirDriver>().init(io, *this, now);
-        break;
-      case ModuleCode::kTlTest001:
-        ok = st.driver.emplace<TestCardDriver>().init(io, *this, now);
-        break;
-      case ModuleCode::kReedContact:
-        ok = st.driver.emplace<ContactDriver>().init(io, *this, now);
-        break;
-      case ModuleCode::kTmag5273Contact:
-        ok = st.driver.emplace<Tmag5273ContactDriver>().init(io, *this, now);
-        break;
-      case ModuleCode::kLis2dw12:
-      case ModuleCode::kTlMod003Imu:
-        ok = st.driver.emplace<Lis2dw12Driver>().init(io, *this, now, config_.impact_threshold_mg);
-        break;
-      case ModuleCode::kSht40:
-      case ModuleCode::kTlMod004Env:
-        ok = st.driver.emplace<Sht40Driver>().init(io, *this, now);
-        break;
-      case ModuleCode::kSmartCameraS3:
-        ok = st.driver.emplace<SmartModuleDriver>().init(io, *this, now);
-        break;
-      case ModuleCode::kNone:
-        break;
-    }
-    if (!ok) {
-      st.driver = std::monostate{};
-      fault(ModuleFault::kInitFailed);
-      continue;
-    }
-    st.enabled = true;
-    emit(i, EventKind::kModulePresent, Priority::kP2Health, true,
-         static_cast<std::int32_t>(st.code), 0);
+    if (!slot || *slot == i) discover_slot(i, now);
   }
+  admit_power();
+}
+
+void NodeRuntime::discover_slot(std::uint8_t i, TimeMs now) {
+  SlotState& st = slots_[i];
+  st = SlotState{};
+  const SlotWiring& w = p_.board.slots[i];
+  if (!w.present) return;
+  SlotIo io(p_, i);
+  struct Deselect {  // leave the root bus free whatever happens below
+    SlotIo& io;
+    ~Deselect() { io.deselect(); }
+  } deselect{io};
+  const IdRead id = read_module_id(io, p_.board.id_eeprom_address);
+  st.code = id.code;
+  auto fault = [&](ModuleFault f) {
+    st.fault = f;
+    emit(i, EventKind::kModuleFault, Priority::kP2Health, false, static_cast<std::int32_t>(f),
+         static_cast<std::uint32_t>(st.code));
+  };
+  const std::optional<bool> seated = p_.power.slot_present(i);
+  switch (id.status) {
+    case IdRead::Status::kAbsent:
+      // A seated card whose ID does not answer is a fault, not an empty slot.
+      if (seated.value_or(false)) fault(ModuleFault::kNoIdEeprom);
+      return;
+    case IdRead::Status::kMuxFault:
+      fault(ModuleFault::kMuxFault);
+      return;
+    case IdRead::Status::kBlank:
+      fault(ModuleFault::kIdBlank);  // never powered past AON
+      return;
+    case IdRead::Status::kCorrupt:
+      fault(ModuleFault::kIdCorrupt);
+      return;
+    case IdRead::Status::kOk:
+      break;
+  }
+  const ModuleInfo* info = find_module(st.code);
+  if (!info) {
+    fault(ModuleFault::kUnknownModule);  // unknown module: never powered
+    return;
+  }
+  if ((info->needs_wake && w.wake_line == 0xFF) || (info->needs_5v && !w.has_5v)) {
+    fault(ModuleFault::kMissingResource);
+    return;
+  }
+  bool ok = false;
+  switch (st.code) {
+    case ModuleCode::kPirEkmb:
+    case ModuleCode::kTlMod002Pir:
+      ok = st.driver.emplace<PirDriver>().init(io, *this, now);
+      break;
+    case ModuleCode::kTlTest001:
+      ok = st.driver.emplace<TestCardDriver>().init(io, *this, now);
+      break;
+    case ModuleCode::kReedContact:
+      ok = st.driver.emplace<ContactDriver>().init(io, *this, now);
+      break;
+    case ModuleCode::kTmag5273Contact:
+      ok = st.driver.emplace<Tmag5273ContactDriver>().init(io, *this, now);
+      break;
+    case ModuleCode::kLis2dw12:
+    case ModuleCode::kTlMod003Imu:
+      ok = st.driver.emplace<Lis2dw12Driver>().init(io, *this, now, config_.impact_threshold_mg);
+      break;
+    case ModuleCode::kSht40:
+    case ModuleCode::kTlMod004Env:
+      ok = st.driver.emplace<Sht40Driver>().init(io, *this, now);
+      break;
+    case ModuleCode::kSmartCameraS3:
+      ok = st.driver.emplace<SmartModuleDriver>().init(io, *this, now);
+      break;
+    case ModuleCode::kNone:
+      break;
+  }
+  if (!ok) {
+    st.driver = std::monostate{};
+    fault(ModuleFault::kInitFailed);
+    return;
+  }
+  st.enabled = true;
+  emit(i, EventKind::kModulePresent, Priority::kP2Health, true, static_cast<std::int32_t>(st.code),
+       0);
 }
 
 std::uint32_t NodeRuntime::sustained_budget_mw() {

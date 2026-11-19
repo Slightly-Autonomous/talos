@@ -43,6 +43,7 @@ class Gpio final : public IGpio {
 class I2cDevice {
  public:
   virtual ~I2cDevice() = default;
+  virtual bool acks() const { return true; }  // answers its address
   virtual bool write(const std::uint8_t* data, std::size_t n) = 0;
   virtual bool read(std::uint8_t* out, std::size_t n) = 0;
 };
@@ -66,6 +67,7 @@ class I2cBus final : public II2c {
   bool write(std::uint8_t addr, const std::uint8_t* data, std::size_t n) override;
   bool write_read(std::uint8_t addr, const std::uint8_t* w, std::size_t wn, std::uint8_t* r,
                   std::size_t rn) override;
+  bool probe(std::uint8_t addr) override;
   std::uint32_t transactions() const { return transactions_; }
 
  private:
@@ -108,8 +110,10 @@ class Tca9535Model final : public RegisterDevice {
   bool is_output(std::uint8_t pin) const;
   void power_on_reset();
   std::function<bool(std::uint8_t pin)> external = [](std::uint8_t) { return true; };
+  bool acks() const override { return !nack; }
   bool nack = false;  // fault: the expander stops answering
   bool write(const std::uint8_t* data, std::size_t n) override;
+  std::function<void()> on_write;  // a pin may have changed: update what it drives
   // Every pin that has ever driven a 1 as an output (catches config-before-output).
   std::uint16_t ever_driven_high = 0;
 };
@@ -124,6 +128,7 @@ class Bq25186Model final : public RegisterDevice {
   bool vin_good = true;
   bool ts_open = false;
   std::uint8_t ts_zone = 0;
+  bool acks() const override { return !nack; }
   bool nack = false;
   bool write(const std::uint8_t* data, std::size_t n) override {
     return !nack && RegisterDevice::write(data, n);
@@ -169,6 +174,12 @@ class Lis2dw12 final : public RegisterDevice {
   Lis2dw12(Gpio& gpio, std::uint8_t int_line, const Clock& clock);
   // A physical impact reaching the sensor along X.
   void impact(std::int32_t mg);
+  // Static acceleration (gravity) in mg; the low-pass path reports it, the
+  // high-pass path (CTRL6 FDS) does not.
+  std::array<std::int32_t, 3> static_mg{0, 0, 1000};
+  // Output shift per axis while CTRL3 self-test is on (+ for ST=01, - for ST=10).
+  std::int32_t self_test_mg = 400;
+  bool read(std::uint8_t* out, std::size_t n) override;
   // Advance to the current time (drops a pulsed INT1 after one ODR period).
   void tick();
   bool write(const std::uint8_t* data, std::size_t n) override;
@@ -184,8 +195,10 @@ class Lis2dw12 final : public RegisterDevice {
   Gpio& gpio_;
   std::uint8_t line_;
   const Clock& clock_;
+  void load_outputs();
   TimeMs pulse_until_ = 0;
   bool pulsing_ = false;
+  std::int32_t impact_x_mg_ = 0;
 };
 
 // TMAG5273A1 register model (SLYS045C): results at 820 LSB/mT, symmetric
@@ -229,9 +242,11 @@ class Sht40 final : public I2cDevice {
   bool corrupt_t_crc = false;  // temperature word CRC
   TimeMs measure_ms = 8;       // high-precision conversion time
   std::uint32_t serial = 0x1234ABCD;
+  double heater_rise_c = 12.0;  // 110 mW for 1 s (0x2F); 0 = dead heater
 
  private:
   void load(std::uint16_t a, std::uint16_t b);
+  void load_measurement(double t_c);
   const Clock& clock_;
   std::array<std::uint8_t, 6> out_{};
   bool ready_ = false;
@@ -311,6 +326,9 @@ class Node {
   BoardIo& board_io() { return *board_io_; }
   bool has_board_io() const { return board_io_.has_value(); }
   void remove(std::uint8_t slot);
+  // TL-TEST-001 contact faults: the card's WAKE / ALERT_N drive never reaches the board.
+  std::array<bool, kSlots> card_wake_open{};
+  std::array<bool, kSlots> card_alert_open{};
   Sht40& sht(std::uint8_t slot) { return *shts_.at(slot); }
   Tmag5273& hall(std::uint8_t slot) { return *halls_.at(slot); }
 
@@ -323,6 +341,7 @@ class Node {
   std::vector<DeviceEvent> drain_and_ack();
 
   NodeRuntime& runtime() { return *runtime_; }
+  Platform& platform() { return platform_; }
   // Step every tick so an external link's replies are picked up promptly.
   bool poll_link = false;
   // Step the way firmware/esp_idf/main.cc does: no interrupt on wake-line

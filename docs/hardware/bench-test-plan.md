@@ -265,9 +265,9 @@ sleep current high (bisect by AON_n off one slot at a time, then by the core spl
 
 | Area | Work |
 |---|---|
-| Portable firmware | `board_io` (TCA9535, TCA9546A with deselect and reset, BQ25186, rails with S-3 sequencing); `diag` line protocol (`@T {json}` lines ending in a `done` line); ID block v1 with CRC; driver fixes FW-B1..B11; `PowerSource::kUnknown` |
-| ESP-IDF | console on USB-serial-JTAG; serial datagram transport (COBS) behind `IDatagram`; reset/wake cause in the boot line; brown-out detector; coredump; custom partition table; real ADC, source, rails; never deep-sleep on USB |
-| Virtual board | TCA9535 ×3, BQ25186, rail gating, PRESENT/ALERT/EXP_INT, busy-NACK, pulsed INT, polled stepping, stuck SDA, per-device NACK, blank/corrupt IDs, brown-out; `bench_node` binary with `--fault=` |
+| Portable firmware | **Done:** `board_io` (TCA9535, BQ25186, rails with S-2/S-3, presence, source), ID block v1 with CRC, driver fixes FW-B1..B11, `PowerSource::kUnknown`, `diag` console (`@T {json}` lines; self-tests for the root bus, the TL-TEST-001 slot loopback, LIS2DW12 self-test and SHT40 heater). **Open:** mux reset line (needs the board decision), SPI/UART loopback lines (need GPIO output in the HAL) |
+| ESP-IDF | **Done:** console and diag on USB-serial-JTAG, reset cause in the boot line, brown-out detector, battery ADC, `BoardIo` for source and rails. **Open:** serial datagram transport (COBS) behind `IDatagram`, wake cause, coredump, custom partition table, never deep-sleep on USB |
+| Virtual board | **Done:** TCA9535 ×3, BQ25186, rail-gated branches, PRESENT/ALERT, busy-NACK, pulsed INT, polled stepping, per-device NACK, blank/corrupt IDs, `bench_node` with `--fault=` (`firmware/sim/sim_faults.h`). **Open:** EXP_INT line, stuck SDA, brown-out |
 | Twin | `IDeviceBackend` (L1/L2/L4), `binding` in the site proto, `--backend`, `skipped` reason, L1/L2 parity test; PIR mask/warm-up, humidity, magnet field, ODR-sampled impacts |
 | tools/dbg | `selftest --stage adapter|tl-test-001`, `id program` (refuses overwrite without `--expect-current`), `id --raw`, `reg`, `uart`, `watch` on the interrupt flag, AON cycle waits for SDA low, FW-B13 |
 | tools/bench, tools/hil | orchestrator (instruments, `plan.yaml`, JSONL, fault trees); `serial_bridge.py` to the hub; PPK2 wrapper |

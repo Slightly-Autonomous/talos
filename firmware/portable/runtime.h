@@ -10,6 +10,7 @@
 
 #include <array>
 #include <cstdint>
+#include <optional>
 
 #include "firmware/portable/event_queue.h"
 #include "firmware/portable/hal.h"
@@ -49,11 +50,15 @@ class NodeRuntime final : public IEventSink {
   std::uint32_t running_version() const { return ota_.running_version(); }
   PowerMode power_mode() const { return mode_; }
   std::uint32_t dropped_events() const { return queue_.dropped(); }
+  // Re-run discovery and driver init for one slot, or all (bench: after a rail
+  // change or a self-test that reconfigured a sensor).
+  void rescan(std::optional<std::uint8_t> slot = std::nullopt);
   // False if the board's expanders or charger did not take their safe state at boot.
   bool board_ok() const { return board_ok_; }
 
  private:
   void discover();
+  void discover_slot(std::uint8_t i, TimeMs now);
   void admit_power();
   PowerMode compute_mode();
   void handle(const Downlink& d);

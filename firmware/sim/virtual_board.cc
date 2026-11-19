@@ -39,10 +39,22 @@ bool I2cBus::write(std::uint8_t addr, const std::uint8_t* data, std::size_t n) {
 bool I2cBus::write_read(std::uint8_t addr, const std::uint8_t* w, std::size_t wn, std::uint8_t* r,
                         std::size_t rn) {
   ++transactions_;
+  if (addr == mux_) {  // TCA9546A: a read returns the control register
+    if (mux_nack || wn != 0 || rn != 1) return false;
+    r[0] = mask_;
+    return true;
+  }
   I2cDevice* d = target(addr);
   if (!d) return false;
   if (wn > 0 && !d->write(w, wn)) return false;
   return d->read(r, rn);
+}
+
+bool I2cBus::probe(std::uint8_t addr) {
+  ++transactions_;
+  if (addr == mux_) return !mux_nack;
+  I2cDevice* d = target(addr);
+  return d && d->acks();
 }
 
 bool RegisterDevice::write(const std::uint8_t* data, std::size_t n) {
@@ -86,6 +98,7 @@ bool Tca9535Model::write(const std::uint8_t* data, std::size_t n) {
       ever_driven_high = static_cast<std::uint16_t>(ever_driven_high | (1u << pin));
     }
   }
+  if (on_write) on_write();
   return true;
 }
 
@@ -138,6 +151,7 @@ Lis2dw12::Lis2dw12(Gpio& gpio, std::uint8_t int_line, const Clock& clock)
 
 void Lis2dw12::reset_registers() {
   regs.fill(0);
+  impact_x_mg_ = 0;
   regs[0x0F] = 0x44;  // WHO_AM_I
   regs[0x21] = 0x04;  // CTRL2 reset value: IF_ADD_INC
   pulsing_ = false;
@@ -156,21 +170,33 @@ bool Lis2dw12::write(const std::uint8_t* data, std::size_t n) {
   return ok;
 }
 
+void Lis2dw12::load_outputs() {
+  const bool high_pass = (regs[0x25] & 0x08) != 0;
+  const std::uint8_t st = (regs[0x22] >> 6) & 0x3;
+  const std::int32_t st_mg = st == 1 ? self_test_mg : st == 2 ? -self_test_mg : 0;
+  // CTRL6 FS: 00 +/-2 g (0.244 mg/LSB), 01 +/-4 g (0.488), 10 +/-8 g, 11 +/-16 g.
+  const std::int32_t ug_per_lsb = 244 << ((regs[0x25] >> 4) & 0x3);
+  for (int axis = 0; axis < 3; ++axis) {
+    std::int32_t mg = high_pass ? 0 : static_mg[static_cast<std::size_t>(axis)];
+    if (axis == 0) mg += impact_x_mg_;
+    mg += st_mg;
+    const auto lsb = static_cast<std::int16_t>(std::clamp(mg * 1000 / ug_per_lsb, -8191, 8191) * 4);
+    regs[0x28 + 2 * axis] = static_cast<std::uint8_t>(static_cast<std::uint16_t>(lsb) & 0xFF);
+    regs[0x29 + 2 * axis] = static_cast<std::uint8_t>(static_cast<std::uint16_t>(lsb) >> 8);
+  }
+}
+
+bool Lis2dw12::read(std::uint8_t* out, std::size_t n) {
+  if (ptr_ >= 0x28 && ptr_ <= 0x2D) load_outputs();
+  return RegisterDevice::read(out, n);
+}
+
 void Lis2dw12::impact(std::int32_t mg) {
   const double threshold_mg = (regs[0x34] & 0x3F) * 31.25;
   const bool int1_wakeup = (regs[0x23] & 0x20) != 0;
   const bool interrupts_enabled = (regs[0x3F] & 0x20) != 0;
   if ((regs[0x34] & 0x3F) == 0 || std::abs(mg) < threshold_mg) return;
-  // X carries the impact; Z carries gravity unless the high-pass path is selected.
-  const bool high_pass = (regs[0x25] & 0x08) != 0;
-  auto put = [&](std::uint8_t reg, std::int32_t axis_mg) {
-    const auto lsb = static_cast<std::int16_t>(std::clamp(axis_mg * 1000 / 244, -8191, 8191) * 4);
-    regs[reg] = static_cast<std::uint8_t>(static_cast<std::uint16_t>(lsb) & 0xFF);
-    regs[reg + 1] = static_cast<std::uint8_t>(static_cast<std::uint16_t>(lsb) >> 8);
-  };
-  put(0x28, mg);
-  put(0x2A, 0);
-  put(0x2C, high_pass ? 0 : 1000);
+  impact_x_mg_ = mg;   // the post-event sample the driver reads
   regs[0x38] |= 0x08;  // WU_IA
   regs[0x3B] |= 0x02;  // ALL_INT_SRC WU_IA
   if (!int1_wakeup || !interrupts_enabled) return;
@@ -280,23 +306,30 @@ void Sht40::load(std::uint16_t a, std::uint16_t b) {
   out_[5] = Sht40Driver::crc8(out_.data() + 3, 2);
 }
 
+void Sht40::load_measurement(double t_c) {
+  const auto t_raw = static_cast<std::uint16_t>(std::lround((t_c + 45.0) * 65535.0 / 175.0));
+  const auto rh_raw =
+      static_cast<std::uint16_t>(std::lround((humidity_pct + 6.0) * 65535.0 / 125.0));
+  load(t_raw, rh_raw);
+  if (corrupt_t_crc) out_[2] = static_cast<std::uint8_t>(out_[2] ^ 0xFF);
+  if (corrupt_crc) out_[5] = static_cast<std::uint8_t>(out_[5] ^ 0xFF);
+}
+
 bool Sht40::write(const std::uint8_t* data, std::size_t n) {
   const TimeMs now = clock_.now_ms();
   if (n != 1 || now < busy_until_) return false;  // NACK while a command runs
   ready_ = false;
   switch (data[0]) {
-    case 0xFD: {
-      const auto t_raw =
-          static_cast<std::uint16_t>(std::lround((temperature_c + 45.0) * 65535.0 / 175.0));
-      const auto rh_raw =
-          static_cast<std::uint16_t>(std::lround((humidity_pct + 6.0) * 65535.0 / 125.0));
-      load(t_raw, rh_raw);
-      if (corrupt_t_crc) out_[2] = static_cast<std::uint8_t>(out_[2] ^ 0xFF);
-      if (corrupt_crc) out_[5] = static_cast<std::uint8_t>(out_[5] ^ 0xFF);
+    case 0xFD:
+      load_measurement(temperature_c);
       busy_until_ = now + measure_ms;
       ready_ = true;
       return true;
-    }
+    case 0x2F:  // heater 110 mW for 1 s, then a high-precision measurement of the hot die
+      load_measurement(temperature_c + heater_rise_c);
+      busy_until_ = now + 1'100;
+      ready_ = true;
+      return true;
     case 0x89:
       load(static_cast<std::uint16_t>(serial >> 16), static_cast<std::uint16_t>(serial & 0xFFFF));
       busy_until_ = now + 1;
@@ -470,9 +503,25 @@ void Node::insert(std::uint8_t slot, ModuleCode code) {
   i2c.attach(branch, board.id_eeprom_address, eeproms_[slot].get());
   if (rev_a_) rev_a_->seated[slot] = true;
   if (code == ModuleCode::kTlTest001) {
+    // TL-TEST-001: P00 drives WAKE, P01 ALERT_N (through 1k); P10/P11 read
+    // CS_N/RESET_N. Other inputs idle high.
     test_cards_[slot] = std::make_unique<Tca9535Model>();
-    test_cards_[slot]->external = [](std::uint8_t) { return true; };
-    i2c.attach(branch, TestCardDriver::kExpanderAddr, test_cards_[slot].get());
+    Tca9535Model* card = test_cards_[slot].get();
+    card->external = [this, slot](std::uint8_t pin) {
+      if (rev_a_ && pin == 8) return rev_a_->cs_n(slot);
+      if (rev_a_ && pin == 9) return rev_a_->reset_n(slot);
+      return true;
+    };
+    const std::uint8_t wake = board.slots[slot].wake_line;
+    card->on_write = [this, card, slot, wake] {
+      if (wake != 0xFF && !card_wake_open[slot]) {
+        gpio.set(wake, card->is_output(0) && card->level(0));
+      }
+      if (rev_a_ && !card_alert_open[slot]) {
+        rev_a_->alert_low[slot] = card->is_output(1) && !card->level(1);
+      }
+    };
+    i2c.attach(branch, TestCardDriver::kExpanderAddr, card);
   } else if (code == ModuleCode::kLis2dw12 || code == ModuleCode::kTlMod003Imu) {
     imus_[slot] = std::make_unique<Lis2dw12>(gpio, board.slots[slot].wake_line, clock);
     i2c.attach(branch, Lis2dw12Driver::kAddr, imus_[slot].get());

@@ -34,6 +34,8 @@ class II2c {
   virtual bool write(std::uint8_t addr, const std::uint8_t* data, std::size_t n) = 0;
   virtual bool write_read(std::uint8_t addr, const std::uint8_t* w, std::size_t wn, std::uint8_t* r,
                           std::size_t rn) = 0;
+  // Address-only transaction: true if a device ACKs (bus scans).
+  virtual bool probe(std::uint8_t addr) { return write(addr, nullptr, 0); }
 };
 
 enum class Rail : std::uint8_t { kAlwaysOn3v3 = 0, kSwitched3v3 = 1, kSwitched5v = 2 };

@@ -32,6 +32,7 @@ class I2c final : public II2c {
   bool write(std::uint8_t addr, const std::uint8_t* data, std::size_t n) override;
   bool write_read(std::uint8_t addr, const std::uint8_t* w, std::size_t wn, std::uint8_t* r,
                   std::size_t rn) override;
+  bool probe(std::uint8_t addr) override;
 
  private:
   i2c_master_dev_handle_t device(std::uint8_t addr);

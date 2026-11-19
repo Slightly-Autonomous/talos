@@ -4,7 +4,8 @@
 
 ## Decision
 - **Dev kit first, custom PCB later.** Bring-up uses an ESP32-H2-DevKitM-1, a TCA9546A, ID EEPROMs and module breakouts (`hardware/bom/devkit_rig_v0.csv`), running the **same** `firmware/portable` code the twin tests. Custom PCB layout waits until the P0 questions are answered with measurements (spec §51 "dependency principle"). The questions: pin map, wake lines, sleep current, OTA fit and connector.
-- **A stable serial contract:** the ESP-IDF app logs `talos boot epoch=… version=…`, one `talos slot N module=0x… enabled=… fault=…` line per slot, and periodic `talos alive …` lines. Bench checks and HIL tests parse only these lines.
+- **A stable serial contract:** the ESP-IDF app logs `talos boot epoch=… version=… reset=… board_ok=…`, one `talos slot N module=0x… enabled=… fault=…` line per slot, and periodic `talos alive …` lines. Bench checks and HIL tests parse only these lines.
+- **The bench diag protocol (2026-11-18)** shares the USB-serial-JTAG console: one command per line in; replies are lines starting `@T ` followed by one JSON object, ending with `@T {"cmd":…,"done":true,"ok":…[,"err":…]}`. Log lines never start with `@T`. The commands and self-tests are in `firmware/portable/diag.h`; `firmware/sim:bench_node` runs the same console on the virtual board, so host tools are tested before a board exists.
 - **HIL tests** (`tests/hil`, `pytest-embedded` 1.17.1) check what simulation cannot: the real boot, NVS-persisted boot epoch across a hard reset, and discovery on real I2C. They run **only** from a manually dispatched workflow (`.github/workflows/hil.yml`) on a self-hosted runner labeled `talos-hil`, restricted to this repository. Pull requests never reach lab hardware, and the job uses no signing keys or secrets (spec §43).
 - **Release discipline:** `docs/manufacturing/release_package.md` lists what a hardware release must contain. Manifest values become non-provisional **only** when measured (spec §56 statuses).
 
@@ -13,7 +14,7 @@
 - **Still to do:**
   - Thread (OpenThread CoAP client as `IDatagram`, plus OTBR)
   - sleep and wake interrupts
-  - battery ADC and the `esp_ota` flash binding
+  - the `esp_ota` flash binding (the battery ADC is wired: `esp::BatteryAdc`)
   - secure boot staging with owner keys
   - the KiCad mainboard and connector selection
   - factory fixtures and certification pre-compliance

@@ -72,6 +72,8 @@ bool I2c::write(std::uint8_t addr, const std::uint8_t* data, std::size_t n) {
   return d && i2c_master_transmit(d, data, n, 50) == ESP_OK;
 }
 
+bool I2c::probe(std::uint8_t addr) { return bus_ && i2c_master_probe(bus_, addr, 50) == ESP_OK; }
+
 bool I2c::write_read(std::uint8_t addr, const std::uint8_t* w, std::size_t wn, std::uint8_t* r,
                      std::size_t rn) {
   auto d = device(addr);

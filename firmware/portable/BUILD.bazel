@@ -8,6 +8,7 @@ cc_library(
     srcs = [
         "board_io.cc",
         "coap_link.cc",
+        "diag.cc",
         "modules.cc",
         "ota.cc",
         "runtime.cc",
@@ -16,6 +17,7 @@ cc_library(
     hdrs = [
         "board_io.h",
         "coap_link.h",
+        "diag.h",
         "event_queue.h",
         "hal.h",
         "modules.h",
