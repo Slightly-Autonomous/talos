@@ -34,7 +34,7 @@ SLEEP_LOADS = [
     Load("TCA9546A standby", 1.0, "3v3", "SRC SCPS205B ICC standby typ @3.6 V"),
     Load("TCA9535 x2 standby", 2 * 0.9, "3v3", "SRC SCPS201F ICC standby typ @3.6 V"),
     Load("TPS22917 x4 AON enabled (IQ; worst case, firmware powers seated slots only)", 4 * 0.5, "3v3", "SRC SLVSDW8B IQ 0.5 uA typ"),
-    Load("TPS22917 x4 SW disabled (ISD)", 4 * 0.010, "3v3", "SRC SLVSDW8B ISD 10 nA typ"),
+    Load("TPS2553-1 x4 SW disabled (IIN_off)", 4 * 0.100, "3v3", "SRC SLVS841G IIN_off 0.1 uA typ"),
     # W&S mode, 100 ms SLEEPTIME, one axis (door closed). EST interpolated from SLYS045C ICC_DCM:
     # 1.21 uA @5 s and 160 uA @1 ms (1 ch) -> ~1.18 uA floor + ~0.17 uC/conversion. Door open (3 axes) ~3.8 uA.
     Load("TL-MOD-001 TMAG5273A1 W&S 100 ms, 1 axis", 2.9, "3v3", "EST from SLYS045C ICC_DCM endpoints"),

@@ -146,6 +146,7 @@ jobs:
         run: |
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
           python3 hardware/scripts/gen_schematics.py
+          python3 hardware/scripts/pi_config.py
           git diff --exit-code -- hardware/kicad
       - name: ERC, netlist round-trip, cross-board, safe-default and PCB DRC checks
         env:
@@ -153,6 +154,8 @@ jobs:
         run: python3 hardware/scripts/check_kicad.py
       - name: Power budget model
         run: python3 hardware/scripts/power_budget.py --out /tmp/power-budget.md
+      - name: Circuit simulation (ngspice from the KiCad image; verdicts match hardware/results/spice.md)
+        run: python3 hardware/scripts/spice_sim.py --check
       - name: JLCPCB sourcing (every assembled part stocked, offline snapshot)
         run: python3 hardware/scripts/jlc_sourcing.py check
       - name: Debug-adapter host tool (simulated MCP2221A)

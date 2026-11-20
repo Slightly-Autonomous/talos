@@ -205,7 +205,8 @@ def sensor_node() -> Board:
         C("C7", "100n", "PMUX_SS"),  # ~780 V/s output slew (SLVSEA3F Table 9-1)
         R("R68", "0R", "USB_VBUS", "PMUX_IN1", "lift to isolate the USB input from the power mux", power=True),
         # 37 kOhm total so board leakage when hot can't hold PR1 up without USB (owner decision 4).
-        # PR1 = 10/37 of VBUS: switches to USB above ~3.7 V (PR1 ref 1.0 V typ, HD-007).
+        # PR1 = 10/37 of VBUS: takes USB above 3.92 V typ (VREF 1.06 V, 1.01-1.10 V: 3.68-4.13 V
+        # with 1% resistors; spice_sim.py B5, HD-007).
         R("R13", "27k", "PMUX_IN1", "PMUX_PR1", "priority divider (HD-007)"),
         R("R14", "10k", "PMUX_PR1", "GND", "priority divider (HD-007)"),
         R("R15", "10k", core, "PMUX_ST", "ST pull-up: datasheet range 6-20k"),
