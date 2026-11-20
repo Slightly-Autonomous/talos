@@ -59,7 +59,9 @@ TEST(Supervision, PulledCardIsAP0TamperFaultOnBothBoardKinds) {
     EXPECT_EQ(removed[0].slot, 0);
     EXPECT_EQ(removed[0].b, static_cast<std::uint32_t>(ModuleCode::kTmag5273Contact));
     EXPECT_FALSE(n.runtime().slot(0).enabled);
-    if (rev_a) EXPECT_FALSE(n.rev_a().aon_on(0));  // nothing left drawing from AON
+    if (rev_a) {
+      EXPECT_FALSE(n.rev_a().aon_on(0));  // nothing left drawing from AON
+    }
     // Put back: discovered again at the next heartbeat.
     n.insert(0, ModuleCode::kTmag5273Contact);
     n.hall(0).set_field(30'000, 0, 0);
