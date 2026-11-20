@@ -21,6 +21,8 @@ const char* key_name(StoreKey k) {
       return "pend";
     case StoreKey::kIdentity:
       return "ident";
+    case StoreKey::kSlotPower:
+      return "slotpwr";
   }
   return "x";
 }

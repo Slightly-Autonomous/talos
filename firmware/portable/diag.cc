@@ -12,6 +12,9 @@ namespace talos::fw {
 
 namespace {
 constexpr std::uint8_t kSht40Heater20mw1s = 0x1E;  // SHT4x datasheet Table 7
+// Longest high-precision measurement is 8.3 ms (SHT4x datasheet Table 4); the part NACKs until
+// done.
+constexpr std::uint32_t kSht40MaxMeasureMs = 10;
 }  // namespace
 
 // --- JsonLine ---------------------------------------------------------------------------
@@ -773,6 +776,9 @@ bool Diag::selftest_sht(std::uint8_t slot, IDiagOut& out, const char*& err) {
     return static_cast<std::int32_t>(-45'000 + 175'000 * raw / 65'535);
   };
   std::uint8_t r[6] = {};
+  // The node's own driver may have a measurement in flight on this sensor, and the SHT40 NACKs
+  // every command until it finishes. Wait it out instead of reporting a bus fault.
+  p_.clock.delay_ms(kSht40MaxMeasureMs);
   const bool serial_ok = command(Sht40Driver::kSerial, 2, r);
   const std::uint32_t serial =
       (std::uint32_t{r[0]} << 24) | (std::uint32_t{r[1]} << 16) | (std::uint32_t{r[3]} << 8) | r[4];

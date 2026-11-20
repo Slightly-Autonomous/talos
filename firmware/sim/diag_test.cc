@@ -161,6 +161,21 @@ TEST(Diag, ShtHeaterTestPassesAndCatchesADeadHeater) {
   EXPECT_FALSE(passed(bad.run("selftest sht 3"), "sht.heater"));
 }
 
+TEST(Diag, ShtSelfTestWaitsOutAMeasurementAlreadyInFlight) {
+  // The runtime's driver can be mid-measurement when the bench command arrives; the SHT40
+  // NACKs until it finishes, which must not read as a bus or CRC fault.
+  Bench b({{3, ModuleCode::kTlMod004Env}});
+  b.boot();
+  Platform& p = b.node.platform();
+  const auto mask = static_cast<std::uint8_t>(1u << p.board.slots[3].i2c_branch);
+  ASSERT_TRUE(p.i2c.write(p.board.mux_address, &mask, 1));
+  const std::uint8_t measure = Sht40Driver::kMeasureHighPrecision;
+  ASSERT_TRUE(p.i2c.write(Sht40Driver::kAddr, &measure, 1));
+  auto st = b.run("selftest sht 3");
+  EXPECT_TRUE(passed(st, "sht.serial")) << st.text;
+  EXPECT_TRUE(passed(st, "sht.heater")) << st.text;
+}
+
 TEST(Diag, RailCommandsFollowTheSequencingRules) {
   Bench b({{0, ModuleCode::kTlTest001}});
   b.boot();
