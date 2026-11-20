@@ -102,6 +102,7 @@ class BoardIo final : public IPower {
   PowerSource source() override;
   std::optional<bool> slot_present(std::uint8_t slot) override;
   void service() override;
+  std::uint8_t take_sw_faults() override;
 
   bool rail_on(std::uint8_t slot, Rail rail) const;
   bool charger_ok() const { return charger_ok_; }

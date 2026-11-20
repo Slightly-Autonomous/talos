@@ -80,6 +80,7 @@ struct ModuleManifest {
   std::uint32_t average_uw = 0;  // used instead of average_mw when non-zero
   std::vector<CapabilityId> capabilities;
   std::string connector_standard;  // empty = not declared
+  bool test_fixture = false;  // bench fixture: exempt from the concurrent UART limit (time-shared)
 };
 
 using ModuleCatalog = std::map<ModuleId, ModuleManifest>;

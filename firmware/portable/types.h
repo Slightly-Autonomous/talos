@@ -56,17 +56,19 @@ enum class PowerSource : std::uint8_t {
 
 enum class ModuleFault : std::int32_t {
   kNone = 0,
-  kUnknownModule = 1,     // ID EEPROM read, code not in the registry
-  kNoIdEeprom = 2,        // nothing answered on the slot's ID address
-  kInitFailed = 3,        // driver probe failed (e.g. WHO_AM_I mismatch)
-  kBusError = 4,          // I2C transaction failed at runtime
-  kDisabledForPower = 5,  // present, but the power budget keeps it off
-  kMissingResource = 6,   // slot lacks a wake line / bus the module needs
-  kMuxFault = 7,          // the I2C mux did not accept the branch select
-  kIdBlank = 8,           // ID EEPROM answered but was never programmed (all 0xFF)
-  kIdCorrupt = 9,         // ID EEPROM content invalid (bad CRC, format or code 0)
-  kStuckInterrupt = 10,   // wake line held high with no event behind it
-  kWarmupTimeout = 11,    // sensor never settled after power-up (PIR: > 210 s)
+  kUnknownModule = 1,      // ID EEPROM read, code not in the registry
+  kNoIdEeprom = 2,         // nothing answered on the slot's ID address
+  kInitFailed = 3,         // driver probe failed (e.g. WHO_AM_I mismatch)
+  kBusError = 4,           // I2C transaction failed at runtime
+  kDisabledForPower = 5,   // present, but the power budget keeps it off
+  kMissingResource = 6,    // slot lacks a wake line / bus the module needs
+  kMuxFault = 7,           // the I2C mux did not accept the branch select
+  kIdBlank = 8,            // ID EEPROM answered but was never programmed (all 0xFF)
+  kIdCorrupt = 9,          // ID EEPROM content invalid (bad CRC, format or code 0)
+  kStuckInterrupt = 10,    // wake line held high with no event behind it
+  kWarmupTimeout = 11,     // sensor never settled after power-up (PIR: > 210 s)
+  kRailFault = 12,         // the slot's switched rail hit its current limit and was shut off
+  kPowerQuarantined = 13,  // the node reset while powering this slot; held off until cleared
 };
 
 // Downlink messages from the hub.

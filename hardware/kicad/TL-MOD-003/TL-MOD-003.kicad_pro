@@ -84,7 +84,15 @@
       },
       {
         "netclass": "Power",
+        "pattern": "/SYS_REG"
+      },
+      {
+        "netclass": "Power",
         "pattern": "/USB_VBUS"
+      },
+      {
+        "netclass": "Power",
+        "pattern": "/PMUX_IN1"
       },
       {
         "netclass": "Power",
@@ -113,6 +121,10 @@
       {
         "netclass": "Rail",
         "pattern": "/VBAT"
+      },
+      {
+        "netclass": "Rail",
+        "pattern": "/VBAT_PACK"
       }
     ],
     "meta": {

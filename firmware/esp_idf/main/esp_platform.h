@@ -24,6 +24,10 @@ class Gpio final : public IGpio {
  public:
   explicit Gpio(const BoardSupport& b);
   bool read(std::uint8_t line) override;
+  bool write(std::uint8_t line, bool level) override;
+
+ private:
+  std::uint8_t output_ = 0xFF;  // the only output line (mux reset)
 };
 
 class I2c final : public II2c {

@@ -3,6 +3,7 @@
  "parts": {
   "C1": {
    "datasheet": "~",
+   "dnp": false,
    "footprint": "Capacitor_SMD:C_0402_1005Metric",
    "lib_id": "Device:C",
    "note": "",
@@ -18,6 +19,7 @@
   },
   "C2": {
    "datasheet": "~",
+   "dnp": false,
    "footprint": "Capacitor_SMD:C_0805_2012Metric",
    "lib_id": "Device:C",
    "note": "",
@@ -33,6 +35,7 @@
   },
   "C3": {
    "datasheet": "~",
+   "dnp": false,
    "footprint": "Capacitor_SMD:C_0402_1005Metric",
    "lib_id": "Device:C",
    "note": "",
@@ -48,6 +51,7 @@
   },
   "C4": {
    "datasheet": "~",
+   "dnp": false,
    "footprint": "Capacitor_SMD:C_0402_1005Metric",
    "lib_id": "Device:C",
    "note": "",
@@ -63,6 +67,7 @@
   },
   "C5": {
    "datasheet": "~",
+   "dnp": false,
    "footprint": "Capacitor_SMD:C_0402_1005Metric",
    "lib_id": "Device:C",
    "note": "",
@@ -78,6 +83,7 @@
   },
   "C6": {
    "datasheet": "~",
+   "dnp": false,
    "footprint": "Capacitor_SMD:C_0402_1005Metric",
    "lib_id": "Device:C",
    "note": "",
@@ -93,6 +99,7 @@
   },
   "C7": {
    "datasheet": "~",
+   "dnp": false,
    "footprint": "Capacitor_SMD:C_0402_1005Metric",
    "lib_id": "Device:C",
    "note": "",
@@ -101,13 +108,46 @@
     "2": ""
    },
    "pins": {
-    "1": "V3V3_AON",
+    "1": "AON_METER",
+    "2": "GND"
+   },
+   "value": "100n"
+  },
+  "C8": {
+   "datasheet": "~",
+   "dnp": true,
+   "footprint": "Capacitor_SMD:C_0402_1005Metric",
+   "lib_id": "Device:C",
+   "note": "TPS22917 CT option",
+   "pin_names": {
+    "1": "",
+    "2": ""
+   },
+   "pins": {
+    "1": "AON_CT",
+    "2": "GND"
+   },
+   "value": "DNP"
+  },
+  "C9": {
+   "datasheet": "~",
+   "dnp": false,
+   "footprint": "Capacitor_SMD:C_0402_1005Metric",
+   "lib_id": "Device:C",
+   "note": "",
+   "pin_names": {
+    "1": "",
+    "2": ""
+   },
+   "pins": {
+    "1": "V3V3",
     "2": "GND"
    },
    "value": "100n"
   },
   "D1": {
    "datasheet": "~",
+   "dnp": false,
    "footprint": "LED_SMD:LED_0603_1608Metric",
    "lib_id": "Device:LED",
    "note": "lit when a card grounds PRESENT_N",
@@ -123,6 +163,7 @@
   },
   "D2": {
    "datasheet": "https://assets.nexperia.com/documents/data-sheet/PESDXL5UF_V_Y.pdf",
+   "dnp": false,
    "footprint": "Package_TO_SOT_SMD:SOT-666",
    "lib_id": "Power_Protection:PESD3V3L5UV",
    "note": "",
@@ -146,6 +187,7 @@
   },
   "J1": {
    "datasheet": "https://www.usb.org/sites/default/files/documents/usb_type-c.zip",
+   "dnp": false,
    "footprint": "Connector_USB:USB_C_Receptacle_GCT_USB4105-xx-A_16P_TopMnt_Horizontal",
    "lib_id": "Connector:USB_C_Receptacle_USB2.0_16P",
    "note": "",
@@ -191,6 +233,7 @@
   },
   "J2": {
    "datasheet": "~",
+   "dnp": false,
    "footprint": "talos:Samtec_HSEC8-110-01-S-D-EM2",
    "lib_id": "Connector_Generic:Conn_02x10_Odd_Even",
    "note": "HSEC8-110-01-S-D-EM2 (30 \u00b5in gold); land pattern from Samtec drawing, host board needs the locating slot (HD-002)",
@@ -242,6 +285,7 @@
   },
   "JP1": {
    "datasheet": "~",
+   "dnp": false,
    "footprint": "Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical",
    "lib_id": "Connector_Generic:Conn_01x02",
    "note": "shunt fitted for normal use; remove and insert a PPK2 (ammeter) to measure card AON current",
@@ -257,6 +301,7 @@
   },
   "JP2": {
    "datasheet": "~",
+   "dnp": false,
    "footprint": "Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical",
    "lib_id": "Connector_Generic:Conn_01x02",
    "note": "shunt fitted for normal use; remove and insert a PPK2 (ammeter) to measure card SW current",
@@ -272,6 +317,7 @@
   },
   "R1": {
    "datasheet": "~",
+   "dnp": false,
    "footprint": "Resistor_SMD:R_0402_1005Metric",
    "lib_id": "Device:R",
    "note": "UFP Rd",
@@ -287,6 +333,7 @@
   },
   "R10": {
    "datasheet": "~",
+   "dnp": false,
    "footprint": "Resistor_SMD:R_0402_1005Metric",
    "lib_id": "Device:R",
    "note": "",
@@ -302,6 +349,7 @@
   },
   "R11": {
    "datasheet": "~",
+   "dnp": false,
    "footprint": "Resistor_SMD:R_0402_1005Metric",
    "lib_id": "Device:R",
    "note": "",
@@ -317,6 +365,7 @@
   },
   "R12": {
    "datasheet": "~",
+   "dnp": false,
    "footprint": "Resistor_SMD:R_0402_1005Metric",
    "lib_id": "Device:R",
    "note": "",
@@ -332,6 +381,7 @@
   },
   "R13": {
    "datasheet": "~",
+   "dnp": false,
    "footprint": "Resistor_SMD:R_0402_1005Metric",
    "lib_id": "Device:R",
    "note": "idle-high when the card has no UART",
@@ -347,6 +397,7 @@
   },
   "R14": {
    "datasheet": "~",
+   "dnp": false,
    "footprint": "Resistor_SMD:R_0402_1005Metric",
    "lib_id": "Device:R",
    "note": "",
@@ -362,6 +413,7 @@
   },
   "R15": {
    "datasheet": "~",
+   "dnp": false,
    "footprint": "Resistor_SMD:R_0402_1005Metric",
    "lib_id": "Device:R",
    "note": "",
@@ -377,6 +429,7 @@
   },
   "R16": {
    "datasheet": "~",
+   "dnp": false,
    "footprint": "Resistor_SMD:R_0402_1005Metric",
    "lib_id": "Device:R",
    "note": "",
@@ -390,8 +443,57 @@
    },
    "value": "1k"
   },
+  "R17": {
+   "datasheet": "~",
+   "dnp": false,
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "QOD to VOUT: card AON decays fast between power cycles",
+   "pin_names": {
+    "1": "",
+    "2": ""
+   },
+   "pins": {
+    "1": "AON_QOD",
+    "2": "AON_METER"
+   },
+   "value": "0R"
+  },
+  "R18": {
+   "datasheet": "~",
+   "dnp": false,
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "FAULT_N pull-up (test pad; no spare bridge GPIO)",
+   "pin_names": {
+    "1": "",
+    "2": ""
+   },
+   "pins": {
+    "1": "V3V3",
+    "2": "DBG_SW_FAULT_N"
+   },
+   "value": "100k"
+  },
+  "R19": {
+   "datasheet": "~",
+   "dnp": false,
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "SW bleed: TPS2553 has no output discharge",
+   "pin_names": {
+    "1": "",
+    "2": ""
+   },
+   "pins": {
+    "1": "SW_METER",
+    "2": "GND"
+   },
+   "value": "100k"
+  },
   "R2": {
    "datasheet": "~",
+   "dnp": false,
    "footprint": "Resistor_SMD:R_0402_1005Metric",
    "lib_id": "Device:R",
    "note": "UFP Rd",
@@ -405,8 +507,89 @@
    },
    "value": "5.1k"
   },
+  "R20": {
+   "datasheet": "~",
+   "dnp": false,
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "idle-high, as on the main board (decision 7)",
+   "pin_names": {
+    "1": "",
+    "2": ""
+   },
+   "pins": {
+    "1": "V3V3_AON",
+    "2": "UART_TX"
+   },
+   "value": "100k"
+  },
+  "R21": {
+   "datasheet": "~",
+   "dnp": false,
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "SPI is not bridged: hold it quiet",
+   "pin_names": {
+    "1": "",
+    "2": ""
+   },
+   "pins": {
+    "1": "SCK",
+    "2": "GND"
+   },
+   "value": "100k"
+  },
+  "R22": {
+   "datasheet": "~",
+   "dnp": false,
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "SPI is not bridged: hold it quiet",
+   "pin_names": {
+    "1": "",
+    "2": ""
+   },
+   "pins": {
+    "1": "MOSI",
+    "2": "GND"
+   },
+   "value": "100k"
+  },
+  "R23": {
+   "datasheet": "~",
+   "dnp": false,
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "series R as on the main board (decision 7)",
+   "pin_names": {
+    "1": "",
+    "2": ""
+   },
+   "pins": {
+    "1": "DBG_UTX",
+    "2": "UART_TX"
+   },
+   "value": "330"
+  },
+  "R24": {
+   "datasheet": "~",
+   "dnp": false,
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "series R as on the main board (decision 7)",
+   "pin_names": {
+    "1": "",
+    "2": ""
+   },
+   "pins": {
+    "1": "UART_RX",
+    "2": "BRIDGE_RX"
+   },
+   "value": "330"
+  },
   "R3": {
    "datasheet": "~",
+   "dnp": false,
    "footprint": "Resistor_SMD:R_0402_1005Metric",
    "lib_id": "Device:R",
    "note": "",
@@ -422,6 +605,7 @@
   },
   "R4": {
    "datasheet": "~",
+   "dnp": false,
    "footprint": "Resistor_SMD:R_0402_1005Metric",
    "lib_id": "Device:R",
    "note": "",
@@ -437,6 +621,7 @@
   },
   "R5": {
    "datasheet": "~",
+   "dnp": false,
    "footprint": "Resistor_SMD:R_0402_1005Metric",
    "lib_id": "Device:R",
    "note": "",
@@ -452,21 +637,23 @@
   },
   "R6": {
    "datasheet": "~",
+   "dnp": false,
    "footprint": "Resistor_SMD:R_0402_1005Metric",
    "lib_id": "Device:R",
-   "note": "QOD to VOUT",
+   "note": "IOS 155-207 mA (SLVS841G)",
    "pin_names": {
     "1": "",
     "2": ""
    },
    "pins": {
-    "1": "SW_QOD",
-    "2": "SW_METER"
+    "1": "SW_ILIM",
+    "2": "GND"
    },
-   "value": "0R"
+   "value": "150k 1%"
   },
   "R7": {
    "datasheet": "~",
+   "dnp": false,
    "footprint": "Resistor_SMD:R_0402_1005Metric",
    "lib_id": "Device:R",
    "note": "",
@@ -482,6 +669,7 @@
   },
   "R8": {
    "datasheet": "~",
+   "dnp": false,
    "footprint": "Resistor_SMD:R_0402_1005Metric",
    "lib_id": "Device:R",
    "note": "",
@@ -497,6 +685,7 @@
   },
   "R9": {
    "datasheet": "~",
+   "dnp": false,
    "footprint": "Resistor_SMD:R_0402_1005Metric",
    "lib_id": "Device:R",
    "note": "empty slot never wakes",
@@ -512,6 +701,7 @@
   },
   "TP1": {
    "datasheet": "~",
+   "dnp": false,
    "footprint": "TestPoint:TestPoint_Pad_D1.0mm",
    "lib_id": "Connector:TestPoint",
    "note": "",
@@ -525,6 +715,7 @@
   },
   "TP10": {
    "datasheet": "~",
+   "dnp": false,
    "footprint": "TestPoint:TestPoint_Pad_D1.0mm",
    "lib_id": "Connector:TestPoint",
    "note": "",
@@ -538,6 +729,7 @@
   },
   "TP11": {
    "datasheet": "~",
+   "dnp": false,
    "footprint": "TestPoint:TestPoint_Pad_D1.0mm",
    "lib_id": "Connector:TestPoint",
    "note": "",
@@ -551,6 +743,7 @@
   },
   "TP12": {
    "datasheet": "~",
+   "dnp": false,
    "footprint": "TestPoint:TestPoint_Pad_D1.0mm",
    "lib_id": "Connector:TestPoint",
    "note": "",
@@ -564,6 +757,7 @@
   },
   "TP13": {
    "datasheet": "~",
+   "dnp": false,
    "footprint": "TestPoint:TestPoint_Pad_D1.0mm",
    "lib_id": "Connector:TestPoint",
    "note": "",
@@ -577,6 +771,7 @@
   },
   "TP14": {
    "datasheet": "~",
+   "dnp": false,
    "footprint": "TestPoint:TestPoint_Pad_D1.0mm",
    "lib_id": "Connector:TestPoint",
    "note": "",
@@ -590,6 +785,7 @@
   },
   "TP15": {
    "datasheet": "~",
+   "dnp": false,
    "footprint": "TestPoint:TestPoint_Pad_D1.0mm",
    "lib_id": "Connector:TestPoint",
    "note": "",
@@ -603,6 +799,7 @@
   },
   "TP16": {
    "datasheet": "~",
+   "dnp": false,
    "footprint": "TestPoint:TestPoint_Pad_D1.0mm",
    "lib_id": "Connector:TestPoint",
    "note": "",
@@ -614,8 +811,51 @@
    },
    "value": "GND"
   },
+  "TP17": {
+   "datasheet": "~",
+   "dnp": false,
+   "footprint": "TestPoint:TestPoint_Pad_D1.0mm",
+   "lib_id": "Connector:TestPoint",
+   "note": "",
+   "pin_names": {
+    "1": "1"
+   },
+   "pins": {
+    "1": "BRIDGE_TX"
+   },
+   "value": "BRIDGE_TX"
+  },
+  "TP18": {
+   "datasheet": "~",
+   "dnp": false,
+   "footprint": "TestPoint:TestPoint_Pad_D1.0mm",
+   "lib_id": "Connector:TestPoint",
+   "note": "",
+   "pin_names": {
+    "1": "1"
+   },
+   "pins": {
+    "1": "USB_VBUS"
+   },
+   "value": "USB_VBUS"
+  },
+  "TP19": {
+   "datasheet": "~",
+   "dnp": false,
+   "footprint": "TestPoint:TestPoint_Pad_D1.0mm",
+   "lib_id": "Connector:TestPoint",
+   "note": "",
+   "pin_names": {
+    "1": "1"
+   },
+   "pins": {
+    "1": "DBG_SW_FAULT_N"
+   },
+   "value": "DBG_SW_FAULT_N"
+  },
   "TP2": {
    "datasheet": "~",
+   "dnp": false,
    "footprint": "TestPoint:TestPoint_Pad_D1.0mm",
    "lib_id": "Connector:TestPoint",
    "note": "",
@@ -629,6 +869,7 @@
   },
   "TP3": {
    "datasheet": "~",
+   "dnp": false,
    "footprint": "TestPoint:TestPoint_Pad_D1.0mm",
    "lib_id": "Connector:TestPoint",
    "note": "",
@@ -642,6 +883,7 @@
   },
   "TP4": {
    "datasheet": "~",
+   "dnp": false,
    "footprint": "TestPoint:TestPoint_Pad_D1.0mm",
    "lib_id": "Connector:TestPoint",
    "note": "",
@@ -655,6 +897,7 @@
   },
   "TP5": {
    "datasheet": "~",
+   "dnp": false,
    "footprint": "TestPoint:TestPoint_Pad_D1.0mm",
    "lib_id": "Connector:TestPoint",
    "note": "",
@@ -668,6 +911,7 @@
   },
   "TP6": {
    "datasheet": "~",
+   "dnp": false,
    "footprint": "TestPoint:TestPoint_Pad_D1.0mm",
    "lib_id": "Connector:TestPoint",
    "note": "",
@@ -681,6 +925,7 @@
   },
   "TP7": {
    "datasheet": "~",
+   "dnp": false,
    "footprint": "TestPoint:TestPoint_Pad_D1.0mm",
    "lib_id": "Connector:TestPoint",
    "note": "",
@@ -694,6 +939,7 @@
   },
   "TP8": {
    "datasheet": "~",
+   "dnp": false,
    "footprint": "TestPoint:TestPoint_Pad_D1.0mm",
    "lib_id": "Connector:TestPoint",
    "note": "",
@@ -707,6 +953,7 @@
   },
   "TP9": {
    "datasheet": "~",
+   "dnp": false,
    "footprint": "TestPoint:TestPoint_Pad_D1.0mm",
    "lib_id": "Connector:TestPoint",
    "note": "",
@@ -720,6 +967,7 @@
   },
   "U1": {
    "datasheet": "https://www.st.com/resource/en/datasheet/usblc6-2.pdf",
+   "dnp": false,
    "footprint": "Package_TO_SOT_SMD:SOT-23-6",
    "lib_id": "Power_Protection:USBLC6-2SC6",
    "note": "",
@@ -743,6 +991,7 @@
   },
   "U2": {
    "datasheet": "https://www.diodes.com/assets/Datasheets/AP2112.pdf",
+   "dnp": false,
    "footprint": "Package_TO_SOT_SMD:SOT-23-5",
    "lib_id": "Regulator_Linear:AP2112K-3.3",
    "note": "",
@@ -764,6 +1013,7 @@
   },
   "U3": {
    "datasheet": "http://ww1.microchip.com/downloads/en/DeviceDoc/20005565B.pdf",
+   "dnp": false,
    "footprint": "Package_SO:SOIC-14_3.9x8.7mm_P1.27mm",
    "lib_id": "Interface_USB:MCP2221AxSL",
    "note": "GP0 AON enable, GP2 SW enable, GP1 WAKE in (interrupt-on-change), GP3 ALERT_N in",
@@ -793,7 +1043,7 @@
     "2": "DBG_AON_EN",
     "3": "BRIDGE_WAKE",
     "4": "BRIDGE_RST_N",
-    "5": "UART_RX",
+    "5": "BRIDGE_RX",
     "6": "BRIDGE_TX",
     "7": "DBG_SW_EN",
     "8": "BRIDGE_ALERT",
@@ -803,6 +1053,7 @@
   },
   "U4": {
    "datasheet": "http://www.ti.com/lit/ds/symlink/tps22917.pdf",
+   "dnp": false,
    "footprint": "Package_TO_SOT_SMD:SOT-23-6",
    "lib_id": "Power_Management:TPS22917DBV",
    "note": "card AON switch, default off on the adapter",
@@ -818,40 +1069,42 @@
     "1": "V3V3",
     "2": "GND",
     "3": "DBG_AON_EN",
-    "4": null,
-    "5": null,
+    "4": "AON_CT",
+    "5": "AON_QOD",
     "6": "AON_METER"
    },
    "value": "TPS22917DBVR"
   },
   "U5": {
-   "datasheet": "http://www.ti.com/lit/ds/symlink/tps22917.pdf",
+   "datasheet": "~",
+   "dnp": false,
    "footprint": "Package_TO_SOT_SMD:SOT-23-6",
-   "lib_id": "Power_Management:TPS22917DBV",
-   "note": "card switched rail, default off",
+   "lib_id": "talos:TPS2553",
+   "note": "card switched rail, default off, latch-off current limit",
    "pin_names": {
-    "1": "VIN",
+    "1": "IN",
     "2": "GND",
-    "3": "ON",
-    "4": "CT",
-    "5": "QOD",
-    "6": "VOUT"
+    "3": "EN",
+    "4": "~{FAULT}",
+    "5": "ILIM",
+    "6": "OUT"
    },
    "pins": {
     "1": "V3V3",
     "2": "GND",
     "3": "DBG_SW_EN",
-    "4": null,
-    "5": "SW_QOD",
+    "4": "DBG_SW_FAULT_N",
+    "5": "SW_ILIM",
     "6": "SW_METER"
    },
-   "value": "TPS22917DBVR"
+   "value": "TPS2553DBVR-1"
   },
   "U6": {
    "datasheet": "https://www.ti.com/lit/ds/symlink/sn74lvc1g125.pdf",
+   "dnp": false,
    "footprint": "Package_TO_SOT_SMD:SOT-23-5",
    "lib_id": "74xGxx:74LVC1G125",
-   "note": "OE_N tied low; powered from the card rail",
+   "note": "OE_N tied low; powered from the card's switched rail ahead of JP1, so its current isn't metered",
    "pin_names": {
     "1": "",
     "2": "",
@@ -863,8 +1116,8 @@
     "1": "GND",
     "2": "BRIDGE_TX",
     "3": "GND",
-    "4": "UART_TX",
-    "5": "V3V3_AON"
+    "4": "DBG_UTX",
+    "5": "AON_METER"
    },
    "value": "SN74LVC1G125DBVR"
   }

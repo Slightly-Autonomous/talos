@@ -3,6 +3,7 @@
  "parts": {
   "C1": {
    "datasheet": "~",
+   "dnp": false,
    "footprint": "Capacitor_SMD:C_0402_1005Metric",
    "lib_id": "Device:C",
    "note": "",
@@ -18,6 +19,7 @@
   },
   "C2": {
    "datasheet": "~",
+   "dnp": false,
    "footprint": "Capacitor_SMD:C_0402_1005Metric",
    "lib_id": "Device:C",
    "note": "",
@@ -33,6 +35,7 @@
   },
   "C3": {
    "datasheet": "~",
+   "dnp": false,
    "footprint": "Capacitor_SMD:C_0805_2012Metric",
    "lib_id": "Device:C",
    "note": "",
@@ -48,6 +51,7 @@
   },
   "J1": {
    "datasheet": "~",
+   "dnp": false,
    "footprint": "talos:CardEdge_sensor_edge_v1_2x10_P0.8mm",
    "lib_id": "Connector_Generic:Conn_02x10_Odd_Even",
    "note": "gold fingers, 1.60 mm card, 0.80 mm pitch",
@@ -99,6 +103,7 @@
   },
   "TP1": {
    "datasheet": "~",
+   "dnp": false,
    "footprint": "TestPoint:TestPoint_Pad_D1.0mm",
    "lib_id": "Connector:TestPoint",
    "note": "",
@@ -112,6 +117,7 @@
   },
   "TP2": {
    "datasheet": "~",
+   "dnp": false,
    "footprint": "TestPoint:TestPoint_Pad_D1.0mm",
    "lib_id": "Connector:TestPoint",
    "note": "",
@@ -123,8 +129,23 @@
    },
    "value": "GND"
   },
+  "TP3": {
+   "datasheet": "~",
+   "dnp": false,
+   "footprint": "TestPoint:TestPoint_Pad_D1.0mm",
+   "lib_id": "Connector:TestPoint",
+   "note": "",
+   "pin_names": {
+    "1": "1"
+   },
+   "pins": {
+    "1": "WAKE"
+   },
+   "value": "WAKE"
+  },
   "U1": {
    "datasheet": "https://ww1.microchip.com/downloads/aemDocuments/documents/MPD/ProductDocuments/DataSheets/2-Kbit-I2C-Serial-EEPROMs-+EUI-48-or-EUI-64-Node-20002124.pdf",
+   "dnp": false,
    "footprint": "Package_TO_SOT_SMD:SOT-23-6",
    "lib_id": "Memory_EEPROM:24AA025E-OT",
    "note": "ID EEPROM 0x50 with factory EUI-48 (S-1)",
@@ -148,6 +169,7 @@
   },
   "U2": {
    "datasheet": "~",
+   "dnp": false,
    "footprint": "Package_LGA:LGA-12_2x2mm_P0.5mm",
    "lib_id": "talos:LIS2DW12",
    "note": "CS high = I2C; SA0 high = 0x19 (internal pull-up cannot be disabled)",

@@ -35,6 +35,13 @@ class Gpio final : public IGpio {
  public:
   bool read(std::uint8_t line) override { return line < lines_.size() && lines_[line]; }
   void set(std::uint8_t line, bool v) { lines_.at(line) = v; }
+  // Output lines (mux reset): the board model decides what is wired there.
+  bool write(std::uint8_t line, bool level) override {
+    if (!on_write) return false;
+    on_write(line, level);
+    return true;
+  }
+  std::function<void(std::uint8_t line, bool level)> on_write;
 
  private:
   std::array<bool, 32> lines_{};
@@ -64,6 +71,10 @@ class I2cBus final : public II2c {
   }
   void detach(std::uint8_t branch, std::uint8_t addr) { devices_.erase({branch, addr}); }
   void break_branch(std::uint8_t branch, bool broken) { broken_[branch] = broken; }
+  // A card holding SDA low: while its branch is selected, nothing on the bus answers.
+  void stick_branch(std::uint8_t branch, bool stuck) { stuck_[branch] = stuck; }
+  void reset_mux() { mask_ = 0; }  // TCA9546A RESET_N pulse
+  std::uint32_t mux_resets = 0;
   bool write(std::uint8_t addr, const std::uint8_t* data, std::size_t n) override;
   bool write_read(std::uint8_t addr, const std::uint8_t* w, std::size_t wn, std::uint8_t* r,
                   std::size_t rn) override;
@@ -72,6 +83,8 @@ class I2cBus final : public II2c {
 
  private:
   I2cDevice* target(std::uint8_t addr);
+  bool held() const;
+  std::array<bool, 8> stuck_{};
   std::uint8_t mux_;
   std::uint8_t mask_ = 0;
   std::map<std::pair<std::uint8_t, std::uint8_t>, I2cDevice*> devices_;
@@ -149,10 +162,11 @@ class RevABoard {
   explicit RevABoard(const BoardSupport& board);
   Tca9535Model exp_a, exp_b;
   Bq25186Model charger;
-  std::array<bool, kSlots> seated{};     // a card grounds PRESENT_N
-  std::array<bool, kSlots> alert_low{};  // a card pulls ALERT_N low
+  std::array<bool, kSlots> seated{};       // a card grounds PRESENT_N
+  std::array<bool, kSlots> alert_low{};    // a card pulls ALERT_N low
+  std::array<bool, kSlots> sw_overload{};  // the card overloads SW: its switch asserts FAULT_N
   Source source = Source::kUsb;
-  bool aon_on(std::uint8_t slot) const;  // TPS22917 ON level (100k pull-up when not driven)
+  bool aon_on(std::uint8_t slot) const;  // TPS22917 ON level (1M pull-down when not driven)
   bool sw_on(std::uint8_t slot) const;   // 1M pull-down when not driven
   // Line level at the card for RESET_N / CS_N (pulled up to the slot's AON).
   bool reset_n(std::uint8_t slot) const;

@@ -38,8 +38,8 @@ flowchart TB
   BAT["Protected 1S pack + NTC"] <-->|VBAT / BAT_NTC| CHG
   CHG -->|SYS_PATH| REG["TPS63900 buck-boost<br/>3.3 V, 75 nA Iq"]
   REG -->|V3V3_CORE| H2["ESP32-H2-MINI-1"]
-  REG --> AON["4 × TPS22917 → V3V3_AON_n<br/>default ON"]
-  REG --> SW["4 × TPS22917 → V3V3_SW_n<br/>default OFF, QOD"]
+  REG --> AON["4 × TPS22917 → V3V3_AON_n<br/>default OFF, staggered by firmware"]
+  REG --> SW["4 × TPS2553-1 → V3V3_SW_n<br/>default OFF, current-limited, FAULT_N"]
   H2 -->|I2C root| MUX["TCA9546A 0x70"] -->|SLOTn_SDA/SCL| SLOTS["4 × sensor_edge_v1"]
   H2 -->|I2C root| EXPA["TCA9535 0x20<br/>enables, reset, CS"]
   H2 -->|I2C root| EXPB["TCA9535 0x21<br/>presence, alerts, charger, UART sel"]
@@ -88,9 +88,9 @@ A TCA9546A joins an enabled branch to the root bus, so branch devices share the 
 | Pin | EXP_A (0x20) | EXP_B (0x21) |
 |---|---|---|
 | P00–P03 | SLOT_SW_EN0–3 (1 MΩ pull-down: default off) | SLOT_PRESENT_N0–3 (in) |
-| P04–P07 | SLOT_AON_EN0–3 (100 k pull-up: default on) | SLOT_ALERT_N0–3 (in) |
-| P10–P13 | SLOT_RESET_N0–3 (100 k pull-up) | UART_SEL0, UART_SEL1, UART_MUX_EN_N, PRESENT_PROBE |
-| P14–P17 | SLOT_CS_N0–3 (100 k pull-up) | CHG_INT_N, CHG_PG_N, PMUX_ST, spare (test pad) |
+| P04–P07 | SLOT_AON_EN0–3 (1 MΩ pull-down: default off) | SLOT_ALERT_N0–3 (in) |
+| P10–P13 | SLOT_RESET_N0–3 (100 k pull-up) | UART_SEL0, UART_SEL1, UART_MUX_EN_N, PRESENT_PROBE (1 MΩ pull-down) |
+| P14–P17 | SLOT_CS_N0–3 (100 k pull-up) | CHG_INT_N, CHG_PG_N, PMUX_ST, SW_FAULT_N (wired-OR, 100 k pull-up) |
 
 TCA9535 ports power up as inputs, so every output's safe default comes from a resistor, not from firmware. Presence pull-ups hang off `PRESENT_PROBE`, which firmware drives high only while it reads presence. That keeps four 100 k pull-ups out of the sleep budget.
 

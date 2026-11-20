@@ -10,7 +10,8 @@ connector_standard: sensor_edge_v1
 uart_channels: 1                            # UART1 + TS3A5017 dual 4:1 mux
 reserved_i2c_addresses: [32, 33, 106, 112]  # 0x20, 0x21 TCA9535; 0x6A BQ25186; 0x70 TCA9546A
 notes:
-  - "Rail limits are estimates (TPS63900 >400 mA at 3.3 V; TPS22917 2 A per switch); not measured."
+  - "Rail limits are estimates (TPS63900 >400 mA at 3.3 V); not measured. AON: TPS22917, no current limit, default off; firmware powers seated slots one at a time and quarantines a slot that reset the node."
+  - "SW: TPS2553-1 per slot, latch-off at 155-207 mA (RILIM 150k), wired-OR FAULT_N to EXP_B P17."
   - "Battery-only sustained budget is for card draw only; board baseline is in hardware/results/power-budget.md."
   - "No 5 V rail in Rev A (HW-0003); no slot ADC (HD-003)."
 slots:

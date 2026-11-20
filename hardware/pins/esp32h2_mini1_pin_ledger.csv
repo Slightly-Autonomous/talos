@@ -28,7 +28,7 @@ pad,name,gpio,strap,lp_deep_sleep_wake,usb_jtag,net,active_use,sleep_behavior,co
 27,IO27,27,,no,USB_D+,USB_DP,USB Serial/JTAG,,,"Table 3"
 28,NC,,,,,NC,,,,"Table 3"
 29,NC,,,,,NC,,,,"Table 3"
-30,RXD0,23,,no,U0RXD,U0RXD,factory UART test pad,,,"Table 3"
+30,RXD0,23,,no,U0RXD,U0RXD,MUX_RESET_N output via R65 0R (stuck-bus recovery); UART0 RX test pad/DNP header,driven high,lift R65 to use UART0 RX (console stays on USB-JTAG),"Table 3; bench plan §8 decision 1"
 31,TXD0,24,,no,U0TXD,U0TXD,factory UART test pad,,,"Table 3"
 32,NC,,,,,NC,,,,"Table 3"
 33,NC,,,,,NC,,,,"Table 3"

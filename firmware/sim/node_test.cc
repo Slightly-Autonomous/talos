@@ -460,17 +460,112 @@ TEST(BoardIo, BootLeavesEveryOutputSafeAndNeverPulsesARail) {
   Node n = rev_a();
   n.boot();
   EXPECT_TRUE(n.runtime().board_ok());
-  for (std::uint8_t s = 0; s < 4; ++s) {
-    EXPECT_TRUE(n.rev_a().aon_on(s)) << int(s);
+  for (std::uint8_t s = 0; s < 4; ++s) {  // no cards: every slot stays unpowered
+    EXPECT_FALSE(n.rev_a().aon_on(s)) << int(s);
     EXPECT_FALSE(n.rev_a().sw_on(s)) << int(s);
-    EXPECT_TRUE(n.rev_a().reset_n(s)) << int(s);
-    EXPECT_TRUE(n.rev_a().cs_n(s)) << int(s);
+    EXPECT_FALSE(n.rev_a().reset_n(s)) << int(s);
+    EXPECT_FALSE(n.rev_a().cs_n(s)) << int(s);
   }
-  // Output latches were written before the pins became outputs: no SW_EN ever drove high.
-  EXPECT_EQ(n.rev_a().exp_a.ever_driven_high & 0x000F, 0);
+  // Output latches were written before the pins became outputs: no rail enable ever drove high.
+  EXPECT_EQ(n.rev_a().exp_a.ever_driven_high & 0x00FF, 0);
   EXPECT_TRUE(n.rev_a().exp_b.is_output(10));  // UART mux enable, parked high
   EXPECT_TRUE(n.rev_a().exp_b.level(10));
   EXPECT_FALSE(n.rev_a().exp_b.level(11));  // presence probe idles low (no pull-up current)
+}
+
+std::vector<DeviceEvent> faults_of(Node& n, ModuleFault f) {
+  std::vector<DeviceEvent> out;
+  n.run_for(20);  // let the runtime transmit what it queued
+  for (const auto& e : n.drain_and_ack()) {
+    if (e.kind == EventKind::kModuleFault && e.a == static_cast<std::int32_t>(f)) out.push_back(e);
+  }
+  return out;
+}
+
+TEST(SlotPower, SeatedSlotsArePoweredEmptyOnesStayOff) {
+  Node n = rev_a();
+  n.insert(0, ModuleCode::kSht40);
+  n.insert(2, ModuleCode::kLis2dw12);
+  n.boot();
+  EXPECT_TRUE(n.rev_a().aon_on(0));
+  EXPECT_FALSE(n.rev_a().aon_on(1));
+  EXPECT_TRUE(n.rev_a().aon_on(2));
+  EXPECT_FALSE(n.rev_a().aon_on(3));
+  EXPECT_TRUE(n.runtime().slot(0).enabled);
+  EXPECT_TRUE(n.runtime().slot(2).enabled);
+  EXPECT_TRUE(n.rev_a().cs_n(0));  // lines deasserted once AON is up
+  EXPECT_EQ(n.runtime().quarantined_slots(), 0);
+  // The attempt marker is cleared after each slot came up.
+  std::uint8_t rec[2] = {0, 0};
+  ASSERT_TRUE(n.store.get(StoreKey::kSlotPower, rec, sizeof rec).has_value());
+  EXPECT_EQ(rec[0], NodeRuntime::kNotPowering);
+}
+
+TEST(SlotPower, ResetWhilePoweringASlotQuarantinesItInsteadOfBootLooping) {
+  Node n = rev_a();
+  n.insert(1, ModuleCode::kSht40);
+  n.insert(3, ModuleCode::kSht40);
+  // What a reset in the middle of switching slot 1's AON on leaves behind.
+  const std::uint8_t rec[2] = {1, 0};
+  ASSERT_TRUE(n.store.put(StoreKey::kSlotPower, rec, sizeof rec));
+  n.boot();
+  EXPECT_FALSE(n.rev_a().aon_on(1));
+  EXPECT_EQ(n.runtime().slot(1).fault, ModuleFault::kPowerQuarantined);
+  EXPECT_FALSE(n.runtime().slot(1).enabled);
+  EXPECT_TRUE(n.runtime().slot(3).enabled);  // the other slots come up as usual
+  EXPECT_EQ(faults_of(n, ModuleFault::kPowerQuarantined).size(), 1u);
+  n.boot();  // the quarantine survives a reboot
+  EXPECT_FALSE(n.rev_a().aon_on(1));
+  EXPECT_EQ(n.runtime().quarantined_slots(), 0b0010);
+  n.runtime().clear_quarantine(1);  // operator action
+  n.runtime().rescan(1);
+  EXPECT_TRUE(n.rev_a().aon_on(1));
+  EXPECT_TRUE(n.runtime().slot(1).enabled);
+  n.boot();
+  EXPECT_TRUE(n.runtime().slot(1).enabled);
+}
+
+TEST(SlotPower, SwitchedRailFaultTurnsRailsOffAndIsReported) {
+  Node n = rev_a();
+  n.insert(0, ModuleCode::kTlTest001);
+  n.insert(1, ModuleCode::kTlTest001);
+  n.boot();
+  n.drain_and_ack();
+  n.board_io().set_rail(0, Rail::kSwitched3v3, true);
+  n.board_io().set_rail(1, Rail::kSwitched3v3, true);
+  n.run_for(50);
+  EXPECT_TRUE(faults_of(n, ModuleFault::kRailFault).empty());  // no fault, nothing happens
+  n.rev_a().sw_overload[1] = true;
+  n.runtime().on_interrupt();
+  n.run_for(50);
+  // FAULT_N is wired-OR: both rails go off, AON stays up, and both slots are reported.
+  EXPECT_FALSE(n.rev_a().sw_on(0));
+  EXPECT_FALSE(n.rev_a().sw_on(1));
+  EXPECT_TRUE(n.rev_a().aon_on(1));
+  const auto f = faults_of(n, ModuleFault::kRailFault);
+  ASSERT_EQ(f.size(), 2u);
+  EXPECT_EQ(f[0].slot, 0);
+  EXPECT_EQ(f[1].slot, 1);
+}
+
+TEST(MuxReset, CardHoldingTheBusIsCutOffByTheMuxReset) {
+  for (const bool wired : {true, false}) {
+    BoardSupport b = tl_sn_001_board();
+    if (!wired) b.mux_reset_line = 0xFF;
+    Node n(b);
+    n.insert(0, ModuleCode::kSht40);
+    n.boot();
+    ASSERT_EQ(n.board_io().source(), PowerSource::kUsb);
+    n.i2c.stick_branch(0, true);  // the card starts holding SDA low
+    n.runtime().rescan(0);
+    if (wired) {
+      EXPECT_GT(n.i2c.mux_resets, 0u);
+      EXPECT_EQ(n.i2c.mask(), 0);
+      EXPECT_EQ(n.board_io().source(), PowerSource::kUsb);  // root bus free again
+    } else {
+      EXPECT_EQ(n.board_io().source(), PowerSource::kUnknown);  // only a power cycle helps
+    }
+  }
 }
 
 TEST(BoardIo, SeatedCardWithDeadIdIsAFaultEmptySlotIsNot) {

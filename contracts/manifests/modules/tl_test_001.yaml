@@ -6,6 +6,7 @@ connector_standard: sensor_edge_v1
 needs_wake: true
 needs_spi: true
 needs_uart: true
+test_fixture: true         # UART time-shared by the firmware: exempt from uart_channels (bench plan §8)
 i2c_addresses: [39, 80]    # 0x27 expander, 0x50 EEPROM
 loads: [{rail: v3v3_aon, active_ma: 1}, {rail: v3v3_sw, active_ma: 10}]
 average_uw: 7

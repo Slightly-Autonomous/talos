@@ -27,6 +27,10 @@ class NodeRuntime final : public IEventSink {
   static constexpr std::uint32_t kCriticalMv = 3300;
   static constexpr std::uint32_t kOtaMinMv = 3700;  // or external power
   static constexpr int kSendsPerStep = 4;
+  static constexpr std::uint8_t kNotPowering = 0xFF;
+  // Time AON is held on before the attempt marker is cleared: a short pulls the
+  // core rail down well inside it (TPS22917 rise ~0.1 ms). Provisional (bench B2).
+  static constexpr std::uint32_t kSlotPowerSettleMs = 5;
 
   explicit NodeRuntime(Platform& p) : p_(p), ota_(p) {}
 
@@ -55,11 +59,16 @@ class NodeRuntime final : public IEventSink {
   void rescan(std::optional<std::uint8_t> slot = std::nullopt);
   // False if the board's expanders or charger did not take their safe state at boot.
   bool board_ok() const { return board_ok_; }
+  // Slots held unpowered because the node reset while switching their AON on.
+  std::uint8_t quarantined_slots() const { return quarantined_; }
+  // Operator action (diag `rail <slot> aon on`): let the slot be powered again.
+  void clear_quarantine(std::uint8_t slot);
 
  private:
   void discover();
   void discover_slot(std::uint8_t i, TimeMs now);
   void admit_power();
+  bool power_slot(std::uint8_t i);
   PowerMode compute_mode();
   void handle(const Downlink& d);
   void emit_ota_status(Priority priority);
@@ -80,6 +89,8 @@ class NodeRuntime final : public IEventSink {
   bool reboot_requested_ = false;
   bool ota_progress_ = false;
   bool board_ok_ = true;
+  std::uint8_t quarantined_ = 0;
+  std::uint8_t aon_on_ = 0;  // AON rails this runtime switched on
 };
 
 }  // namespace talos::fw

@@ -42,9 +42,23 @@ Gpio::Gpio(const BoardSupport& b) {
     io.pull_down_en = GPIO_PULLDOWN_DISABLE;
     gpio_config(&io);
   }
+  if (b.mux_reset_line != 0xFF) {
+    // Level first, then direction: the reset line never glitches low at boot.
+    gpio_set_level(static_cast<gpio_num_t>(b.mux_reset_line), 1);
+    gpio_config_t io{};
+    io.pin_bit_mask = 1ULL << b.mux_reset_line;
+    io.mode = GPIO_MODE_OUTPUT;
+    gpio_config(&io);
+    output_ = b.mux_reset_line;
+  }
 }
 
 bool Gpio::read(std::uint8_t line) { return gpio_get_level(static_cast<gpio_num_t>(line)) != 0; }
+
+bool Gpio::write(std::uint8_t line, bool level) {
+  if (line != output_) return false;  // only the board's declared output may be driven
+  return gpio_set_level(static_cast<gpio_num_t>(line), level ? 1 : 0) == ESP_OK;
+}
 
 I2c::I2c(int sda, int scl) {
   i2c_master_bus_config_t cfg{};

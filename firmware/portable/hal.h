@@ -26,6 +26,8 @@ class IGpio {
  public:
   virtual ~IGpio() = default;
   virtual bool read(std::uint8_t line) = 0;
+  // Drive an output line (mux reset). Boards without one return false.
+  virtual bool write(std::uint8_t /*line*/, bool /*level*/) { return false; }
 };
 
 class II2c {
@@ -54,6 +56,9 @@ class IPower {
   virtual std::optional<bool> slot_present(std::uint8_t /*slot*/) { return std::nullopt; }
   // Periodic housekeeping (heartbeat): re-check charger config and status.
   virtual void service() {}
+  // Slots whose switched rail a current-limit fault shut off since the last
+  // call (bit n = slot n). The board turns the rails off itself; this reports it.
+  virtual std::uint8_t take_sw_faults() { return 0; }
 };
 
 // Battery voltage measurement (ADC behind the VBAT divider on the ESP32).
@@ -70,7 +75,8 @@ enum class StoreKey : std::uint8_t {
   kConfig = 1,
   kOta = 2,
   kPendingCritical = 3,
-  kIdentity = 4,  // device ID + link key (serial_link.h), set with diag `provision`
+  kIdentity = 4,   // device ID + link key (serial_link.h), set with diag `provision`
+  kSlotPower = 5,  // slot being powered up + quarantined slots (runtime.cc)
 };
 
 class IStore {
@@ -139,13 +145,17 @@ struct BoardSupport {
   std::array<SlotWiring, kSlots> slots{};
   std::uint8_t mux_address = 0x70;  // TCA9546A-style mux (provisional)
   std::uint8_t id_eeprom_address = 0x50;
+  // GPIO driving the mux's RESET_N (active low), 0xFF = none: frees a root bus
+  // that a card holds stuck through a selected branch.
+  std::uint8_t mux_reset_line = 0xFF;
   // Expander-driven plumbing (TL-SN-001). Unwired pins leave the feature off.
   std::array<SlotIoPins, kSlots> slot_io{};
   ExpanderPin present_probe;  // drives the PRESENT_N pull-ups while probing
   ExpanderPin uart_sel0, uart_sel1, uart_mux_en_n;
   ExpanderPin charger_int_n, charger_pg_n, source_st;  // BQ25186 /INT, /PG; TPS2121 ST
-  std::uint8_t charger_address = 0;                    // BQ25186 on the root bus, 0 = none
-  std::uint32_t battery_sustained_mw = 15;             // provisional budgets per source
+  ExpanderPin sw_fault_n;                   // wired-OR FAULT_N of the current-limited SW switches
+  std::uint8_t charger_address = 0;         // BQ25186 on the root bus, 0 = none
+  std::uint32_t battery_sustained_mw = 15;  // provisional budgets per source
   std::uint32_t usb_sustained_mw = 2500;
   std::uint32_t solar_sustained_mw = 300;
 };

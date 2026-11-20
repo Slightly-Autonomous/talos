@@ -288,7 +288,8 @@ def flip_two_pad_parts(fps: dict, pinned: set) -> None:
 
     Wirelength alone can't tell the two orientations apart: an inductor between two switch pins
     costs the same either way, but one way round its nets have to cross (TPS63900 LX1/LX2 to L1).
-    The courtyard of a two-pad part is symmetric, so the flip never breaks the legal placement.
+    Only parts whose courtyard is symmetric about the origin are flipped (resistors, caps), so the
+    flip never breaks the legal placement. A pin header's origin is pin 1: turning it moves its body.
     """
     def cost(fp) -> float:
         total = 0.0
@@ -303,9 +304,10 @@ def flip_two_pad_parts(fps: dict, pinned: set) -> None:
     for ref, fp in sorted(fps.items()):
         if ref in pinned or len(fp.Pads()) != 2:
             continue
-        before = cost(fp)
+        before, box = cost(fp), bbox(fp)
         fp.SetOrientationDegrees(fp.GetOrientationDegrees() + 180)
-        if cost(fp) >= before - 1e-6:
+        moved = any(abs(a - b) > 0.01 for a, b in zip(box, bbox(fp)))
+        if moved or cost(fp) >= before - 1e-6:
             fp.SetOrientationDegrees(fp.GetOrientationDegrees() - 180)
 
 
@@ -339,6 +341,73 @@ def optimise_placement(spec, parts, fps, w, h, margin, keep_top, keep_bottom) ->
     for ref, (x, y, rot) in sol.items():
         fps[ref].SetOrientationDegrees(rot)
         fps[ref].SetPosition(pt(x, y))
+
+
+FIDUCIAL = "Fiducial:Fiducial_1mm_Mask2mm"
+REVISION = "A"
+
+
+def silk_text(board, text, x, y, size=1.0, layer=None) -> None:
+    t = pcbnew.PCB_TEXT(board)
+    t.SetText(text)
+    t.SetLayer(layer if layer is not None else pcbnew.F_SilkS)
+    t.SetPosition(pt(x, y))
+    t.SetTextSize(pcbnew.VECTOR2I(mm(size), mm(size)))
+    t.SetTextThickness(mm(max(0.1, size * 0.15)))
+    board.Add(t)
+
+
+def silk_box(board, x0, y0, x1, y1, layer=None) -> None:
+    r = pcbnew.PCB_SHAPE(board)
+    r.SetShape(pcbnew.SHAPE_T_RECT)
+    r.SetStart(pt(x0, y0))
+    r.SetEnd(pt(x1, y1))
+    r.SetLayer(layer if layer is not None else pcbnew.F_SilkS)
+    r.SetWidth(mm(0.12))
+    board.Add(r)
+
+
+def add_marking(board, name, spec, fps, w, h, copper) -> None:
+    """Board name, revision and a serial box on the bottom silk (bench §8: all boards); fiducials on
+    the assembled boards big enough to carry them; card-specific marks."""
+    cards = spec.get("finger_zone")
+    size = 0.7 if cards else 1.0
+    y = 3.0 if cards else h - (12.0 if name == "TL-SN-001" else 8.0)
+    x = w / 2
+    silk_text(board, f"{name} rev {REVISION}", x, y, size, pcbnew.B_SilkS)
+    silk_text(board, "S/N", x - (2.4 if cards else 4.5), y + size * 1.8, size * 0.8, pcbnew.B_SilkS)
+    bw, bh = (5.0, 1.6) if cards else (9.0, 2.4)
+    silk_box(board, x - bw / 2 + 1.0, y + size * 1.8 - bh / 2, x + bw / 2 + 1.0, y + size * 1.8 + bh / 2,
+             pcbnew.B_SilkS)
+    if name == "TL-SN-001":  # smaller boards rely on the JLCPCB panel-rail fiducials
+        # Board-only footprints (no symbol): three corners, clear of the edge ring and the antenna strip.
+        top = spec.get("keepout_top", 0.0) + 3.0
+        for i, (fx, fy) in enumerate(((3.0, top), (w - 3.0, h - 3.0), (3.0, h - 3.0))):
+            fp = load_fp(FIDUCIAL)
+            fp.SetReference(f"FID{i + 1}")
+            fp.SetValue("fiducial")
+            fp.SetBoardOnly(True)
+            fp.SetExcludedFromBOM(True)
+            fp.SetExcludedFromPosFiles(True)
+            taken = [bbox(f) for f in fps.values()]
+            for r in range(0, 40):  # walk in from the corner until the fiducial's courtyard is clear
+                cx = fx + (r * 0.5 if fx < w / 2 else -r * 0.5)
+                cy = fy + (r * 0.5 if fy < h / 2 else -r * 0.5)
+                fp.SetPosition(pt(cx, cy))
+                if not any(overlaps(bbox(fp), t, 0.3) for t in taken):
+                    break
+            else:
+                raise SystemExit(f"{name}: no room for fiducial {i + 1}")
+            board.Add(fp)
+    if name == "TL-MOD-002":  # EKMB pin legend beside the sensor (bench §8)
+        u = fps["U2"]
+        ux, uy = pcbnew.ToMM(u.GetPosition().x) - ORIGIN[0], pcbnew.ToMM(u.GetPosition().y) - ORIGIN[1]
+        silk_text(board, "V O G", ux, uy + 6.2, 0.8)
+    if name == "TL-MOD-004":  # pull every pour back ~1 mm around the SHT40 (DS §5.3): heat from copper
+        u = fps["U2"]
+        x0, y0, x1, y1 = bbox(u)
+        add_rule_area(board, (x0 - 1.0, y0 - 1.0, x1 + 1.0, y1 + 1.0), copper,
+                      "SHT40 thermal keepout: no pour", allow_tracks=True)
 
 
 def build(board_name: str) -> dict:
@@ -380,6 +449,8 @@ def build(board_name: str) -> dict:
             field.SetLayer(pcbnew.F_Fab)
             fp.Add(field)
         fp.SetField("Datasheet", p["datasheet"])
+        if p.get("dnp"):
+            fp.SetDNP(True)  # placed and routed, not assembled (bench option)
         for pad in fp.Pads():
             num = PAD_ALIASES.get(pad.GetNumber(), pad.GetNumber())
             if num not in p["pins"]:
@@ -483,6 +554,8 @@ def build(board_name: str) -> dict:
     if keep_bottom:
         add_rule_area(board, (0, h - keep_bottom, w, h), [pcbnew.F_Cu, pcbnew.B_Cu],
                       "card-edge fingers: tracks only, no pour or vias", allow_tracks=True)
+
+    add_marking(board, board_name, spec, fps, w, h, copper)
 
     (KICAD / board_name / f"{board_name}.kicad_dru").write_text(
         {"TL-SN-001": DRU_SN, "TL-DBG-001": DRU_DBG}.get(board_name, DRU_CARD))

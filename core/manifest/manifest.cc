@@ -178,10 +178,13 @@ ValidationResult validate_configuration(const BoardManifest& board, const Module
     }
   }
 
-  // Card UARTs share a limited number of controller UARTs (HW-MF-005).
+  // Card UARTs share a limited number of controller UARTs (HW-MF-005). Test
+  // fixtures are exempt: the firmware routes the mux to one of them at a time.
   if (board.uart_channels > 0) {
     std::uint32_t uart_users = 0;
-    for (const auto& p : placed) uart_users += p.module->needs_uart ? 1 : 0;
+    for (const auto& p : placed) {
+      uart_users += p.module->needs_uart && !p.module->test_fixture ? 1 : 0;
+    }
     if (uart_users > board.uart_channels) {
       issue(ManifestIssueCode::kUartOversubscribed, std::nullopt,
             std::to_string(uart_users) + " modules need a UART, board provides " +

@@ -276,6 +276,27 @@ current high (bisect by AON_n off one slot at a time, then by the core split lin
 
 ## 8. Board changes
 
+**Status (2026-11-19): applied in one generator pass.** The owner took all ten recommendations. Every item below is in `gen_schematics.py` / `gen_pcbs.py`, and the boards were re-placed and re-routed. ERC, DRC and sourcing results are in `hardware/results/kicad-check.md`. Exceptions:
+- Test pads are placed by the annealer, not snapped to a 2.54 mm grid. That is left for the layout review.
+- TL-DBG-001 and the cards have no fiducials: they are too small, so they rely on JLCPCB's panel-rail fiducials.
+- EXPB_SPARE became SW_FAULT_N with a 100k pull-up, replacing the 100k pull-down.
+
+What the decisions became in hardware and firmware:
+
+| # | Decision | Hardware | Firmware / software |
+|---|---|---|---|
+| 1 | Mux reset on GPIO23 | R65 0R U0RXD→MUX_RESET_N (R33 pull-up kept) | `mux_reset_line = 23`; a failed select or deselect pulses RESET_N and retries once |
+| 2 | AON default off | R21–R24 now 1M pull-downs | Only seated slots are powered, one at a time. An attempt marker in the store quarantines a slot that reset the node (`kPowerQuarantined`); `rail <n> aon on` clears it |
+| 3 | Current limit on SW | U10–U13 TPS2553DBVR-1, RILIM 150k (155–207 mA), wired-OR FAULT_N to EXP_B P17, 100k bleed | A trip switches off every SW rail and reports `kRailFault` per slot |
+| 4 | PR1 divider | R13/R14 27k/10k (switchover ~3.7 V) | none |
+| 5 | C10 | 2.2 µF 25 V 0805 | none |
+| 6 | Reverse pack | Q1 AO3401A, gate 100k to GND (USB-present caveat: HD-024) | none |
+| 7 | Slot UART | 330 Ω series and 100k pull-ups to AON_n (main board and TL-DBG-001) | none |
+| 8 | UART validator | none | `test_fixture` on ModuleManifest; TL-TEST-001 is exempt |
+| 9 | TL-TEST-001 loopback | 10k TX→RX, MOSI→MISO | none |
+| 10 | SHT40 heater | none | Node firmware uses 20 mW (0x1E); 110 mW is for the TL-DBG-001 host tool only |
+
+
 ### Recommended, no owner decision needed (passives already stocked, copper, silk)
 
 - **TL-SN-001**

@@ -9,7 +9,6 @@ value,footprint,assembly,lcsc,mpn,manufacturer,risk,note
 10k,R_0402_1005Metric,jlc,C25744,0402WGF1002TCE,Uniroyal,,1% basic
 5.1k,R_0402_1005Metric,jlc,C25905,0402WGF5101TCE,Uniroyal,,1% basic (USB-C CC)
 100k,R_0402_1005Metric,jlc,C25741,0402WGF1003TCE,Uniroyal,,1% basic
-33k,R_0402_1005Metric,jlc,C25779,0402WGF3302TCE,Uniroyal,,1% basic
 36.5k 1%,R_0402_1005Metric,jlc,C25887,0402WGF3652TCE,Uniroyal,,1% extended
 16.2k 1%,R_0402_1005Metric,jlc,C27176,0402WGF1622TCE,Uniroyal,,1% extended
 0R,R_0402_1005Metric,jlc,C17168,0402WGF0000TCE,Uniroyal,,basic
@@ -51,3 +50,9 @@ AP2112K-3.3TRG1,SOT-23-5,jlc,C51118,AP2112K-3.3TRG1,Diodes Inc,,TL-DBG-001 3.3 V
 MCP2221AT-I/SL,SOIC-14_3.9x8.7mm_P1.27mm,jlc,C626750,MCP2221AT-I/SL,Microchip,,TL-DBG-001 USB bridge; thin stock
 SN74LVC1G125DBVR,SOT-23-5,jlc,C23654,SN74LVC1G125DBVR,TI,,TL-DBG-001 UART TX buffer (Ioff)
 * meter,PinHeader_1x02_P2.54mm_Vertical,jlc,C492401,PZ254V-11-02P,XFCN,,through-hole (JLCPCB THT assembly); shunt bought separately
+27k,R_0402_1005Metric,jlc,C25771,0402WGF2702TCE,Uniroyal,,1% extended; TPS2121 PR1 divider (decision 4)
+150k 1%,R_0402_1005Metric,jlc,C25755,0402WGF1503TCE,Uniroyal,,1% extended; TPS2553 ILIM (decision 3)
+0R,R_0805_2012Metric,jlc,C17477,0805W8F0000T5E,Uniroyal,,basic; power-path links
+2.2u/25V,C_0805_2012Metric,jlc,C87994,CL21A225KAFNNNE,Samsung,,25 V X5R; BQ25186 BAT cap (decision 5)
+AO3401A,SOT-23,jlc,C15127,AO3401A,Alpha & Omega,,basic; reverse-pack P-FET (decision 6)
+TPS2553DBVR-1,SOT-23-6,jlc,C111738,TPS2553DBVR-1,TI,,latch-off current-limited SW switch (decision 3)

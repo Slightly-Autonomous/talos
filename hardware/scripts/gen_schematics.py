@@ -39,6 +39,8 @@ NS = uuid.UUID("6f6b0a52-6a35-4d7e-9f0e-7a1c9e3d2b10")
 G = 2.54
 
 FP_R = "Resistor_SMD:R_0402_1005Metric"
+FP_R_POWER = "Resistor_SMD:R_0805_2012Metric"  # 0R links in the power path (>0.5 A)
+FP_HDR2 = "Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical"
 FP_C = "Capacitor_SMD:C_0402_1005Metric"
 FP_C_BULK = "Capacitor_SMD:C_0805_2012Metric"
 FP_TP = "TestPoint:TestPoint_Pad_D1.0mm"
@@ -52,6 +54,7 @@ class Part:
     pins: dict[str, str | None]  # pin number -> net (None = intentionally unconnected)
     footprint: str | None = None  # None = use symbol default
     note: str = ""
+    dnp: bool = False  # footprint on the board, not fitted (bench/test option)
 
 
 @dataclass
@@ -65,12 +68,19 @@ class Board:
         self.parts.extend(parts)
 
 
-def R(ref, value, a, b, note=""):
-    return Part(ref, "Device:R", value, {"1": a, "2": b}, FP_R, note)
+def R(ref, value, a, b, note="", power=False):
+    return Part(ref, "Device:R", value, {"1": a, "2": b}, FP_R_POWER if power else FP_R, note)
 
 
-def C(ref, value, a, b="GND", bulk=False):
-    return Part(ref, "Device:C", value, {"1": a, "2": b}, FP_C_BULK if bulk else FP_C)
+def C(ref, value, a, b="GND", bulk=False, dnp=False, note=""):
+    return Part(ref, "Device:C", value, {"1": a, "2": b}, FP_C_BULK if bulk else FP_C, note, dnp)
+
+
+def SPLIT(r_ref, jp_ref, a, b, what):
+    """0R link with a DNP 2-pin header across it: lift the 0R, fit the header, meter the block (bench §8)."""
+    return [R(r_ref, "0R", a, b, f"{what}: lift to isolate/meter (header {jp_ref} across it)", power=True),
+            Part(jp_ref, "Connector_Generic:Conn_01x02", "DNP meter", {"1": a, "2": b}, FP_HDR2,
+                 f"{what}: fit a header and a PPK2 after lifting {r_ref}", dnp=True)]
 
 
 def TP(ref, net):
@@ -124,7 +134,9 @@ def id_eeprom(ref="U1", cap="C1") -> list[Part]:
 # ---- TL-SN-001 ------------------------------------------------------------------------
 def sensor_node() -> Board:
     b = Board("TL-SN-001", "TL-SN-001 Sensor Node Rev A (generated, provisional)",
-              external_power={"GND", "USB_VBUS", "PV_IN", "VBAT"})
+              # Nets reached only through a 0R/FET (passive) also need a flag for ERC.
+              external_power={"GND", "USB_VBUS", "PV_IN", "VBAT_PACK", "VBAT", "PMUX_IN1", "SYS_REG",
+                              "V3V3_CORE"})
     core = "V3V3_CORE"
 
     # Sheet A: MCU, boot, reset, USB-JTAG, status
@@ -133,7 +145,7 @@ def sensor_node() -> Board:
         "5": "I2C_SDA", "6": "I2C_SCL", "18": "SPI_SCK", "19": "SPI_MOSI", "22": "STATUS_LED_N",
         "23": "BOOT_N", "20": "SLOT_WAKE0", "21": "SLOT_WAKE1", "16": "SLOT_WAKE2",
         "12": "SLOT_WAKE3", "13": "EXP_INT_N", "24": "UART1_TX", "25": "UART1_RX",
-        "30": "U0RXD", "31": "U0TXD", "26": "USB_DN", "27": "USB_DP",
+        "30": "U0RXD", "31": "U0TXD", "26": "MCU_USB_DN", "27": "MCU_USB_DP",
     }
     for n in ("4", "7", "17", "28", "29", "32", "33", "34", "35"):
         mcu[n] = None
@@ -154,6 +166,17 @@ def sensor_node() -> Board:
         R("R7", "4.7M", "VBAT", "VBAT_SENSE"), R("R8", "4.7M", "VBAT_SENSE", "GND"),
         C("C4", "100n", "VBAT_SENSE"),
         R("R9", "47k", core, "EXP_INT_N"),
+        # Stuck-bus recovery (owner decision 1): GPIO23 drives the mux reset. Lift R65 to use
+        # U0RXD as a console instead (R33 then holds the mux out of reset).
+        R("R65", "0R", "U0RXD", "MUX_RESET_N", "GPIO23 -> TCA9546A RESET_N; lift for UART0 RX"),
+        # USB D+/D-: 0R links with DNP shunt-C pads on the module side (Espressif HW design guide)
+        R("R66", "0R", "MCU_USB_DP", "USB_DP"), R("R67", "0R", "MCU_USB_DN", "USB_DN"),
+        C("C25", "DNP", "MCU_USB_DP", dnp=True, note="USB D+ shunt C option (Espressif)"),
+        C("C26", "DNP", "MCU_USB_DN", dnp=True, note="USB D- shunt C option (Espressif)"),
+        Part("J8", "Connector_Generic:Conn_01x06", "DNP UART0",
+             {"1": "GND", "2": core, "3": "U0TXD", "4": "U0RXD", "5": "CHIP_EN", "6": "BOOT_N"},
+             "Connector_PinHeader_2.54mm:PinHeader_1x06_P2.54mm_Vertical",
+             "bench console/flash header; lift R65 before driving RX", dnp=True),
     )
 
     # Sheet B: USB-C, PV, power mux, charger, battery
@@ -176,53 +199,75 @@ def sensor_node() -> Board:
              "TVS: pin 1 is the cathode (bar), so it sits on PV_IN and only conducts above breakdown"),
         C("C6", "10u/25V", "PV_IN", bulk=True),
         Part("U3", "talos:TPS2121", "TPS2121RUXR",
-             {"7": "USB_VBUS", "2": "PV_IN", "6": "PMUX_PR1", "3": "GND", "5": "GND", "4": "GND",
+             {"7": "PMUX_IN1", "2": "PV_IN", "6": "PMUX_PR1", "3": "GND", "5": "GND", "4": "GND",
               "1": "CHG_IN", "8": "CHG_IN", "9": "PMUX_ST", "10": "PMUX_ILIM", "11": "PMUX_SS", "12": "GND"}),
         R("R12", "100k", "PMUX_ILIM", "GND", "ILIM = 65.2/R^0.861 = 1.24 A typ (SLVSEA3F eq. 2; 18-100k range)"),
         C("C7", "100n", "PMUX_SS"),  # ~780 V/s output slew (SLVSEA3F Table 9-1)
-        R("R13", "100k", "USB_VBUS", "PMUX_PR1", "priority divider placeholder (HD-007)"),
-        R("R14", "33k", "PMUX_PR1", "GND", "priority divider placeholder (HD-007)"),
+        R("R68", "0R", "USB_VBUS", "PMUX_IN1", "lift to isolate the USB input from the power mux", power=True),
+        # 37 kOhm total so board leakage when hot can't hold PR1 up without USB (owner decision 4).
+        # PR1 = 10/37 of VBUS: switches to USB above ~3.7 V (PR1 ref 1.0 V typ, HD-007).
+        R("R13", "27k", "PMUX_IN1", "PMUX_PR1", "priority divider (HD-007)"),
+        R("R14", "10k", "PMUX_PR1", "GND", "priority divider (HD-007)"),
         R("R15", "10k", core, "PMUX_ST", "ST pull-up: datasheet range 6-20k"),
         C("C8", "4.7u/25V", "CHG_IN", bulk=True),
         Part("U4", "talos:BQ25186", "BQ25186DLHR",
              {"10": "CHG_IN", "1": "SYS_PATH", "2": "VBAT", "3": "CHG_PG_N", "4": "GND", "5": "GND",
               "6": "BAT_NTC", "7": "I2C_SDA", "8": "I2C_SCL", "9": "CHG_INT_N", "11": "GND"}, None,
              "DLH0010A land pattern from SLUSF69 §12"),
-        C("C9", "10u", "SYS_PATH", bulk=True), C("C10", "1u", "VBAT"),
+        # C10: 1 uF 0402 keeps only ~0.5 uF at 4.2 V; 2.2 uF 0805 (owner decision 5)
+        C("C9", "10u", "SYS_PATH", bulk=True), C("C10", "2.2u/25V", "VBAT", bulk=True),
         R("R16", "100k", core, "CHG_PG_N"), R("R17", "10k", core, "CHG_INT_N"),
         Part("J3", "Connector_Generic:Conn_01x03", "1S pack (BAT+, NTC, GND)",
-             {"1": "VBAT", "2": "BAT_NTC", "3": "GND"},
+             {"1": "VBAT_PACK", "2": "BAT_NTC", "3": "GND"},
              "Connector_JST:JST_PH_S3B-PH-SM4-TB_1x03-1MP_P2.00mm_Horizontal",
-             "keyed protected-pack connector TBD (HD-006)"),
+             "keyed protected-pack connector TBD (HD-006); 4-pin with separate NTC return once the pack is chosen"),
+        # Reverse-pack protection (owner decision 6): body diode conducts for a correct pack, then the
+        # gate at GND turns the channel on (both directions). Reversed pack: diode blocks, Vgs ~ 0.
+        # Caveat HD-024: with USB in, the charger can raise VBAT and turn Q1 on into a reversed pack.
+        Part("Q1", "Transistor_FET:AO3401A", "AO3401A", {"1": "BATFET_G", "2": "VBAT", "3": "VBAT_PACK"},
+             "Package_TO_SOT_SMD:SOT-23", "reverse-pack P-FET: D = pack, S = VBAT"),
+        R("R69", "100k", "BATFET_G", "GND", "Q1 gate"),
     )
 
     # Sheet C: 3.3 V regulator and per-slot switches
     b.add(
         Part("U5", "Regulator_Switching:TPS63900", "TPS63900DSKR",
-             {"10": "SYS_PATH", "1": "SYS_PATH", "2": "GND", "3": "REG_CFG1", "4": "REG_CFG2",
-              "5": "REG_CFG3", "6": core, "9": "REG_LX1", "7": "REG_LX2", "8": "GND", "11": "GND"},
+             {"10": "SYS_REG", "1": "SYS_REG", "2": "GND", "3": "REG_CFG1", "4": "REG_CFG2",
+              "5": "REG_CFG3", "6": "V3V3_REG", "9": "REG_LX1", "7": "REG_LX2", "8": "GND", "11": "GND"},
              "Package_SON:WSON-10-1EP_2.5x2.5mm_P0.5mm_EP1.2x2mm"),
         R("R18", "36.5k 1%", "REG_CFG1", "GND", "SEL-high 3.3 V, unlimited ILIM (Table 7-2)"),
         R("R19", "0R", "REG_CFG2", "GND", "SEL-high 3.3 V, unlimited ILIM (Table 7-2)"),
         R("R20", "16.2k 1%", "REG_CFG3", "GND", "SEL-low 3.3 V (Table 7-3)"),
         Part("L1", "Device:L", "2.2u DFE252012F-2R2M", {"1": "REG_LX1", "2": "REG_LX2"},
              "Inductor_SMD:L_1008_2520Metric"),
-        C("C11", "10u", "SYS_PATH", bulk=True), C("C12", "22u", core, bulk=True),
+        C("C11", "10u", "SYS_REG", bulk=True), C("C12", "22u", "V3V3_REG", bulk=True),
+        # Bench splits: charger | regulator | loads, each block powered and metered alone (bench §8)
+        *SPLIT("R70", "JP1", "SYS_PATH", "SYS_REG", "charger to regulator"),
+        *SPLIT("R71", "JP2", "V3V3_REG", core, "regulator to 3.3 V loads"),
     )
     for n in range(4):
         b.add(
             Part(f"U{6 + n}", "Power_Management:TPS22917DBV", "TPS22917DBVR",
-                 {"1": core, "2": "GND", "3": f"SLOT_AON_EN{n}", "4": None, "5": None, "6": f"V3V3_AON_{n}"},
-                 note=f"slot {n} AON switch, default on"),
-            R(f"R{21 + n}", "100k", core, f"SLOT_AON_EN{n}"),
+                 {"1": core, "2": "GND", "3": f"SLOT_AON_EN{n}", "4": f"SLOT_AON_CT{n}", "5": None,
+                  "6": f"V3V3_AON_{n}"},
+                 note=f"slot {n} AON switch, default off; firmware powers seated slots one at a time"),
+            # Owner decision 2: default off, so a shorted card can't hold the node in a boot loop
+            R(f"R{21 + n}", "1M", f"SLOT_AON_EN{n}", "GND", "AON default off"),
             C(f"C{13 + n}", "1u", f"V3V3_AON_{n}"),
-            Part(f"U{10 + n}", "Power_Management:TPS22917DBV", "TPS22917DBVR",
-                 {"1": core, "2": "GND", "3": f"SLOT_SW_EN{n}", "4": None, "5": f"SW_QOD{n}", "6": f"V3V3_SW_{n}"},
-                 note=f"slot {n} switched rail, default off"),
+            C(f"C{27 + n}", "DNP", f"SLOT_AON_CT{n}", dnp=True, note="TPS22917 CT option (slower ramp)"),
+            # Owner decision 3: current-limited switch with FAULT on SW (TPS22917 has no limit)
+            Part(f"U{10 + n}", "talos:TPS2553", "TPS2553DBVR-1",
+                 {"1": core, "2": "GND", "3": f"SLOT_SW_EN{n}", "4": "SW_FAULT_N", "5": f"SW_ILIM{n}",
+                  "6": f"V3V3_SW_{n}"},
+                 note=f"slot {n} switched rail, default off, latch-off current limit"),
             R(f"R{25 + n}", "1M", f"SLOT_SW_EN{n}", "GND"),
-            R(f"R{29 + n}", "0R", f"SW_QOD{n}", f"V3V3_SW_{n}", "QOD to VOUT"),
+            R(f"R{29 + n}", "150k 1%", f"SW_ILIM{n}", "GND",
+              "IOS 155-207 mA min-max (SLVS841G eqs 1/3) > 150 mA per-slot SW budget"),
+            R(f"R{72 + n}", "100k", f"V3V3_SW_{n}", "GND", "SW bleed: TPS2553 has no output discharge"),
             C(f"C{17 + n}", "1u", f"V3V3_SW_{n}"),
+            C(f"C{31 + n}", "100n", core),
         )
+    b.add(R("R76", "100k", core, "SW_FAULT_N", "wired-OR FAULT_N pull-up"))
 
     # Sheet D: I2C mux, expanders, UART mux
     mux = {"1": "GND", "2": "GND", "13": "GND", "3": "MUX_RESET_N", "14": "I2C_SCL", "15": "I2C_SDA",
@@ -248,7 +293,7 @@ def sensor_node() -> Board:
         exp_b[p0[n]] = f"SLOT{n}_PRESENT_N"
         exp_b[p0[4 + n]] = f"SLOT{n}_ALERT_N"
     for pin, net in zip(p1, ["UART_SEL0", "UART_SEL1", "UART_MUX_EN_N", "PRESENT_PROBE",
-                             "CHG_INT_N", "CHG_PG_N", "PMUX_ST", "EXPB_SPARE"]):
+                             "CHG_INT_N", "CHG_PG_N", "PMUX_ST", "SW_FAULT_N"]):
         exp_b[pin] = net
     b.add(
         Part("U15", "Interface_Expansion:TCA9535PWR", "TCA9535PWR", exp_a, note="EXP_A root 0x20"),
@@ -257,11 +302,12 @@ def sensor_node() -> Board:
         C("C23", "100n", core),
         R("R42", "1M", "UART_SEL0", "GND"), R("R43", "1M", "UART_SEL1", "GND"),
         R("R44", "100k", core, "UART_MUX_EN_N", "mux disabled by default (S-3)"),
+        R("R77", "1M", "PRESENT_PROBE", "GND", "probe idles low before the expander is configured"),
     )
     umux = {"5": "UART1_TX", "7": "UART1_RX", "12": "UART_SEL0", "16": "UART_SEL1",
             "15": "UART_MUX_EN_N", "13": "UART_MUX_EN_N", "14": core, "6": "GND"}
     for n, (s1, s2) in enumerate([("4", "8"), ("3", "9"), ("2", "10"), ("1", "11")]):
-        umux[s1], umux[s2] = f"SLOT{n}_UART_TX", f"SLOT{n}_UART_RX"
+        umux[s1], umux[s2] = f"SLOT{n}_UTX_M", f"SLOT{n}_URX_M"
     b.add(Part("U17", "Analog_Switch:TS3A5017RSV", "TS3A5017RSVR", umux), C("C24", "100n", core))
 
     # Sheet E: four slot connectors with safe defaults and ESD
@@ -280,11 +326,20 @@ def sensor_node() -> Board:
             Part(f"D{4 + n}", "Power_Protection:PESD3V3L5UV", "PESD5V0L5UV",  # PESD3V3L5UV symbol: same pinout
                  {"1": f"SLOT_WAKE{n}", "3": f"SLOT{n}_SDA", "4": f"SLOT{n}_SCL", "5": f"SLOT{n}_ALERT_N",
                   "6": f"SLOT{n}_RESET_N", "2": "GND"}),
+            # Owner decision 7: UART lines idle high from the slot's own AON (no backfeed) and the
+            # 330R bounds contention and ESD current into the mux
+            R(f"R{78 + 4 * n}", "330", f"SLOT{n}_UART_TX", f"SLOT{n}_UTX_M"),
+            R(f"R{79 + 4 * n}", "330", f"SLOT{n}_UART_RX", f"SLOT{n}_URX_M"),
+            R(f"R{80 + 4 * n}", "100k", aon, f"SLOT{n}_UART_TX"),
+            R(f"R{81 + 4 * n}", "100k", aon, f"SLOT{n}_UART_RX"),
         )
 
     # Sheet F: factory test pads
     for i, net in enumerate([core, "GND", "CHIP_EN", "BOOT_N", "U0TXD", "U0RXD", "VBAT", "SYS_PATH",
-                             "I2C_SDA", "I2C_SCL", "EXPB_SPARE", "USB_VBUS"]):
+                             "I2C_SDA", "I2C_SCL", "SW_FAULT_N", "USB_VBUS",
+                             # bench §8 additions
+                             "CHG_IN", "PV_IN", "PMUX_ST", "BAT_NTC", "CHG_INT_N", "CHG_PG_N", "EXP_INT_N",
+                             "MUX_RESET_N", "USB_DP", "USB_DN", "V3V3_REG", "SYS_REG", "GND", "GND", "GND"]):
         b.add(TP(f"TP{i + 1}", net))
     return b
 
@@ -334,25 +389,31 @@ def debug_adapter() -> Board:
         # USB bridge. VDD = 3.3 V, so VUSB ties to VDD (DS20005565E §1.6.2.3); RST has an internal pull-up
         Part("U3", "Interface_USB:MCP2221AxSL", "MCP2221AT-I/SL",
              {"1": v, "11": v, "14": "GND", "4": "BRIDGE_RST_N", "12": "USB_DN", "13": "USB_DP",
-              "9": "SDA", "10": "SCL", "6": "BRIDGE_TX", "5": "UART_RX",
+              "9": "SDA", "10": "SCL", "6": "BRIDGE_TX", "5": "BRIDGE_RX",
               "2": "DBG_AON_EN", "7": "DBG_SW_EN", "3": "BRIDGE_WAKE", "8": "BRIDGE_ALERT"},
              note="GP0 AON enable, GP2 SW enable, GP1 WAKE in (interrupt-on-change), GP3 ALERT_N in"),
         C("C3", "100n", v), C("C4", "1u", v),
         R("R3", "10k", v, "BRIDGE_RST_N"),
         # card rails: one slot's worth of the main board's switches, both default off
         Part("U4", "Power_Management:TPS22917DBV", "TPS22917DBVR",
-             {"1": v, "2": "GND", "3": "DBG_AON_EN", "4": None, "5": None, "6": "AON_METER"},
+             {"1": v, "2": "GND", "3": "DBG_AON_EN", "4": "AON_CT", "5": "AON_QOD", "6": "AON_METER"},
              note="card AON switch, default off on the adapter"),
         R("R4", "1M", "DBG_AON_EN", "GND"),
+        R("R17", "0R", "AON_QOD", "AON_METER", "QOD to VOUT: card AON decays fast between power cycles"),
+        C("C8", "DNP", "AON_CT", dnp=True, note="TPS22917 CT option"),
         Part("JP1", "Connector_Generic:Conn_01x02", "AON meter", {"1": "AON_METER", "2": "V3V3_AON"},
              "Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical",
              "shunt fitted for normal use; remove and insert a PPK2 (ammeter) to measure card AON current"),
         C("C5", "1u", "V3V3_AON"),
-        Part("U5", "Power_Management:TPS22917DBV", "TPS22917DBVR",
-             {"1": v, "2": "GND", "3": "DBG_SW_EN", "4": None, "5": "SW_QOD", "6": "SW_METER"},
-             note="card switched rail, default off"),
+        # Same current-limited SW switch as the main board's slots (owner decision 3)
+        Part("U5", "talos:TPS2553", "TPS2553DBVR-1",
+             {"1": v, "2": "GND", "3": "DBG_SW_EN", "4": "DBG_SW_FAULT_N", "5": "SW_ILIM", "6": "SW_METER"},
+             note="card switched rail, default off, latch-off current limit"),
         R("R5", "1M", "DBG_SW_EN", "GND"),
-        R("R6", "0R", "SW_QOD", "SW_METER", "QOD to VOUT"),
+        R("R6", "150k 1%", "SW_ILIM", "GND", "IOS 155-207 mA (SLVS841G)"),
+        R("R18", "100k", v, "DBG_SW_FAULT_N", "FAULT_N pull-up (test pad; no spare bridge GPIO)"),
+        R("R19", "100k", "SW_METER", "GND", "SW bleed: TPS2553 has no output discharge"),
+        C("C9", "100n", v),
         Part("JP2", "Connector_Generic:Conn_01x02", "SW meter", {"1": "SW_METER", "2": "V3V3_SW"},
              "Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical",
              "shunt fitted for normal use; remove and insert a PPK2 (ammeter) to measure card SW current"),
@@ -367,32 +428,40 @@ def debug_adapter() -> Board:
         R("R11", "100k", "V3V3_AON", "CS_N"),
         R("R12", "100k", "V3V3_AON", "RESET_N"),
         R("R13", "100k", "V3V3_AON", "UART_RX", "idle-high when the card has no UART"),
+        R("R20", "100k", "V3V3_AON", "UART_TX", "idle-high, as on the main board (decision 7)"),
+        R("R21", "100k", "SCK", "GND", "SPI is not bridged: hold it quiet"),
+        R("R22", "100k", "MOSI", "GND", "SPI is not bridged: hold it quiet"),
         Part("D2", "Power_Protection:PESD3V3L5UV", "PESD5V0L5UV",  # PESD3V3L5UV symbol: same pinout
              {"1": "WAKE", "3": "SDA", "4": "SCL", "5": "ALERT_N", "6": "RESET_N", "2": "GND"}),
         # card outputs reach the bridge through 1k: bounds contention while GP pins are unconfigured
         R("R14", "1k", "WAKE", "BRIDGE_WAKE"), R("R15", "1k", "ALERT_N", "BRIDGE_ALERT"),
         # bridge TX is buffered from the card's AON rail: Ioff keeps an unpowered card unpowered
         Part("U6", "74xGxx:74LVC1G125", "SN74LVC1G125DBVR",
-             {"1": "GND", "2": "BRIDGE_TX", "3": "GND", "4": "UART_TX", "5": "V3V3_AON"},
-             "Package_TO_SOT_SMD:SOT-23-5", "OE_N tied low; powered from the card rail"),
-        C("C7", "100n", "V3V3_AON"),
+             {"1": "GND", "2": "BRIDGE_TX", "3": "GND", "4": "DBG_UTX", "5": "AON_METER"},
+             "Package_TO_SOT_SMD:SOT-23-5",
+             "OE_N tied low; powered from the card's switched rail ahead of JP1, so its current isn't metered"),
+        C("C7", "100n", "AON_METER"),
+        R("R23", "330", "DBG_UTX", "UART_TX", "series R as on the main board (decision 7)"),
+        R("R24", "330", "UART_RX", "BRIDGE_RX", "series R as on the main board (decision 7)"),
         # card-seated indicator
         Part("D1", "Device:LED", "STATUS", {"2": v, "1": "SEATED_K"}, "LED_SMD:LED_0603_1608Metric",
              "lit when a card grounds PRESENT_N"),
         R("R16", "1k", "SEATED_K", "PRESENT_N"),
     )
     for i, net in enumerate([v, "GND", "V3V3_AON", "V3V3_SW", "SCK", "MOSI", "MISO", "CS_N", "RESET_N",
-                             "UART_TX", "UART_RX", "SDA", "SCL", "WAKE", "ALERT_N", "GND"]):
+                             "UART_TX", "UART_RX", "SDA", "SCL", "WAKE", "ALERT_N", "GND",
+                             "BRIDGE_TX", "USB_VBUS", "DBG_SW_FAULT_N"]):
         b.add(TP(f"TP{i + 1}", net))
     return b
 
 
 # ---- cards ----------------------------------------------------------------------------
-def card(name: str, title: str, used: set[str], parts: list[Part]) -> Board:
+def card(name: str, title: str, used: set[str], parts: list[Part], pads: tuple[str, ...] = ()) -> Board:
     b = Board(name, title, external_power={"GND", "V3V3_AON"})
     b.add(card_edge(used), *id_eeprom())
     b.add(*parts)
     b.add(TP("TP1", "V3V3_AON"), TP("TP2", "GND"))
+    b.add(*(TP(f"TP{3 + i}", net) for i, net in enumerate(pads)))
     return b
 
 
@@ -412,19 +481,19 @@ def boards() -> list[Board]:
              {"1": None, "2": "MAG_INT_N", "3": "GND", "4": "WAKE", "5": "V3V3_AON"},
              "Package_TO_SOT_SMD:SOT-23-5", "inverts INT_N to idle-low push-pull WAKE"),
         C("C3", "100n", "V3V3_AON"),
-    ]))
+    ], pads=("MAG_INT_N",)))
     out.append(card("TL-MOD-002", "TL-MOD-002 PIR card Rev A", i2c | {"WAKE"}, [
         Part("U2", "talos:EKMB", "EKMB1101111", {"1": "V3V3_AON", "2": "WAKE", "3": "GND"}, None,
              "TO-5 3-pin on PCD 5.08 mm; pin positions from bottom-view drawing, verify"),
         C("C2", "100n", "V3V3_AON"),
-    ]))
+    ], pads=("WAKE",)))
     out.append(card("TL-MOD-003", "TL-MOD-003 Vibration/impact card Rev A", i2c | {"WAKE"}, [
         Part("U2", "talos:LIS2DW12", "LIS2DW12TR",
              {"9": "V3V3_AON", "10": "V3V3_AON", "1": "SCL", "4": "SDA", "2": "V3V3_AON", "3": "V3V3_AON",
               "12": "WAKE", "11": None, "5": "GND", "7": "GND", "6": "GND", "8": "GND"},
              note="CS high = I2C; SA0 high = 0x19 (internal pull-up cannot be disabled)"),
         C("C2", "100n", "V3V3_AON"), C("C3", "10u", "V3V3_AON", bulk=True),
-    ]))
+    ], pads=("WAKE",)))
     out.append(card("TL-MOD-004", "TL-MOD-004 Temperature/humidity card Rev A", i2c, [
         Part("U2", "Sensor_Humidity:SHT4x", "SHT40-AD1B", {"1": "SDA", "2": "SCL", "3": "V3V3_AON", "4": "GND"},
              "talos:Sensirion_DFN-4_1.5x1.5mm_P0.8mm_SHT4x_CentralKeepout", "no copper under the sensor die"),
@@ -435,17 +504,24 @@ def boards() -> list[Board]:
     exp = {"21": "V3V3_AON", "2": "V3V3_AON", "3": "V3V3_AON", "22": "SCL", "23": "SDA", "24": "V3V3_AON",
            "12": "GND", "1": None,
            "4": "DRV_WAKE", "5": "DRV_ALERT", "6": "DRV_MISO", "7": "DRV_UART_RX",
-           "8": None, "9": None, "10": None, "11": None,
+           "8": "SW_SENSE", "9": "EXP_NC0", "10": "EXP_NC1", "11": "EXP_NC2",
            "13": "CS_N", "14": "RESET_N", "15": "SCK", "16": "MOSI", "17": "UART_TX",
-           "18": None, "19": None, "20": None}
+           "18": "EXP_NC3", "19": "EXP_NC4", "20": "EXP_NC5"}
     out.append(card("TL-TEST-001", "TL-TEST-001 Slot test cartridge Rev A", used, [
         Part("U2", "Interface_Expansion:TCA9535PWR", "TCA9535PWR", exp, note="branch address 0x27"),
         C("C2", "100n", "V3V3_AON"),
         R("R1", "1k", "DRV_WAKE", "WAKE"), R("R2", "1k", "DRV_ALERT", "ALERT_N", "test only; ALERT_N is open-drain"),
         R("R3", "1k", "DRV_MISO", "MISO"), R("R4", "1k", "DRV_UART_RX", "UART_RX"),
         R("R5", "330", "V3V3_SW", "GND", "~10 mA switched-rail load"),
-        TP("TP3", "V3V3_SW"), TP("TP4", "WAKE"),
-    ]))
+        # At-speed loopbacks (owner decision 9): weak enough that an expander drive through 1k wins
+        R("R6", "10k", "UART_TX", "UART_RX", "UART loopback"),
+        R("R7", "10k", "MOSI", "MISO", "SPI loopback"),
+        R("R8", "10k", "V3V3_SW", "SW_SENSE", "SW rail sense into P04"),
+        # Defined levels so the test can tell a host pull-up from an open contact
+        R("R9", "100k", "SCK", "GND"), R("R10", "100k", "MOSI", "GND"), R("R11", "100k", "UART_TX", "GND"),
+        R("R12", "1M", "CS_N", "GND"), R("R13", "1M", "RESET_N", "GND"),
+        *(R(f"R{14 + i}", "10k", f"EXP_NC{i}", "GND", "unused expander input held low") for i in range(6)),
+    ], pads=("V3V3_SW", "WAKE", "SDA", "SCL", "ALERT_N")))
     out.append(debug_adapter())
     return out
 
@@ -487,7 +563,7 @@ def place(board: Board, root: str, p: Part, sym, unit: int, upins, sx: float, sy
                       effects(hide=True)])
     inst = ["symbol", ["lib_id", q(p.lib_id)], ["at", f"{sx:g}", f"{sy:g}", "0"], ["unit", str(unit)],
             ["exclude_from_sim", "no"], ["in_bom", "yes" if in_bom else "no"],
-            ["on_board", "no" if is_flag else "yes"], ["dnp", "no"],
+            ["on_board", "no" if is_flag else "yes"], ["dnp", "yes" if p.dnp else "no"],
             ["uuid", q(uid(board.name, tag))], *props]
     for pin in upins:
         inst.append(["pin", q(pin.number), ["uuid", q(uid(board.name, p.ref, "pin", pin.number))]])
@@ -546,8 +622,9 @@ def project_file(name: str) -> dict:
             # BQ25186 pin sits mid-row at 0.4 mm pitch (0.3 mm there leaves no router margin). GND is the
             # In1 plane and V3V3_CORE the In2 plane on the 4-layer board.
             "netclass_patterns": [{"netclass": "Power", "pattern": pat} for pat in (
-                "/SYS_PATH", "/USB_VBUS", "/CHG_IN", "/PV_IN", "/PV_RAW", "/REG_LX1", "/REG_LX2")]
-            + [{"netclass": "Rail", "pattern": pat} for pat in ("/V3V3_*", "/VBAT")],
+                "/SYS_PATH", "/SYS_REG", "/USB_VBUS", "/PMUX_IN1", "/CHG_IN", "/PV_IN", "/PV_RAW", "/REG_LX1",
+                "/REG_LX2")]
+            + [{"netclass": "Rail", "pattern": pat} for pat in ("/V3V3_*", "/VBAT", "/VBAT_PACK")],
             "meta": {"version": 4}},
         "schematic": {"page_layout_descr_file": ""},
     }
@@ -643,7 +720,7 @@ def write_board(board: Board, libs: SymbolLibraries) -> dict:
         "board": board.name,
         "parts": {p.ref: {"lib_id": p.lib_id, "value": p.value,
                           "footprint": p.footprint if p.footprint is not None else syms[p.lib_id].prop("Footprint"),
-                          "note": p.note, "pins": p.pins,
+                          "note": p.note, "pins": p.pins, "dnp": p.dnp,
                           "datasheet": syms[p.lib_id].prop("Datasheet") or "~",
                           "pin_names": {pin.number: pin.name for pin in syms[p.lib_id].pins}} for p in board.parts},
     }

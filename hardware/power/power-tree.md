@@ -7,8 +7,8 @@ USB-C ─ CC 5.1k×2, USBLC6 ─ USB_VBUS ─┐
                                       ├─ TPS2121 (IN1 priority) ─ CHG_IN ─ BQ25186 ─ SYS_PATH ─ TPS63900 ─ V3V3_CORE
 PV jack ─ SS34 ─ SMAJ12A ─ PV_IN ─────┘   (IN2 fallback, ST→EXP_B)       │  ↕ BAT        (3.3 V, CFG3=16.2k)
                                                                         │  protected 1S pack + NTC (TS/MR)
-                                                       V3V3_CORE ─ 4× TPS22917 AON (default on)  → V3V3_AON_n
-                                                       V3V3_CORE ─ 4× TPS22917 SW (default off, QOD) → V3V3_SW_n
+                                                       V3V3_CORE ─ 4× TPS22917 AON (default off, firmware staggers) → V3V3_AON_n
+                                                       V3V3_CORE ─ 4× TPS2553-1 SW (default off, 155-207 mA latch-off, FAULT_N) → V3V3_SW_n
 ```
 
 ## Operating-mode matrix

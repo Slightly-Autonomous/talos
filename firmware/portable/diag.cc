@@ -10,6 +10,10 @@
 
 namespace talos::fw {
 
+namespace {
+constexpr std::uint8_t kSht40Heater20mw1s = 0x1E;  // SHT4x datasheet Table 7
+}  // namespace
+
 // --- JsonLine ---------------------------------------------------------------------------
 
 JsonLine::JsonLine() { raw("@T {"); }
@@ -503,6 +507,8 @@ bool Diag::cmd_rail(const Args& a, IDiagOut& out, const char*& err) {
   }
   const Rail rail = a.v[2][0] == 'a' ? Rail::kAlwaysOn3v3 : Rail::kSwitched3v3;
   const bool on = std::strcmp(a.v[3], "on") == 0;
+  // Switching AON on by hand is the operator's decision to lift a power quarantine.
+  if (rail == Rail::kAlwaysOn3v3 && on) rt_.clear_quarantine(slot);
   io_->set_rail(slot, rail, on);
   const bool aon = io_->rail_on(slot, Rail::kAlwaysOn3v3);
   const bool sw = io_->rail_on(slot, Rail::kSwitched3v3);
@@ -777,8 +783,10 @@ bool Diag::selftest_sht(std::uint8_t slot, IDiagOut& out, const char*& err) {
       .emit(out);
   const bool before_ok = command(Sht40Driver::kMeasureHighPrecision, 10, r);
   const std::int32_t t0 = milli_c(r);
-  // Heater 110 mW for 1 s (0x2F); the reply is a measurement of the heated die.
-  const bool heat_ok = command(0x2F, 1'110, r);
+  // Heater 20 mW for 1 s (0x1E); the reply is a measurement of the heated die.
+  // A slot's AON budget allows 20 mW; the 110 mW and 200 mW settings are for the
+  // TL-DBG-001 bench adapter only (bench plan §8), never from node firmware.
+  const bool heat_ok = command(kSht40Heater20mw1s, 1'110, r);
   const std::int32_t t1 = milli_c(r);
   deselect();
   rt_.rescan(slot);
@@ -787,7 +795,7 @@ bool Diag::selftest_sht(std::uint8_t slot, IDiagOut& out, const char*& err) {
     return false;
   }
   // Threshold is provisional: calibrate to half a golden unit's rise (bench C4-05).
-  const bool rise_ok = t1 - t0 >= 5'000;
+  const bool rise_ok = t1 - t0 >= 1'000;
   JsonLine()
       .str("t", "sht.heater")
       .boolean("ok", rise_ok)

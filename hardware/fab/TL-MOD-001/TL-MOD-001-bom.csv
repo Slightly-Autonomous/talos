@@ -4,6 +4,7 @@ qty,refs,value,symbol,footprint
 1,R1,100k,Device:R,Resistor_SMD:R_0402_1005Metric
 1,TP1,V3V3_AON,Connector:TestPoint,TestPoint:TestPoint_Pad_D1.0mm
 1,TP2,GND,Connector:TestPoint,TestPoint:TestPoint_Pad_D1.0mm
+1,TP3,MAG_INT_N,Connector:TestPoint,TestPoint:TestPoint_Pad_D1.0mm
 1,U1,24AA025E48T-I/OT,Memory_EEPROM:24AA025E-OT,Package_TO_SOT_SMD:SOT-23-6
 1,U2,TMAG5273A1QDBVR,Sensor_Magnetic:TMAG5273x1QDBV,Package_TO_SOT_SMD:SOT-23-6
 1,U3,SN74AUP1G04DBVR,74xGxx:74AUP1G04,Package_TO_SOT_SMD:SOT-23-5

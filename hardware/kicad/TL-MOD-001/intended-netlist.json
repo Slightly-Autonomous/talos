@@ -3,6 +3,7 @@
  "parts": {
   "C1": {
    "datasheet": "~",
+   "dnp": false,
    "footprint": "Capacitor_SMD:C_0402_1005Metric",
    "lib_id": "Device:C",
    "note": "",
@@ -18,6 +19,7 @@
   },
   "C2": {
    "datasheet": "~",
+   "dnp": false,
    "footprint": "Capacitor_SMD:C_0402_1005Metric",
    "lib_id": "Device:C",
    "note": "",
@@ -33,6 +35,7 @@
   },
   "C3": {
    "datasheet": "~",
+   "dnp": false,
    "footprint": "Capacitor_SMD:C_0402_1005Metric",
    "lib_id": "Device:C",
    "note": "",
@@ -48,6 +51,7 @@
   },
   "J1": {
    "datasheet": "~",
+   "dnp": false,
    "footprint": "talos:CardEdge_sensor_edge_v1_2x10_P0.8mm",
    "lib_id": "Connector_Generic:Conn_02x10_Odd_Even",
    "note": "gold fingers, 1.60 mm card, 0.80 mm pitch",
@@ -99,6 +103,7 @@
   },
   "R1": {
    "datasheet": "~",
+   "dnp": false,
    "footprint": "Resistor_SMD:R_0402_1005Metric",
    "lib_id": "Device:R",
    "note": "INT pull-up (open-drain)",
@@ -114,6 +119,7 @@
   },
   "TP1": {
    "datasheet": "~",
+   "dnp": false,
    "footprint": "TestPoint:TestPoint_Pad_D1.0mm",
    "lib_id": "Connector:TestPoint",
    "note": "",
@@ -127,6 +133,7 @@
   },
   "TP2": {
    "datasheet": "~",
+   "dnp": false,
    "footprint": "TestPoint:TestPoint_Pad_D1.0mm",
    "lib_id": "Connector:TestPoint",
    "note": "",
@@ -138,8 +145,23 @@
    },
    "value": "GND"
   },
+  "TP3": {
+   "datasheet": "~",
+   "dnp": false,
+   "footprint": "TestPoint:TestPoint_Pad_D1.0mm",
+   "lib_id": "Connector:TestPoint",
+   "note": "",
+   "pin_names": {
+    "1": "1"
+   },
+   "pins": {
+    "1": "MAG_INT_N"
+   },
+   "value": "MAG_INT_N"
+  },
   "U1": {
    "datasheet": "https://ww1.microchip.com/downloads/aemDocuments/documents/MPD/ProductDocuments/DataSheets/2-Kbit-I2C-Serial-EEPROMs-+EUI-48-or-EUI-64-Node-20002124.pdf",
+   "dnp": false,
    "footprint": "Package_TO_SOT_SMD:SOT-23-6",
    "lib_id": "Memory_EEPROM:24AA025E-OT",
    "note": "ID EEPROM 0x50 with factory EUI-48 (S-1)",
@@ -163,6 +185,7 @@
   },
   "U2": {
    "datasheet": "https://www.ti.com/lit/ds/symlink/tmag5273.pdf",
+   "dnp": false,
    "footprint": "Package_TO_SOT_SMD:SOT-23-6",
    "lib_id": "Sensor_Magnetic:TMAG5273x1QDBV",
    "note": "I2C 0x35 (A1), +/-40/80 mT; TEST pin 3 to GND; volatile config, host sets W&S mode",
@@ -186,6 +209,7 @@
   },
   "U3": {
    "datasheet": "https://www.ti.com/lit/ds/symlink/sn74aup1g04.pdf",
+   "dnp": false,
    "footprint": "Package_TO_SOT_SMD:SOT-23-5",
    "lib_id": "74xGxx:74AUP1G04",
    "note": "inverts INT_N to idle-low push-pull WAKE",

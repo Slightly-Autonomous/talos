@@ -78,6 +78,13 @@
 		(descr "")
 	)
 	(lib
+		(name "Transistor_FET")
+		(type "KiCad")
+		(uri "${KICAD10_SYMBOL_DIR}/Transistor_FET.kicad_sym")
+		(options "")
+		(descr "")
+	)
+	(lib
 		(name "power")
 		(type "KiCad")
 		(uri "${KICAD10_SYMBOL_DIR}/power.kicad_sym")

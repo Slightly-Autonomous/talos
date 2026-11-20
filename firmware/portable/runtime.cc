@@ -23,6 +23,11 @@ bool save(IStore& store, StoreKey key, const T& v) {
   return store.put(key, reinterpret_cast<const std::uint8_t*>(&v), sizeof v);
 }
 
+struct SlotPowerBlob {
+  std::uint8_t powering = NodeRuntime::kNotPowering;  // slot whose AON was being switched on
+  std::uint8_t quarantined = 0;                       // bit n: slot n stays unpowered
+};
+
 struct PendingBlob {
   std::uint32_t count = 0;
   DeviceEvent events[NodeRuntime::kMaxPendingCritical];
@@ -76,6 +81,17 @@ void NodeRuntime::boot() {
   const BootDecision d = ota_.boot();
   restore_pending_critical();
   board_ok_ = p_.power.begin();  // safe outputs before anything touches a slot
+  // A reset while a slot's AON was being switched on means that card pulled the
+  // core rail down (no current limit on AON): keep it off instead of boot-looping.
+  SlotPowerBlob sp;
+  load(p_.store, StoreKey::kSlotPower, sp);
+  if (sp.powering < kSlots) {
+    sp.quarantined = static_cast<std::uint8_t>(sp.quarantined | (1u << sp.powering));
+    sp.powering = kNotPowering;
+    save(p_.store, StoreKey::kSlotPower, sp);
+  }
+  quarantined_ = sp.quarantined;
+  aon_on_ = 0;
   mode_ = compute_mode();
   discover();
   admit_power();
@@ -113,6 +129,7 @@ void NodeRuntime::discover_slot(std::uint8_t i, TimeMs now) {
   st = SlotState{};
   const SlotWiring& w = p_.board.slots[i];
   if (!w.present) return;
+  if (!power_slot(i)) return;
   SlotIo io(p_, i);
   struct Deselect {  // leave the root bus free whatever happens below
     SlotIo& io;
@@ -189,6 +206,46 @@ void NodeRuntime::discover_slot(std::uint8_t i, TimeMs now) {
   st.enabled = true;
   emit(i, EventKind::kModulePresent, Priority::kP2Health, true, static_cast<std::int32_t>(st.code),
        0);
+}
+
+bool NodeRuntime::power_slot(std::uint8_t i) {
+  // Boards without a switch on AON (or without one we can drive) have it always on.
+  if (!p_.board.slot_io[i].aon_enable.wired()) return true;
+  const auto bit = static_cast<std::uint8_t>(1u << i);
+  if (quarantined_ & bit) {
+    p_.power.set_rail(i, Rail::kAlwaysOn3v3, false);
+    aon_on_ = static_cast<std::uint8_t>(aon_on_ & ~bit);
+    slots_[i].fault = ModuleFault::kPowerQuarantined;
+    emit(i, EventKind::kModuleFault, Priority::kP2Health, false,
+         static_cast<std::int32_t>(ModuleFault::kPowerQuarantined), 0);
+    return false;
+  }
+  // An empty slot stays off: no pull-up current, nothing to short.
+  if (p_.power.slot_present(i) == std::optional<bool>{false}) {
+    p_.power.set_rail(i, Rail::kAlwaysOn3v3, false);
+    aon_on_ = static_cast<std::uint8_t>(aon_on_ & ~bit);
+    return false;
+  }
+  if (aon_on_ & bit) {
+    p_.power.set_rail(i, Rail::kAlwaysOn3v3, true);  // idempotent; a bench command may have cut it
+    return true;
+  }
+  // Record the attempt first: if this card shorts AON the node resets right here,
+  // and the next boot finds the marker and quarantines the slot.
+  SlotPowerBlob sp{i, quarantined_};
+  save(p_.store, StoreKey::kSlotPower, sp);
+  p_.power.set_rail(i, Rail::kAlwaysOn3v3, true);
+  p_.clock.delay_ms(kSlotPowerSettleMs);
+  sp.powering = kNotPowering;
+  save(p_.store, StoreKey::kSlotPower, sp);
+  aon_on_ = static_cast<std::uint8_t>(aon_on_ | bit);
+  return true;
+}
+
+void NodeRuntime::clear_quarantine(std::uint8_t slot) {
+  if (slot >= kSlots || !(quarantined_ & (1u << slot))) return;
+  quarantined_ = static_cast<std::uint8_t>(quarantined_ & ~(1u << slot));
+  save(p_.store, StoreKey::kSlotPower, SlotPowerBlob{kNotPowering, quarantined_});
 }
 
 std::uint32_t NodeRuntime::sustained_budget_mw() {
@@ -315,6 +372,15 @@ void NodeRuntime::step() {
         },
         st.driver);
     io.deselect();
+  }
+
+  if (const std::uint8_t tripped = p_.power.take_sw_faults()) {
+    for (std::uint8_t i = 0; i < kSlots; ++i) {
+      if (!(tripped & (1u << i))) continue;
+      emit(i, EventKind::kModuleFault, Priority::kP2Health, false,
+           static_cast<std::int32_t>(ModuleFault::kRailFault),
+           static_cast<std::uint32_t>(slots_[i].code));
+    }
   }
 
   if (now >= next_heartbeat_) {

@@ -2461,24 +2461,23 @@
 		(uuid "1b437608-ae07-55c0-a817-d306db8366d5")
 	)
 	(symbol
-		(lib_id "power:PWR_FLAG")
+		(lib_id "Connector:TestPoint")
 		(at 241.3 35.56 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom no)
-		(on_board no)
+		(on_board yes)
 		(dnp no)
-		(uuid "7f309617-fd76-5d42-9591-fe73dbb35f87")
-		(property "Reference" "#FLG01"
+		(uuid "19393751-98f4-5f43-8e1d-1f0c013e6c76")
+		(property "Reference" "TP3"
 			(at 241.3 27.94 0)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
-				(hide yes)
 			)
 		)
-		(property "Value" "PWR_FLAG"
+		(property "Value" "WAKE"
 			(at 241.3 43.18 0)
 			(effects
 				(font
@@ -2486,7 +2485,7 @@
 				)
 			)
 		)
-		(property "Footprint" ""
+		(property "Footprint" "TestPoint:TestPoint_Pad_D1.0mm"
 			(at 241.3 35.56 0)
 			(effects
 				(font
@@ -2505,12 +2504,12 @@
 			)
 		)
 		(pin "1"
-			(uuid "68433a12-d224-52a6-9411-25773a1b9929")
+			(uuid "c6c08ea7-c509-5013-8dc3-579a50c36bb4")
 		)
 		(instances
 			(project "TL-MOD-002"
 				(path "/83ce8f6b-0b8b-59f7-bd12-ac2043bcc427"
-					(reference "#FLG01")
+					(reference "TP3")
 					(unit 1)
 				)
 			)
@@ -2525,9 +2524,9 @@
 			(width 0)
 			(type default)
 		)
-		(uuid "300f0554-d264-5399-9085-17af71561470")
+		(uuid "0be28be6-28d2-5c39-b9e4-675672561e48")
 	)
-	(label "GND"
+	(label "WAKE"
 		(at 241.3 38.1 270)
 		(effects
 			(font
@@ -2535,7 +2534,7 @@
 			)
 			(justify right bottom)
 		)
-		(uuid "e3c2df0d-8211-5476-a72f-c9ed32f4e7f5")
+		(uuid "dcac463c-4788-52e4-a75e-24584c5f6e92")
 	)
 	(symbol
 		(lib_id "power:PWR_FLAG")
@@ -2545,8 +2544,8 @@
 		(in_bom no)
 		(on_board no)
 		(dnp no)
-		(uuid "f9232d8b-0a52-5233-94d9-f26e8a5a026a")
-		(property "Reference" "#FLG02"
+		(uuid "7f309617-fd76-5d42-9591-fe73dbb35f87")
+		(property "Reference" "#FLG01"
 			(at 256.54 27.94 0)
 			(effects
 				(font
@@ -2582,12 +2581,12 @@
 			)
 		)
 		(pin "1"
-			(uuid "1d49c04c-d7a1-5d19-a3bc-b7d5f77d2636")
+			(uuid "68433a12-d224-52a6-9411-25773a1b9929")
 		)
 		(instances
 			(project "TL-MOD-002"
 				(path "/83ce8f6b-0b8b-59f7-bd12-ac2043bcc427"
-					(reference "#FLG02")
+					(reference "#FLG01")
 					(unit 1)
 				)
 			)
@@ -2602,10 +2601,87 @@
 			(width 0)
 			(type default)
 		)
+		(uuid "300f0554-d264-5399-9085-17af71561470")
+	)
+	(label "GND"
+		(at 256.54 38.1 270)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right bottom)
+		)
+		(uuid "e3c2df0d-8211-5476-a72f-c9ed32f4e7f5")
+	)
+	(symbol
+		(lib_id "power:PWR_FLAG")
+		(at 271.78 35.56 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom no)
+		(on_board no)
+		(dnp no)
+		(uuid "f9232d8b-0a52-5233-94d9-f26e8a5a026a")
+		(property "Reference" "#FLG02"
+			(at 271.78 27.94 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Value" "PWR_FLAG"
+			(at 271.78 43.18 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at 271.78 35.56 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" "~"
+			(at 271.78 35.56 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "1d49c04c-d7a1-5d19-a3bc-b7d5f77d2636")
+		)
+		(instances
+			(project "TL-MOD-002"
+				(path "/83ce8f6b-0b8b-59f7-bd12-ac2043bcc427"
+					(reference "#FLG02")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(wire
+		(pts
+			(xy 271.78 35.56)
+			(xy 271.78 38.1)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
 		(uuid "c773cd05-8771-5d37-8a6c-b39f1d9c538b")
 	)
 	(label "V3V3_AON"
-		(at 256.54 38.1 270)
+		(at 271.78 38.1 270)
 		(effects
 			(font
 				(size 1.27 1.27)

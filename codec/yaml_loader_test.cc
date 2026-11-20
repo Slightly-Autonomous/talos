@@ -139,12 +139,31 @@ TEST(SensorNodeRevA, HW_MF_004_WakeRequiredOnSlotWithoutWake) {
 
 // HW-MF-005: two UART cards but one muxed UART.
 TEST(SensorNodeRevA, HW_MF_005_TwoUartCardsOneUart) {
-  std::vector<SlotAssignment> a{{0, ModuleId("tl_test_001")}, {1, ModuleId("tl_test_001")}};
-  auto r = validate_configuration(sensor_node(), load_rev_a_catalog(), a, PowerSource::kUsb);
+  auto catalog = load_rev_a_catalog();
+  ModuleManifest radar;
+  radar.id = ModuleId("uart_radar_card");
+  radar.connector_standard = "sensor_edge_v1";
+  radar.needs_uart = true;
+  radar.i2c_addresses = {0x50};
+  radar.loads = {{"v3v3_aon", 1}};
+  catalog.emplace(radar.id, radar);
+  std::vector<SlotAssignment> a{{0, radar.id}, {1, radar.id}};
+  auto r = validate_configuration(sensor_node(), catalog, a, PowerSource::kUsb);
   EXPECT_TRUE(r.has(ManifestIssueCode::kUartOversubscribed));
-  std::vector<SlotAssignment> one{{0, ModuleId("tl_test_001")}};
-  EXPECT_TRUE(
-      validate_configuration(sensor_node(), load_rev_a_catalog(), one, PowerSource::kUsb).ok());
+  std::vector<SlotAssignment> one{{0, radar.id}};
+  EXPECT_TRUE(validate_configuration(sensor_node(), catalog, one, PowerSource::kUsb).ok());
+}
+
+// HW-MF-005: four TL-TEST-001 fixtures are allowed (the UART is time-shared),
+// but a fixture still counts nothing toward a field card's UART.
+TEST(SensorNodeRevA, HW_MF_005_TestFixturesAreExemptFromTheUartLimit) {
+  const auto catalog = load_rev_a_catalog();
+  ASSERT_TRUE(catalog.at(ModuleId("tl_test_001")).test_fixture);
+  std::vector<SlotAssignment> four;
+  for (SlotIndex s = 0; s < 4; ++s) four.push_back({s, ModuleId("tl_test_001")});
+  const auto r = validate_configuration(sensor_node(), catalog, four, PowerSource::kUsb);
+  EXPECT_FALSE(r.has(ManifestIssueCode::kUartOversubscribed));
+  EXPECT_TRUE(r.ok());
 }
 
 // HW-MF-006: four high-current cards exceed the battery budget but fit on USB.

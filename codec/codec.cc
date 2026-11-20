@@ -549,6 +549,7 @@ Result<ModuleManifest> from_proto(const v1::ModuleManifest& p) {
   m.average_uw = p.average_uw();
   for (const auto& c : p.capabilities()) m.capabilities.emplace_back(c);
   m.connector_standard = p.connector_standard();
+  m.test_fixture = p.test_fixture();
   return m;
 }
 

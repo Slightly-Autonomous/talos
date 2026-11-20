@@ -83,4 +83,8 @@ message ModuleManifest {
   string connector_standard = 14;
   // Finer-grained average draw; used instead of average_mw when non-zero.
   uint32 average_uw = 15;
+  // Bench test fixture (TL-TEST-001). The firmware time-shares the muxed UART
+  // across fixtures one slot at a time, so they are exempt from the concurrent
+  // UART limit. Never set on a field module.
+  bool test_fixture = 16;
 }

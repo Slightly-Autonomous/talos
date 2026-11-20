@@ -53,9 +53,11 @@ def load_rows() -> list[dict]:
         return list(csv.DictReader(f))
 
 
-def board_parts(board: str) -> dict[str, tuple[str, str]]:
+def board_parts(board: str, dnp: bool = False) -> dict[str, tuple[str, str]]:
+    """Fitted parts (or, with dnp=True, the do-not-fit bench options, which need no sourcing row)."""
     intended = json.load(open(KICAD / board / "intended-netlist.json"))
-    return {ref: (p["value"], (p["footprint"] or "TBD").split(":")[-1]) for ref, p in intended["parts"].items()}
+    return {ref: (p["value"], (p["footprint"] or "TBD").split(":")[-1]) for ref, p in intended["parts"].items()
+            if bool(p.get("dnp")) == dnp}
 
 
 def match(rows: list[dict], value: str, fp: str) -> list[dict]:
@@ -163,6 +165,8 @@ def export(boards: list[str]) -> int:
                 groups.setdefault((value, fp, r["lcsc"]), []).append(ref)
             elif r["assembly"] == "not_placed":
                 skipped.append([ref, value, r["mpn"], r["risk"], r["note"]])
+        for ref, (value, _fp) in sorted(board_parts(board, dnp=True).items(), key=lambda kv: natural(kv[0])):
+            skipped.append([ref, value, "", "", "DNP: bench option, footprint only"])
         out = FAB / board
         out.mkdir(parents=True, exist_ok=True)
         with open(out / f"{board}-jlc-bom.csv", "w", newline="") as f:

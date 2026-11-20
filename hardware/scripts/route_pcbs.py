@@ -5,6 +5,11 @@ Run with KiCad's bundled Python:
     ~/Applications/KiCad/KiCad.app/Contents/Frameworks/Python.framework/Versions/3.9/bin/python3 \\
         hardware/scripts/route_pcbs.py [BOARD ...]
 
+Attempts run in parallel (ROUTE_JOBS at a time), each in its own temp copy of the board folder; the
+first DRC-clean attempt wins and the rest are stopped. If none is clean, a repair pass keeps the best
+attempt's tracks, rips up any track in a clearance violation and stitches each connection that is
+still open with a short clearance-checked track (seconds, instead of another ~30 min attempt).
+
 Freerouting is a general-purpose autorouter: the result is a connectivity-correct first pass, not a
 reviewed layout (no impedance control, no deliberate RF or power-loop placement).
 """
@@ -16,9 +21,11 @@ import math
 import os
 import pathlib
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
+import time
 
 import pcbnew
 
@@ -29,24 +36,31 @@ JAR = os.path.expanduser(os.environ.get("FREEROUTING_JAR", "~/.cache/talos-tools
 JAVA = os.environ.get("JAVA", "java")
 # macOS app bundle launcher (bundles its own Java runtime); used when set.
 APP = os.path.expanduser(os.environ.get("FREEROUTING_APP", ""))
-PASSES = os.environ.get("FREEROUTING_PASSES", "200")
+# Freerouting never sees the Sensor Node as complete (it chases plane pins that the inner planes
+# already connect), so it always runs every pass: 200 passes took ~39 min an attempt. The first
+# passes do nearly all the work; the repair pass picks up what a short attempt leaves.
+PASSES = os.environ.get("FREEROUTING_PASSES", "60")
+REPAIR_ROUNDS = int(os.environ.get("REPAIR_ROUNDS", "2"))
 ATTEMPTS = int(os.environ.get("ROUTE_ATTEMPTS", "6"))
+# Each Freerouting JVM keeps a few cores busy and may take ~6 GB: a quarter of the cores (3 on a
+# 12-core, 24 GB Mac) keeps the machine responsive.
+JOBS = int(os.environ.get("ROUTE_JOBS", str(max(1, min(ATTEMPTS, (os.cpu_count() or 4) // 4)))))
 KICAD_CLI = os.environ.get("KICAD_CLI", os.path.expanduser("~/Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli"))
 
 
-def drc_errors(path: pathlib.Path) -> list[str]:
+def drc_report(path: pathlib.Path) -> list[dict]:
     """kicad-cli DRC; returns error-severity findings (warnings such as silkscreen are reported, not fatal)."""
     with tempfile.TemporaryDirectory() as tmp:
         out = os.path.join(tmp, "drc.json")
         subprocess.run([KICAD_CLI, "pcb", "drc", "--schematic-parity", "--refill-zones", "--format", "json",
                         "--severity-all", "-o", out, str(path)], capture_output=True)
         d = json.load(open(out))
-    found = []
-    for key in ("violations", "unconnected_items", "schematic_parity"):
-        for v in d.get(key, []):
-            if v["severity"] == "error":
-                found.append(f"{v['type']}: {v['description']}")
-    return found
+    return [v for key in ("violations", "unconnected_items", "schematic_parity")
+            for v in d.get(key, []) if v["severity"] == "error"]
+
+
+def drc_errors(path: pathlib.Path) -> list[str]:
+    return [f"{v['type']}: {v['description']}" for v in drc_report(path)]
 
 
 def remove_dangling_vias(board) -> int:
@@ -221,32 +235,28 @@ def plane_fanout(board, via_d=0.6, drill=0.3, clear=0.2, track_w=0.25, stub_clea
     return added
 
 
-def route(name: str, attempt: int = 1) -> None:
-    path = KICAD / name / f"{name}.kicad_pcb"
-    board = pcbnew.LoadBoard(str(path))
+def freeroute(board, name: str, passes: str, clearance_mm: float) -> int:
+    """One Freerouting round trip on a loaded board; existing tracks are kept and extended."""
     # Copper pours on signal layers would be exported as planes, and Freerouting would then skip
     # their nets. Hide them so every net gets real tracks; the pours come back as stitching after.
     signal_pours = [z for z in board.Zones() if not z.GetIsRuleArea()
                     and board.GetLayerType(z.GetLayer()) != pcbnew.LT_POWER]
     for z in signal_pours:
         board.Remove(z)
-    fanned = plane_fanout(board)
-    if fanned:
-        print(f"    plane fanout: {fanned} pads given a plane via")
-    # Route with extra clearance (grows per attempt): absorbs DSN rounding and varies the input
-    # between attempts. Only the DSN sees it; DRC still checks the project's netclass value.
+    # Route with extra clearance: absorbs DSN rounding (and varies the input between attempts).
+    # Only the DSN sees it; DRC still checks the project's netclass value.
     nc = board.GetDesignSettings().m_NetSettings.GetDefaultNetclass()
-    nc.SetClearance(pcbnew.FromMM(0.15 + 0.01 * attempt))
+    nc.SetClearance(pcbnew.FromMM(clearance_mm))
     with tempfile.TemporaryDirectory() as tmp:
         dsn, ses = os.path.join(tmp, f"{name}.dsn"), os.path.join(tmp, f"{name}.ses")
         if not pcbnew.ExportSpecctraDSN(board, dsn):
             raise SystemExit(f"{name}: DSN export failed")
-        args = ["-de", dsn, "-do", ses, "-mp", PASSES, "--gui.enabled=false"]
+        args = ["-de", dsn, "-do", ses, "-mp", passes, "--gui.enabled=false"]
         cmd = [APP] + args if APP else [JAVA, "-jar", JAR] + args
         p = subprocess.run(cmd, capture_output=True, text=True, timeout=5400)
         summary = [ln for ln in (p.stdout + p.stderr).splitlines()
                    if any(k in ln.lower() for k in ("unrouted", "incomplete", "completed", "pass #"))]
-        for ln in summary[-6:]:
+        for ln in summary[-4:]:
             print(f"    freerouting: {ln.strip()[:160]}")
         if not os.path.exists(ses):
             print(p.stdout[-3000:], p.stderr[-3000:])
@@ -261,41 +271,271 @@ def route(name: str, attempt: int = 1) -> None:
             t.SetWidth(pcbnew.FromMM(0.1))
     removed = 0 if os.environ.get("ROUTE_KEEP_VIAS") else remove_dangling_vias(board)
     pcbnew.ZONE_FILLER(board).Fill(board.Zones())
-    board.Save(str(path))
+    return removed
+
+
+def _counts(board) -> tuple[int, int]:
     tracks = sum(1 for t in board.GetTracks() if t.GetClass() == "PCB_TRACK")
-    vias = sum(1 for t in board.GetTracks() if t.GetClass() == "PCB_VIA")
+    return tracks, sum(1 for t in board.GetTracks() if t.GetClass() == "PCB_VIA")
+
+
+def route(path: pathlib.Path, name: str, attempt: int) -> None:
+    """A fresh attempt from the placed board (worker process)."""
+    board = pcbnew.LoadBoard(str(path))
+    fanned = plane_fanout(board)
+    if fanned:
+        print(f"    plane fanout: {fanned} pads given a plane via")
+    removed = freeroute(board, name, PASSES, 0.15 + 0.01 * attempt)
+    board.Save(str(path))
+    tracks, vias = _counts(board)
     print(f"{name}: {tracks} track segments, {vias} vias ({removed} dangling vias removed)")
 
 
+def _by_uuid(board) -> dict:
+    items = list(board.GetPads()) + list(board.GetTracks())
+    return {i.m_Uuid.AsString(): i for i in items}
+
+
+def _anchors(item, layer) -> list:
+    """Points a stitch may start or end on, on one copper layer."""
+    if item.GetClass() == "PCB_VIA":
+        return [item.GetPosition()]
+    if item.GetClass() in ("PCB_TRACK", "PCB_ARC"):
+        return [item.GetStart(), item.GetEnd()] if item.GetLayer() == layer else []
+    if item.GetClass() == "PAD":
+        return [item.GetPosition()] if item.IsOnLayer(layer) else []
+    return []
+
+
+def _escape(pad):
+    """A point straight out of the pad's free end, so the stitch leaves between its neighbours."""
+    fp, pos, size = pad.GetParentFootprint(), pad.GetPosition(), pad.GetBoundingBox()
+    w, h = size.GetWidth(), size.GetHeight()
+    c = fp.GetPosition()
+    if w > h:
+        return pcbnew.VECTOR2I(pos.x + (1 if pos.x > c.x else -1) * (w // 2 + pcbnew.FromMM(0.3)), pos.y)
+    return pcbnew.VECTOR2I(pos.x, pos.y + (1 if pos.y > c.y else -1) * (h // 2 + pcbnew.FromMM(0.3)))
+
+
+def _paths(p, q, via_pad=None) -> list[list]:
+    V = pcbnew.VECTOR2I
+    out = [[p, q], [p, V(q.x, p.y), q], [p, V(p.x, q.y), q]]
+    dx, dy = q.x - p.x, q.y - p.y
+    d = min(abs(dx), abs(dy))
+    sx, sy = (1 if dx > 0 else -1), (1 if dy > 0 else -1)
+    out += [[p, V(p.x + sx * d, p.y + sy * d), q], [p, V(q.x - sx * d, q.y - sy * d), q]]  # 45 degree legs
+    if via_pad is not None:
+        e = _escape(via_pad)
+        out += [[p] + path for path in _paths(e, q)]
+    return out
+
+
+def stitch(board, report: list[dict], margin_mm: float = 0.01) -> int:
+    """Close leftover unconnected pairs with a short, clearance-checked track on a shared layer.
+
+    Freerouting can leave the last connection of a crowded pin open (a VBAT pin in the charger's
+    0.4 mm column). A full re-route to close one gap costs ~30 min; a straight or two-leg track out
+    of the pad between its neighbours usually fits, and DRC re-checks whatever this adds.
+    """
+    F = pcbnew.FromMM
+    edge = board.GetBoardEdgesBoundingBox()
+    edge.Inflate(-F(0.3))
+    keepouts = [z for z in board.Zones() if z.GetIsRuleArea() and z.GetDoNotAllowTracks()]
+    keepouts += [z for fp in board.Footprints() for z in fp.Zones() if z.GetIsRuleArea() and z.GetDoNotAllowTracks()]
+    copper = list(board.GetPads()) + [t for t in board.GetTracks()]
+    fixed = 0
+    by_uuid = _by_uuid(board)
+    for v in report:
+        if v["type"] != "unconnected_items" or len(v["items"]) != 2:
+            continue
+        a, b = (by_uuid.get(i["uuid"]) for i in v["items"])
+        if a is None or b is None or a.GetNetCode() != b.GetNetCode():
+            continue
+        net = a.GetNetCode()
+        nc = board.GetDesignSettings().m_NetSettings.GetEffectiveNetClass(a.GetNetname())
+        clear = max(F(0.15), nc.GetClearance()) + F(margin_mm)
+        widths = [w for w in (nc.GetTrackWidth(), F(0.25), F(0.2), F(0.15), F(0.1)) if w <= nc.GetTrackWidth()]
+        done = False
+        for layer in (pcbnew.F_Cu, pcbnew.B_Cu):
+            pads = [x for x in (a, b) if x.GetClass() == "PAD"]
+            pairs = sorted(((pa, pb) for pa in _anchors(a, layer) for pb in _anchors(b, layer)),
+                           key=lambda ab: (ab[0] - ab[1]).EuclideanNorm())
+            others = [c for c in copper if c.GetNetCode() != net and c.IsOnLayer(layer)]
+            for pa, pb in pairs[:4]:
+                cands = _paths(pa, pb, pads[0] if pads and pads[0].GetPosition() == pa else None)
+                if pads and pads[-1].GetPosition() == pb:
+                    cands += [list(reversed(c)) for c in _paths(pb, pa, pads[-1])]
+                cands.sort(key=lambda c: sum((c[i + 1] - c[i]).EuclideanNorm() for i in range(len(c) - 1)))
+                for width in widths:
+                    for path in cands:
+                        segs = [(path[i], path[i + 1]) for i in range(len(path) - 1) if path[i] != path[i + 1]]
+                        if any(not edge.Contains(pt) for pt in path):
+                            continue
+                        shapes = [pcbnew.SHAPE_SEGMENT(s0, s1, width) for s0, s1 in segs]
+                        if any(o.GetEffectiveShape(layer).Collide(sh, clear) for o in others for sh in shapes):
+                            continue
+                        if any(z.IsOnLayer(layer) and z.Outline().Collide(sh, 0) for z in keepouts for sh in shapes):
+                            continue
+                        for s0, s1 in segs:
+                            t = pcbnew.PCB_TRACK(board)
+                            t.SetStart(s0)
+                            t.SetEnd(s1)
+                            t.SetWidth(width)
+                            t.SetLayer(layer)
+                            t.SetNetCode(net)
+                            board.Add(t)
+                            copper.append(t)
+                        print(f"    stitch: {a.GetNetname()} on {board.GetLayerName(layer)}, "
+                              f"{len(segs)} segment(s), {pcbnew.ToMM(width):.2f} mm")
+                        done = True
+                        break
+                    if done:
+                        break
+                if done:
+                    break
+            if done:
+                break
+        if done:
+            fixed += 1
+        else:
+            print(f"    stitch: no clear path for {a.GetNetname()} near {v['items'][0]['pos']}")
+    return fixed
+
+
+def repair(path: pathlib.Path, name: str) -> None:
+    """Keep the routed board: rip up tracks in clearance violations, then stitch open connections."""
+    board = pcbnew.LoadBoard(str(path))
+    ripped = 0
+    by_uuid = _by_uuid(board)
+    for v in drc_report(path):
+        if v["type"] not in ("clearance", "tracks_crossing", "shorting_items"):
+            continue
+        for item in v["items"]:
+            t = by_uuid.get(item["uuid"])
+            if t is not None and t.GetClass() in ("PCB_TRACK", "PCB_ARC") and not t.IsLocked():
+                board.Delete(t)
+                ripped += 1
+    if ripped:  # ripping opens connections; DRC names them so the stitch can close them
+        board.Save(str(path))
+    fixed = stitch(board, drc_report(path))
+    remove_dangling_vias(board)
+    pcbnew.ZONE_FILLER(board).Fill(board.Zones())
+    board.Save(str(path))
+    print(f"{name}: repair ripped {ripped} segment(s), stitched {fixed} connection(s)")
+
+
+def _workdir(tmp: pathlib.Path, tag: str, name: str, board: pathlib.Path) -> pathlib.Path:
+    """Copy the board folder so each worker has its own project (DRC needs the .kicad_pro and rules)."""
+    root = tmp / tag
+    shutil.copytree(KICAD / name, root / name)
+    (root / "libraries").symlink_to(KICAD / "libraries")  # fp/sym tables use ${KIPRJMOD}/../libraries
+    out = root / name / f"{name}.kicad_pcb"
+    shutil.copy(board, out)
+    return out
+
+
+def _worker(mode: str, name: str, pcb: pathlib.Path, attempt: int, logs: dict) -> subprocess.Popen:
+    log = open(pcb.parent.parent / "log.txt", "w")
+    logs[pcb] = log
+    return subprocess.Popen([sys.executable, __file__, f"--{mode}", name, str(pcb), str(attempt)],
+                            stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
+
+
+def _stop(p: subprocess.Popen) -> None:
+    if p.poll() is None:
+        try:
+            os.killpg(p.pid, signal.SIGTERM)  # takes Freerouting's JVM with it
+        except ProcessLookupError:
+            pass
+        p.wait()
+
+
+def _report(pcb: pathlib.Path) -> None:
+    for ln in (pcb.parent.parent / "log.txt").read_text().splitlines():
+        if ln.startswith(("TL-", "    ")) and "wx" not in ln and "Debug:" not in ln:
+            print(ln)
+
+
 def route_until_clean(name: str) -> bool:
-    """Freerouting is not deterministic; retry from the placed board until DRC has no errors."""
+    """Freerouting is not deterministic: run attempts in parallel, keep the first DRC-clean one.
+
+    With no clean attempt, repair the best one instead of throwing its routing away.
+    """
     path = KICAD / name / f"{name}.kicad_pcb"
-    placed = path.with_suffix(".placed")
-    shutil.copy(path, placed)
-    best = path.with_suffix(".best")
-    best_count = None
-    try:
-        for attempt in range(1, ATTEMPTS + 1):
-            shutil.copy(placed, path)
-            route(name, attempt)
-            errors = drc_errors(path)
-            print(f"  attempt {attempt}: {len(errors)} DRC errors", flush=True)
-            if not errors:
-                return True
+    with tempfile.TemporaryDirectory(prefix=f"route-{name}-") as tmpdir:
+        tmp = pathlib.Path(tmpdir)
+        placed = tmp / f"{name}.placed.kicad_pcb"
+        shutil.copy(path, placed)
+        pending = list(range(1, ATTEMPTS + 1))
+        running: dict[subprocess.Popen, tuple[int, pathlib.Path]] = {}
+        logs: dict = {}
+        done: list[tuple[int, int, pathlib.Path]] = []  # (errors, attempt, pcb)
+        try:
+            while pending or running:
+                while pending and len(running) < JOBS:
+                    a = pending.pop(0)
+                    pcb = _workdir(tmp, f"a{a}", name, placed)
+                    running[_worker("attempt", name, pcb, a, logs)] = (a, pcb)
+                    print(f"  attempt {a}: started", flush=True)
+                finished = [p for p in running if p.poll() is not None]
+                if not finished:
+                    time.sleep(5)
+                    continue
+                for p in finished:
+                    a, pcb = running.pop(p)
+                    logs[pcb].close()
+                    _report(pcb)
+                    if p.returncode != 0:
+                        print(f"  attempt {a}: worker failed (exit {p.returncode})", flush=True)
+                        continue
+                    errors = drc_errors(pcb)
+                    print(f"  attempt {a}: {len(errors)} DRC errors", flush=True)
+                    for e in errors[:5]:
+                        print(f"    {e}")
+                    if not errors:
+                        shutil.copy(pcb, path)
+                        return True
+                    done.append((len(errors), a, pcb))
+        finally:
+            for p in running:
+                _stop(p)
+            for log in logs.values():
+                log.close()
+        if not done:
+            raise SystemExit(f"{name}: every routing attempt failed")
+        best_count, a, best = min(done)
+        print(f"  best attempt {a}: {best_count} DRC errors; repairing", flush=True)
+        for r in range(1, REPAIR_ROUNDS + 1):
+            pcb = _workdir(tmp, f"r{r}", name, best)
+            p = _worker("repair", name, pcb, r, logs)
+            p.wait()
+            logs[pcb].close()
+            _report(pcb)
+            if p.returncode != 0:
+                print(f"  repair {r}: worker failed (exit {p.returncode})")
+                break
+            errors = drc_errors(pcb)
+            print(f"  repair {r}: {len(errors)} DRC errors", flush=True)
             for e in errors[:5]:
                 print(f"    {e}")
-            if best_count is None or len(errors) < best_count:
-                best_count = len(errors)
-                shutil.copy(path, best)
-        shutil.copy(best, path)  # keep the best attempt, not the last
-        print(f"  kept best attempt: {best_count} DRC errors")
-        return False
-    finally:
-        placed.unlink()
-        best.unlink(missing_ok=True)
+            if len(errors) < best_count:
+                best_count, best = len(errors), pcb
+            if not errors:
+                break
+        shutil.copy(best, path)  # keep the best result, not the last
+        if best_count:
+            print(f"  kept best result: {best_count} DRC errors")
+        return best_count == 0
 
 
 def main() -> int:
+    if len(sys.argv) == 5 and sys.argv[1] in ("--attempt", "--repair"):
+        name, pcb, n = sys.argv[2], pathlib.Path(sys.argv[3]), int(sys.argv[4])
+        if sys.argv[1] == "--attempt":
+            route(pcb, name, n)
+        else:
+            repair(pcb, name)
+        return 0
     ok = True
     for name in sys.argv[1:] or BOARDS:
         ok &= route_until_clean(name)

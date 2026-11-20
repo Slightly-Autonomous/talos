@@ -25,8 +25,16 @@ I2cDevice* I2cBus::target(std::uint8_t addr) {
   return it == devices_.end() ? nullptr : it->second;
 }
 
+bool I2cBus::held() const {
+  for (std::size_t b = 0; b < stuck_.size(); ++b) {
+    if (stuck_[b] && (mask_ & (1u << b))) return true;
+  }
+  return false;
+}
+
 bool I2cBus::write(std::uint8_t addr, const std::uint8_t* data, std::size_t n) {
   ++transactions_;
+  if (held()) return false;
   if (addr == mux_) {
     if (n != 1 || mux_nack) return false;
     mask_ = data[0];
@@ -39,6 +47,7 @@ bool I2cBus::write(std::uint8_t addr, const std::uint8_t* data, std::size_t n) {
 bool I2cBus::write_read(std::uint8_t addr, const std::uint8_t* w, std::size_t wn, std::uint8_t* r,
                         std::size_t rn) {
   ++transactions_;
+  if (held()) return false;
   if (addr == mux_) {  // TCA9546A: a read returns the control register
     if (mux_nack || wn != 0 || rn != 1) return false;
     r[0] = mask_;
@@ -52,6 +61,7 @@ bool I2cBus::write_read(std::uint8_t addr, const std::uint8_t* w, std::size_t wn
 
 bool I2cBus::probe(std::uint8_t addr) {
   ++transactions_;
+  if (held()) return false;
   if (addr == mux_) return !mux_nack;
   I2cDevice* d = target(addr);
   return d && d->acks();
@@ -325,8 +335,9 @@ bool Sht40::write(const std::uint8_t* data, std::size_t n) {
       busy_until_ = now + measure_ms;
       ready_ = true;
       return true;
+    case 0x1E:  // heater 20 mW for 1 s: the rise scales with power
     case 0x2F:  // heater 110 mW for 1 s, then a high-precision measurement of the hot die
-      load_measurement(temperature_c + heater_rise_c);
+      load_measurement(temperature_c + heater_rise_c * (data[0] == 0x1E ? 20.0 / 110.0 : 1.0));
       busy_until_ = now + 1'100;
       ready_ = true;
       return true;
@@ -411,10 +422,9 @@ std::optional<Downlink> Link::receive() {
 
 RevABoard::RevABoard(const BoardSupport& board) : board_(board) {
   exp_a.external = [this](std::uint8_t pin) {
-    // P00-03 SW_EN: 1M pull-down; P04-07 AON_EN: 100k pull-up;
+    // P00-03 SW_EN and P04-07 AON_EN: 1M pull-downs (both rails default off);
     // P10-17 RESET_N/CS_N: 100k pull-up to the slot's AON.
-    if (pin < 4) return false;
-    if (pin < 8) return true;
+    if (pin < 8) return false;
     return aon_on(static_cast<std::uint8_t>((pin - 8) % 4));
   };
   exp_b.external = [this](std::uint8_t pin) {
@@ -437,8 +447,14 @@ RevABoard::RevABoard(const BoardSupport& board) : board_(board) {
         return !charger.vin_good;  // CHG_PG_N
       case 14:
         return source == Source::kUsb;  // PMUX_ST: high while IN1 (USB) is selected
+      case 15: {  // SW_FAULT_N: 100k pull-up, wired-OR open-drain FAULT_N of the SW switches
+        for (std::uint8_t slot = 0; slot < kSlots; ++slot) {
+          if (sw_overload[slot] && sw_on(slot)) return false;
+        }
+        return true;
+      }
       default:
-        return false;  // EXPB_SPARE
+        return false;
     }
   };
 }
@@ -449,7 +465,7 @@ bool RevABoard::expander_pin(const ExpanderPin& p, bool undriven) const {
 }
 
 bool RevABoard::aon_on(std::uint8_t slot) const {
-  return expander_pin(board_.slot_io[slot].aon_enable, true);
+  return expander_pin(board_.slot_io[slot].aon_enable, false);
 }
 bool RevABoard::sw_on(std::uint8_t slot) const {
   return aon_on(slot) && expander_pin(board_.slot_io[slot].sw_enable, false);
@@ -482,6 +498,14 @@ Node::Node(BoardSupport b, std::uint32_t flash_capacity, ILink* link_override)
           board} {}
 
 IPower& Node::select_power() {
+  if (board.mux_reset_line != 0xFF) {
+    gpio.on_write = [this](std::uint8_t line, bool level) {
+      if (line == board.mux_reset_line && !level) {
+        i2c.reset_mux();
+        ++i2c.mux_resets;
+      }
+    };
+  }
   if (!board.slot_io[0].aon_enable.wired()) return power;
   rev_a_.emplace(board);
   i2c.attach(I2cBus::kRoot, board.slot_io[0].aon_enable.address, &rev_a_->exp_a);

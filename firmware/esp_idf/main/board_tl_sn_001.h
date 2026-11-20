@@ -20,13 +20,16 @@ inline constexpr std::uint8_t kSlotWake[kSlots] = {10, 11, 12, 13};  // LP GPIOs
 inline constexpr int kExpanderInt = 14;     // TCA9535 INT wired-OR, LP GPIO
 inline constexpr int kStatusLed = 8;        // strap pin, active low, 10k pull-up
 inline constexpr int kBatterySenseAdc = 1;  // ADC1_CH0, 4.7M/4.7M divider
+// TCA9546A RESET_N through R_MUXRST (0R) from the U0RXD pad; R33 100k keeps it
+// high until the GPIO is configured. Pull the 0R to use UART0 RX for a console.
+inline constexpr std::uint8_t kMuxReset = 23;
 
 // I/O expanders and charger on the root I2C bus (intended-netlist.json):
 //   EXP_A 0x20: P00-P03 SLOT_SW_EN0-3, P04-P07 SLOT_AON_EN0-3,
 //               P10-P13 SLOTn_RESET_N, P14-P17 SLOTn_CS_N
 //   EXP_B 0x21: P00-P03 SLOTn_PRESENT_N, P04-P07 SLOTn_ALERT_N, P10/P11 UART_SEL0/1,
 //               P12 UART_MUX_EN_N, P13 PRESENT_PROBE, P14 CHG_INT_N, P15 CHG_PG_N,
-//               P16 PMUX_ST, P17 spare
+//               P16 PMUX_ST, P17 SW_FAULT_N (wired-OR, 100k pull-up)
 //   BQ25186 0x6A. Pin n of port 1 is expander pin 8 + n.
 inline constexpr std::uint8_t kExpA = 0x20;
 inline constexpr std::uint8_t kExpB = 0x21;
@@ -51,6 +54,8 @@ inline BoardSupport tl_sn_001() {
   b.charger_int_n = {kExpB, 12};
   b.charger_pg_n = {kExpB, 13};
   b.source_st = {kExpB, 14};
+  b.sw_fault_n = {kExpB, 15};
+  b.mux_reset_line = kMuxReset;
   b.charger_address = kCharger;
   return b;
 }

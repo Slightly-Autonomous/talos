@@ -56,19 +56,38 @@ std::array<std::uint8_t, kIdBlockSize> make_id_block(ModuleCode code, std::uint8
 
 // --- SlotIo -----------------------------------------------------------------------------
 
+namespace {
+
+// TCA9546A RESET_N low clears the control register (every branch off), which
+// frees a root bus that a card holds stuck through its branch. 1 ms is far
+// beyond the 6 ns minimum pulse.
+bool reset_mux(Platform& p) {
+  const std::uint8_t line = p.board.mux_reset_line;
+  if (line == 0xFF || !p.gpio.write(line, false)) return false;
+  p.clock.delay_ms(1);
+  p.gpio.write(line, true);
+  return true;
+}
+
+}  // namespace
+
 bool SlotIo::select_branch() {
   const auto branch = wiring().i2c_branch;
   if (branch == 0xFF) return false;
   const std::uint8_t mask = static_cast<std::uint8_t>(1u << branch);
   selected_ = true;  // even on failure: the mux may have latched it
-  return p_.i2c.write(p_.board.mux_address, &mask, 1);
+  if (p_.i2c.write(p_.board.mux_address, &mask, 1)) return true;
+  // The root bus may be held by the branch selected last: reset the mux and try once more.
+  return reset_mux(p_) && p_.i2c.write(p_.board.mux_address, &mask, 1);
 }
 
 bool SlotIo::deselect() {
   if (!selected_) return true;
   selected_ = false;
   const std::uint8_t none = 0;
-  return p_.i2c.write(p_.board.mux_address, &none, 1);
+  if (p_.i2c.write(p_.board.mux_address, &none, 1)) return true;
+  // A card holding SDA low blocks the deselect itself; the reset line still works.
+  return reset_mux(p_);
 }
 
 bool SlotIo::read_wake_line() {

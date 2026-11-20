@@ -118,7 +118,7 @@ BoardIo::BoardIo(II2c& i2c, IClock& clock, IBatteryAdc& adc, const BoardSupport&
   }
   for (const auto* p :
        {&board_.present_probe, &board_.uart_sel0, &board_.uart_sel1, &board_.uart_mux_en_n,
-        &board_.charger_int_n, &board_.charger_pg_n, &board_.source_st}) {
+        &board_.charger_int_n, &board_.charger_pg_n, &board_.source_st, &board_.sw_fault_n}) {
     add(*p);
   }
   if (board_.charger_address) charger_.emplace(i2c_, board_.charger_address);
@@ -169,12 +169,14 @@ bool BoardIo::begin() {
   };
   for (std::uint8_t i = 0; i < kSlots; ++i) {
     const auto& s = board_.slot_io[i];
-    // AON matches its hardware default (pull-up: on), SW stays off until asked.
-    plan(s.aon_enable, true);
+    // Both rails match their hardware default (pull-downs: off). The runtime
+    // powers seated slots one at a time during discovery, so a shorted card
+    // can't take the whole node down at power-on.
+    plan(s.aon_enable, false);
     plan(s.sw_enable, false);
-    plan(s.reset_n, true);  // AON is on, so the card's lines are deasserted (high)
-    plan(s.cs_n, true);
-    rails_[i] = {s.aon_enable.wired(), false};
+    plan(s.reset_n, false);  // AON is off: card lines low, no backfeed through its pull-ups
+    plan(s.cs_n, false);
+    rails_[i] = {false, false};
   }
   plan(board_.present_probe, false);  // probe only while reading: saves 33 uA per card
   plan(board_.uart_mux_en_n, true);   // UART mux parked
@@ -271,6 +273,22 @@ void BoardIo::service() {
     charger_ok_ = charger_->configure(want);
   }
   last_source_ = src;
+}
+
+std::uint8_t BoardIo::take_sw_faults() {
+  std::uint8_t on = 0;
+  for (std::uint8_t i = 0; i < kSlots; ++i)
+    on = static_cast<std::uint8_t>(on | (rails_[i][1] << i));
+  if (!on || !board_.sw_fault_n.wired())
+    return 0;  // no SW rail on: nothing can trip, no bus traffic
+  const auto level = sense(board_.sw_fault_n);
+  if (!level || *level) return 0;
+  // FAULT_N is wired-OR across the four switches, so the slot can't be told
+  // apart: every SW rail that was on goes off, and each one is reported.
+  for (std::uint8_t i = 0; i < kSlots; ++i) {
+    if (on & (1u << i)) set_rail(i, Rail::kSwitched3v3, false);
+  }
+  return on;
 }
 
 bool BoardIo::select_uart(std::optional<std::uint8_t> slot) {

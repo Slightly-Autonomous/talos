@@ -56,6 +56,10 @@ const char* fault_name(fw::ModuleFault f) {
       return "module interrupt stuck";
     case fw::ModuleFault::kWarmupTimeout:
       return "module never settled after power-up";
+    case fw::ModuleFault::kRailFault:
+      return "slot switched rail overloaded and shut off";
+    case fw::ModuleFault::kPowerQuarantined:
+      return "slot held unpowered after a reset while powering it";
   }
   return "fault";
 }

@@ -79,6 +79,19 @@ SYMBOLS = {
             ("12", "GND", "power_in", "B"),
         ],
     },
+    "TPS2553": {
+        "ref": "U",
+        "source": "TI SLVS841G Table 5-1 (DBV SOT-23-6); -1 = latch-off variant",
+        "footprint": "Package_TO_SOT_SMD:SOT-23-6",
+        "pins": [
+            ("1", "IN", "power_in", "L"),
+            ("3", "EN", "input", "L"),
+            ("5", "ILIM", "passive", "L"),
+            ("6", "OUT", "power_out", "R"),
+            ("4", "~{FAULT}", "open_collector", "R"),
+            ("2", "GND", "power_in", "B"),
+        ],
+    },
     "LIS2DW12": {
         "ref": "U",
         "source": "ST DS11811 Rev 8 Table 1 (LGA-12)",

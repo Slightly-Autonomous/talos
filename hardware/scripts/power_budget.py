@@ -33,7 +33,7 @@ SLEEP_LOADS = [
     Load("ESP32-H2 deep sleep (LP timer + LP mem on)", 7.0, "3v3", "SRC MINI-1 v1.6 Table 16"),
     Load("TCA9546A standby", 1.0, "3v3", "SRC SCPS205B ICC standby typ @3.6 V"),
     Load("TCA9535 x2 standby", 2 * 0.9, "3v3", "SRC SCPS201F ICC standby typ @3.6 V"),
-    Load("TPS22917 x4 AON enabled (IQ)", 4 * 0.5, "3v3", "SRC SLVSDW8B IQ 0.5 uA typ"),
+    Load("TPS22917 x4 AON enabled (IQ; worst case, firmware powers seated slots only)", 4 * 0.5, "3v3", "SRC SLVSDW8B IQ 0.5 uA typ"),
     Load("TPS22917 x4 SW disabled (ISD)", 4 * 0.010, "3v3", "SRC SLVSDW8B ISD 10 nA typ"),
     # W&S mode, 100 ms SLEEPTIME, one axis (door closed). EST interpolated from SLYS045C ICC_DCM:
     # 1.21 uA @5 s and 160 uA @1 ms (1 ch) -> ~1.18 uA floor + ~0.17 uC/conversion. Door open (3 axes) ~3.8 uA.
