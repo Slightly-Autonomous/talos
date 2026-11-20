@@ -225,8 +225,13 @@ TEST(CoapIngress, SignedOtaCampaignUpdatesTheNodeEndToEnd) {
   c.set_device_id("node-12");
   c.set_version(2);
   ASSERT_TRUE(f.hub->start_campaign(PrincipalId("owner"), c).ok());
-  // Offer arrives on the next contact (heartbeat), then chunks stream.
-  pump(f, n, 7'000);
+  // Offer arrives on the next contact (heartbeat), then chunks stream over real UDP. Wait on
+  // the outcome: under ASan the hub thread answers slower than virtual time runs, and the
+  // node's retries stretch the download past any fixed tick budget (7'000 ticks failed in CI).
+  EXPECT_TRUE(pump_until(f, n, 30'000, [&] {
+    return n.node.reboots() == 1u && n.node.runtime().running_version() == 2u &&
+           n.node.runtime().ota().active_version == 2u;  // confirmed after the post-boot check
+  }));
   EXPECT_EQ(n.node.reboots(), 1u);
   EXPECT_EQ(n.node.runtime().running_version(), 2u);
   EXPECT_EQ(n.node.runtime().ota().active_version, 2u);
