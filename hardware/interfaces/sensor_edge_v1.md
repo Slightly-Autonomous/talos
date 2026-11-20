@@ -6,7 +6,7 @@ Twenty contacts, 0.80 mm pitch, 2 × 10. The card is a 1.60 mm PCB with gold fin
 |---|---|---|---|---|
 | 1 | GND | – | ground | ground |
 | 2 | GND | – | ground | ground |
-| 3 | V3V3_AON_n | main→card | TPS22917, default OFF (1 MΩ pull-down); firmware powers seated slots one at a time, ≤ 20 mA *(est)* | ID EEPROM and anything on the I²C branch |
+| 3 | V3V3_AON_n | main→card | TPS22917, default OFF (1 MΩ pull-down), 1 nF CT for a ~2 ms ramp (inrush ≤ 30 mA into 10 µF); firmware powers seated slots one at a time, ≤ 20 mA *(est)* | ID EEPROM and anything on the I²C branch |
 | 4 | V3V3_SW_n | main→card | TPS2553-1, default OFF, latch-off current limit 155–207 mA, FAULT_N to EXP_B, 100 kΩ bleed | higher-current sensing only, no I²C devices unless buffered |
 | 5 | V5_SW (reserved) | main→card | **not connected** | leave unconnected |
 | 6 | GND | – | ground | ground |
@@ -31,4 +31,5 @@ Twenty contacts, 0.80 mm pitch, 2 × 10. The card is a 1.60 mm PCB with gold fin
 - **S-3:** Firmware holds SPI_SCK/MOSI low and keeps the UART mux disabled (`UART_MUX_EN_N` high) whenever the addressed slot's rails are off.
 - **S-4:** One card UART is active at a time (one UART1, one mux). The board manifest declares `uart_channels: 1`, and the validator rejects two UART cards that need concurrent operation. Bench fixtures (`test_fixture: true`, TL-TEST-001) are exempt: the firmware routes the mux to one at a time.
 - **S-5:** No hot-swap. Cards are inserted with the node off.
+- **S-7:** The SW current limit (155–207 mA) protects one slot; it is not a guarantee that every slot can draw it at once. All rails come from the TPS63900 (0.4 A at 3.3 V guaranteed), so the firmware admits module load within the board's budget (`usb_sustained_mw` = 800 mW on TL-SN-001) and refuses the rest (`kDisabledForPower`).
 - **S-6:** Current per contact is ≤ 1 A design limit. The 2.3 A rating is for 2 pins powered *(src)*, so derate for plating and temperature at review.

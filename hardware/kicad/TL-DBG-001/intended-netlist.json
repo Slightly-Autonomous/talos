@@ -118,14 +118,14 @@
    "dnp": true,
    "footprint": "Capacitor_SMD:C_0402_1005Metric",
    "lib_id": "Device:C",
-   "note": "TPS22917 CT option",
+   "note": "TPS22917 CT option, to VIN (SLVSDW8B 9.3.2)",
    "pin_names": {
     "1": "",
     "2": ""
    },
    "pins": {
     "1": "AON_CT",
-    "2": "GND"
+    "2": "V3V3"
    },
    "value": "DNP"
   },

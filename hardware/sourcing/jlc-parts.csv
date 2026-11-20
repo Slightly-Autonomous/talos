@@ -1,5 +1,6 @@
 value,footprint,assembly,lcsc,mpn,manufacturer,risk,note
 100n,C_0402_1005Metric,jlc,C1525,CL05B104KO5NNNC,Samsung,,16 V X7R basic
+1n,C_0402_1005Metric,jlc,C1523,0402B102K500NT,FH (Guangdong Fenghua Advanced Tech),,50 V X7R basic (TPS22917 CT, VCT >= 7 V)
 1u,C_0402_1005Metric,jlc,C52923,CL05A105KA5NQNC,Samsung,,25 V X5R basic
 10u,C_0805_2012Metric,jlc,C15850,CL21A106KAYNNNE,Samsung,,25 V X5R basic
 10u/25V,C_0805_2012Metric,jlc,C15850,CL21A106KAYNNNE,Samsung,,25 V X5R basic

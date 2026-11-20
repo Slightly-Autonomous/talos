@@ -255,7 +255,9 @@ def sensor_node() -> Board:
             # Owner decision 2: default off, so a shorted card can't hold the node in a boot loop
             R(f"R{21 + n}", "1M", f"SLOT_AON_EN{n}", "GND", "AON default off"),
             C(f"C{13 + n}", "1u", f"V3V3_AON_{n}"),
-            C(f"C{27 + n}", "DNP", f"SLOT_AON_CT{n}", dnp=True, note="TPS22917 CT option (slower ramp)"),
+            # CT goes to VIN, not GND (SLVSDW8B 9.3.2). 1 nF: ~1.9 mV/us, inrush 26 mA instead of 0.5 A
+            # into a 10 uF card, which could brown out the ESP32 (spice_sim.py B1, finding S-1).
+            C(f"C{27 + n}", "1n", f"SLOT_AON_CT{n}", core, note="TPS22917 CT to VIN: slow AON ramp"),
             # Owner decision 3: current-limited switch with FAULT on SW (TPS22917 has no limit)
             Part(f"U{10 + n}", "talos:TPS2553", "TPS2553DBVR-1",
                  {"1": core, "2": "GND", "3": f"SLOT_SW_EN{n}", "4": "SW_FAULT_N", "5": f"SW_ILIM{n}",
@@ -401,7 +403,7 @@ def debug_adapter() -> Board:
              note="card AON switch, default off on the adapter"),
         R("R4", "1M", "DBG_AON_EN", "GND"),
         R("R17", "0R", "AON_QOD", "AON_METER", "QOD to VOUT: card AON decays fast between power cycles"),
-        C("C8", "DNP", "AON_CT", dnp=True, note="TPS22917 CT option"),
+        C("C8", "DNP", "AON_CT", v, dnp=True, note="TPS22917 CT option, to VIN (SLVSDW8B 9.3.2)"),
         Part("JP1", "Connector_Generic:Conn_01x02", "AON meter", {"1": "AON_METER", "2": "V3V3_AON"},
              "Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical",
              "shunt fitted for normal use; remove and insert a PPK2 (ammeter) to measure card AON current"),

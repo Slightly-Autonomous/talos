@@ -22,7 +22,7 @@ import numpy as np
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 OUT = ROOT / "hardware" / "results" / "magnet.md"
 
-CLOSE_MT, OPEN_MT, RANGE_MT = 3.0, 1.5, 40.0  # modules.h kCloseUt, kOpenUt, kLsbPerMt range
+CLOSE_MT, OPEN_MT, RANGE_MT = 20.0, 10.0, 40.0  # modules.h kCloseUt, kOpenUt, kLsbPerMt range
 BR = {"N35": 1.17, "N52": 1.42}  # T, low end of grade (IEC 60404-8-1 style grade tables)
 MAGNETS = [  # (label, shape, dimensions in mm, grade)
     ("disc 6 x 3 mm", "cyl", (6, 3), "N35"),
@@ -75,7 +75,7 @@ def build() -> str:
               "| Magnet | Close / open (mT) | Closes within (mm) | Opens beyond (mm) |", "|---|---|---:|---:|"]
     for label, shape, dims, grade in (MAGNETS[0], MAGNETS[3]):
         src = magnet(shape, dims, BR[grade])
-        for c, o in ((CLOSE_MT, OPEN_MT), (10.0, 5.0), (20.0, 10.0), (35.0, 20.0)):
+        for c, o in ((3.0, 1.5), (10.0, 5.0), (CLOSE_MT, OPEN_MT), (35.0, 20.0)):
             lines.append(f"| {label} {grade} | {c:g} / {o:g} | {crossing(src, 0.0, c):.1f} | {crossing(src, 0.0, o):.1f} |")
     lines += ["", "Reading: a door gap below *closes within* reads closed; above *opens beyond* reads open; between "
               "the two the last state holds (hysteresis). Saturation above 40 mT is harmless for a contact (the "

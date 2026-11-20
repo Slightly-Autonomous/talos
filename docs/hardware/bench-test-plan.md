@@ -140,7 +140,7 @@ current within the budget line after the D-07 baseline.
 | C1-03 | MOD-001 | Forced threshold (-40 mT, wake-and-sleep): WAKE without a magnet | WAKE ≥ 3.1 V within 5 ms; MAG_INT_N ≤ 0.4 V; I²C access clears it |
 | C1-04 | MOD-001 | AON off | WAKE 0, AON < 0.1 V |
 | C1-05 | MOD-001 | Armed current, door closed / open | ≤ 4 µA / ≤ 5 µA for the card |
-| C1-06 | MOD-001 | Distance sweep, 4 orientations, both polarities | 3 mT and 1.5 mT crossing gaps recorded; offset ≤ ±1 mT |
+| C1-06 | MOD-001 | Distance sweep, 4 orientations, both polarities, reference 20 × 5 × 3 mm N35 magnet | 20 mT and 10 mT crossing gaps recorded (model: ~10 / ~14 mm, `hardware/results/magnet.md`); offset ≤ ±1 mT |
 | C2-01 | MOD-002 | Steady AON current after warm-up | EEPROM + 1 µA ±1 µA; mA means rotated: power off |
 | C2-02 | MOD-002 | Warm-up time ×5 (still scene) | settles ≤ 30 s typ; fail > 210 s |
 | C2-03 | MOD-002 | Hand wave at 30 cm | WAKE ≤ 0.5 s; hold 2–4 s; no retrigger in the 1.3 s mask |

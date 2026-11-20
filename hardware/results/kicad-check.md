@@ -4,13 +4,13 @@
 
 | Board | Parts | ERC errors | ERC warnings | Waived | Netlist round-trip | Safe defaults | PCB DRC errors | PCB DRC warnings |
 |---|---:|---:|---:|---:|---|---|---:|---:|
-| TL-SN-001 | 192 | 0 | 0 | 0 | match | ok | 0 | 111 |
+| TL-SN-001 | 192 | 0 | 0 | 0 | match | ok | 0 | 100 |
 | TL-MOD-001 | 11 | 0 | 0 | 0 | match | ok | 0 | 11 |
 | TL-MOD-002 | 8 | 0 | 0 | 0 | match | ok | 0 | 6 |
 | TL-MOD-003 | 9 | 0 | 0 | 1 | match | ok | 0 | 17 |
 | TL-MOD-004 | 7 | 0 | 0 | 0 | match | ok | 0 | 6 |
 | TL-TEST-001 | 31 | 0 | 0 | 0 | match | ok | 0 | 37 |
-| TL-DBG-001 | 64 | 0 | 0 | 0 | match | ok | 0 | 59 |
+| TL-DBG-001 | 64 | 0 | 0 | 0 | match | ok | 0 | 44 |
 
 ## Cross-board connector check (sensor_edge_v1)
 
@@ -20,7 +20,7 @@
 
 - ERC: no violations
 - Netlist: KiCad export equals the intended netlist
-- PCB DRC (with schematic parity): lib_footprint_issues 3, nonmirrored_text_on_back_layer 2, silk_edge_clearance 6, silk_over_copper 43, silk_overlap 57
+- PCB DRC (with schematic parity): lib_footprint_issues 3, nonmirrored_text_on_back_layer 2, silk_edge_clearance 6, silk_over_copper 35, silk_overlap 54
 
 ## TL-MOD-001
 
@@ -56,6 +56,6 @@
 
 - ERC: no violations
 - Netlist: KiCad export equals the intended netlist
-- PCB DRC (with schematic parity): nonmirrored_text_on_back_layer 2, silk_edge_clearance 2, silk_over_copper 23, silk_overlap 32
+- PCB DRC (with schematic parity): nonmirrored_text_on_back_layer 2, silk_edge_clearance 2, silk_over_copper 15, silk_overlap 25
 
 **Overall: PASS**

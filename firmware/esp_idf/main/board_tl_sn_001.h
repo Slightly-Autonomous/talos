@@ -57,6 +57,10 @@ inline BoardSupport tl_sn_001() {
   b.sw_fault_n = {kExpB, 15};
   b.mux_reset_line = kMuxReset;
   b.charger_address = kCharger;
+  // Module admission budget on USB (provisional): every slot rail hangs off the TPS63900, which
+  // guarantees 0.4 A x 3.3 V = 1.32 W; the MCU's 802.15.4 TX burst takes ~0.5 W of it. The generic
+  // 2500 mW default would admit loads the regulator cannot supply (hardware/results/pi.md, S-2).
+  b.usb_sustained_mw = 800;
   return b;
 }
 

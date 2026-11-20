@@ -224,37 +224,37 @@
     {
       "name": "PI_LOAD",
       "ref": "J4",
-      "value": "/V3V3_AON_0=5mA, /V3V3_SW_0=150mA",
+      "value": "/V3V3_AON_0=5mA, /V3V3_SW_0=55mA",
       "source": {
         "kind": "design",
-        "note": "sensor_edge_v1: 150 mA SW budget per slot; AON 5 mA EST"
+        "note": "firmware admission caps module load at usb_sustained_mw = 800 mW: 4 x 55 mA x 3.3 V = 726 mW (board_tl_sn_001.h, finding S-2); AON 5 mA EST"
       }
     },
     {
       "name": "PI_LOAD",
       "ref": "J5",
-      "value": "/V3V3_AON_1=5mA, /V3V3_SW_1=150mA",
+      "value": "/V3V3_AON_1=5mA, /V3V3_SW_1=55mA",
       "source": {
         "kind": "design",
-        "note": "sensor_edge_v1: 150 mA SW budget per slot; AON 5 mA EST"
+        "note": "firmware admission caps module load at usb_sustained_mw = 800 mW: 4 x 55 mA x 3.3 V = 726 mW (board_tl_sn_001.h, finding S-2); AON 5 mA EST"
       }
     },
     {
       "name": "PI_LOAD",
       "ref": "J6",
-      "value": "/V3V3_AON_2=5mA, /V3V3_SW_2=150mA",
+      "value": "/V3V3_AON_2=5mA, /V3V3_SW_2=55mA",
       "source": {
         "kind": "design",
-        "note": "sensor_edge_v1: 150 mA SW budget per slot; AON 5 mA EST"
+        "note": "firmware admission caps module load at usb_sustained_mw = 800 mW: 4 x 55 mA x 3.3 V = 726 mW (board_tl_sn_001.h, finding S-2); AON 5 mA EST"
       }
     },
     {
       "name": "PI_LOAD",
       "ref": "J7",
-      "value": "/V3V3_AON_3=5mA, /V3V3_SW_3=150mA",
+      "value": "/V3V3_AON_3=5mA, /V3V3_SW_3=55mA",
       "source": {
         "kind": "design",
-        "note": "sensor_edge_v1: 150 mA SW budget per slot; AON 5 mA EST"
+        "note": "firmware admission caps module load at usb_sustained_mw = 800 mW: 4 x 55 mA x 3.3 V = 726 mW (board_tl_sn_001.h, finding S-2); AON 5 mA EST"
       }
     }
   ]

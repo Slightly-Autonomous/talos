@@ -1,5 +1,8 @@
 # PROVISIONAL. TL-MOD-001: TMAG5273A1 3-axis Hall (orientation-independent, SLYS045C) + SN74AUP1G04
 # INT inverter + 24AA025E ID. The host configures wake-up-and-sleep mode after every power-up.
+# Reference magnet (provisional, owner decision 2026-11-20): 20 x 5 x 3 mm N35 block, poles on the
+# 3 mm faces. Firmware: closed > 20 mT, open < 10 mT, so closed within ~10 mm, open beyond ~14 mm
+# (hardware/results/magnet.md, free space; a steel door changes it: bench C1-06).
 id: tl_mod_001_magnetic
 revision: a
 provisional: true

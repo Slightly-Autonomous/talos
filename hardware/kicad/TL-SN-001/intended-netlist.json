@@ -307,51 +307,51 @@
   },
   "C27": {
    "datasheet": "~",
-   "dnp": true,
+   "dnp": false,
    "footprint": "Capacitor_SMD:C_0402_1005Metric",
    "lib_id": "Device:C",
-   "note": "TPS22917 CT option (slower ramp)",
+   "note": "TPS22917 CT to VIN: slow AON ramp",
    "pin_names": {
     "1": "",
     "2": ""
    },
    "pins": {
     "1": "SLOT_AON_CT0",
-    "2": "GND"
+    "2": "V3V3_CORE"
    },
-   "value": "DNP"
+   "value": "1n"
   },
   "C28": {
    "datasheet": "~",
-   "dnp": true,
+   "dnp": false,
    "footprint": "Capacitor_SMD:C_0402_1005Metric",
    "lib_id": "Device:C",
-   "note": "TPS22917 CT option (slower ramp)",
+   "note": "TPS22917 CT to VIN: slow AON ramp",
    "pin_names": {
     "1": "",
     "2": ""
    },
    "pins": {
     "1": "SLOT_AON_CT1",
-    "2": "GND"
+    "2": "V3V3_CORE"
    },
-   "value": "DNP"
+   "value": "1n"
   },
   "C29": {
    "datasheet": "~",
-   "dnp": true,
+   "dnp": false,
    "footprint": "Capacitor_SMD:C_0402_1005Metric",
    "lib_id": "Device:C",
-   "note": "TPS22917 CT option (slower ramp)",
+   "note": "TPS22917 CT to VIN: slow AON ramp",
    "pin_names": {
     "1": "",
     "2": ""
    },
    "pins": {
     "1": "SLOT_AON_CT2",
-    "2": "GND"
+    "2": "V3V3_CORE"
    },
-   "value": "DNP"
+   "value": "1n"
   },
   "C3": {
    "datasheet": "~",
@@ -371,19 +371,19 @@
   },
   "C30": {
    "datasheet": "~",
-   "dnp": true,
+   "dnp": false,
    "footprint": "Capacitor_SMD:C_0402_1005Metric",
    "lib_id": "Device:C",
-   "note": "TPS22917 CT option (slower ramp)",
+   "note": "TPS22917 CT to VIN: slow AON ramp",
    "pin_names": {
     "1": "",
     "2": ""
    },
    "pins": {
     "1": "SLOT_AON_CT3",
-    "2": "GND"
+    "2": "V3V3_CORE"
    },
-   "value": "DNP"
+   "value": "1n"
   },
   "C31": {
    "datasheet": "~",

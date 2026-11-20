@@ -40,7 +40,7 @@ P = {
     "aon_ron": (0.090, "TPS22917 RON 90 mOhm typ at VIN 3.6 V, 25 C (SLVSDW8B 6.5)"),
     "aon_slew": (44e3, "TPS22917 SRON 44 mV/us with CT open at VIN 3.6 V (SLVSDW8B 6.6); C27-30 are DNP"),
     "aon_slew_ct": (1900e3, "TPS22917 SRON 1900 (mV/us)*pF with CT >= 100 pF at VIN 3.6 V (SLVSDW8B 6.6)"),
-    "ct_fix": (1e-9, "Proposed: populate C27-C30 (CT, DNP today) with 1 nF"),
+    "ct_fix": (1e-9, "C27-C30 1 nF from CT to VIN (fitted 2026-11-20, finding S-1)"),
     "c_slot": (1e-6, "C13-C16 1 uF on each V3V3_AON_n (intended-netlist.json)"),
     "c_mod003": (10.2e-6, "TL-MOD-003 card: C3 10 uF + C1, C2 100 nF on V3V3_AON"),
     "c_mod004": (0.2e-6, "TL-MOD-004 card: C1, C2 100 nF on V3V3_AON"),
@@ -173,11 +173,11 @@ def slot_inrush(ng: NgSpice) -> Bench:
     for card, c_card in (("TL-MOD-004 (0.2 uF)", v("c_mod004")), ("TL-MOD-003 (10.2 uF)", v("c_mod003"))):
         for reg_label, imax in (("reg 0.4 A (min)", v("reg_imax_min")), ("reg 1.0 A (EST typ)", v("reg_imax_typ"))):
             for tx in (False, True):
-                cases.append((card, c_card, reg_label, imax, tx, v("aon_slew"), "CT open (today)"))
+                cases.append((card, c_card, reg_label, imax, tx, v("aon_slew"), "CT open (before S-1)"))
     slew_fix = v("aon_slew_ct") / (v("ct_fix") * 1e12)  # mV/us*pF over pF, in V/s
     for tx in (False, True):
         cases.append(("TL-MOD-003 (10.2 uF)", v("c_mod003"), "reg 0.4 A (min)", v("reg_imax_min"), tx, slew_fix,
-                      "CT = 1 nF (proposed)"))
+                      "CT = 1 nF (fitted)"))
     for card, c_card, reg_label, imax, tx, slew, ct in cases:
             ramp_end = t_on + 3.6 / slew
             t_stop = ramp_end + 400e-6

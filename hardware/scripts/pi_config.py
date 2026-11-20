@@ -6,7 +6,8 @@
 
 kisi (github.com/riehlies/kisi, GPL-3.0, run as an external tool; nothing of it is vendored) reads
 <board>.kisi.json next to the board. This file describes the USB-powered worst case: USB in through the
-TPS2121 and BQ25186, the charger charging at 300 mA, the radio transmitting, and every slot at its SW budget.
+TPS2121 and BQ25186, the charger charging at 300 mA, the radio transmitting, and the slots drawing
+what the firmware's 800 mW admission budget allows.
 kisi has one power tree per board, so battery-only operation is not modelled here (power_budget.py covers it).
 Every value carries a source; kind "estimate"/"assumption" marks what the bench must replace.
 """
@@ -55,8 +56,9 @@ FIELDS = [
 ] + [
     ("PI_THERMAL", f"J{4 + i}", "p=0W", src("design", "card load dissipates on the card")) for i in range(4)
 ] + [
-    ("PI_LOAD", f"J{4 + i}", f"/V3V3_AON_{i}=5mA, /V3V3_SW_{i}=150mA",
-     src("design", "sensor_edge_v1: 150 mA SW budget per slot; AON 5 mA EST")) for i in range(4)
+    ("PI_LOAD", f"J{4 + i}", f"/V3V3_AON_{i}=5mA, /V3V3_SW_{i}=55mA",
+     src("design", "firmware admission caps module load at usb_sustained_mw = 800 mW: 4 x 55 mA x 3.3 V "
+                   "= 726 mW (board_tl_sn_001.h, finding S-2); AON 5 mA EST")) for i in range(4)
 ]
 
 

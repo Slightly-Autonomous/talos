@@ -6424,7 +6424,7 @@
 				(hide yes)
 			)
 		)
-		(property "Talos_Note" "TPS22917 CT option"
+		(property "Talos_Note" "TPS22917 CT option, to VIN (SLVSDW8B 9.3.2)"
 			(at 426.72 48.26 0)
 			(effects
 				(font
@@ -6480,7 +6480,7 @@
 		)
 		(uuid "a1e66b4f-42d9-5ec2-b2af-70d69266d3c5")
 	)
-	(label "GND"
+	(label "V3V3"
 		(at 426.72 54.61 270)
 		(effects
 			(font

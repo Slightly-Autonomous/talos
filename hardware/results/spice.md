@@ -8,16 +8,16 @@ Does turning on a slot's TPS22917 sag V3V3_CORE below the ESP32's 3.0 V minimum?
 
 | Case | V3V3_CORE min (V) | inrush peak (A) | Result |
 |---|---:|---:|---|
-| TL-MOD-004 (0.2 uF), CT open (today), reg 0.4 A (min), radio idle | 3.295 | 0.058 | pass |
-| TL-MOD-004 (0.2 uF), CT open (today), reg 0.4 A (min), TX burst at the same time | 3.286 | 0.058 | pass |
-| TL-MOD-004 (0.2 uF), CT open (today), reg 1.0 A (EST typ), radio idle | 3.295 | 0.058 | pass |
-| TL-MOD-004 (0.2 uF), CT open (today), reg 1.0 A (EST typ), TX burst at the same time | 3.286 | 0.058 | pass |
-| TL-MOD-003 (10.2 uF), CT open (today), reg 0.4 A (min), radio idle | 3.015 | 0.497 | pass |
-| TL-MOD-003 (10.2 uF), CT open (today), reg 0.4 A (min), TX burst at the same time | 2.795 | 0.497 | FAIL |
-| TL-MOD-003 (10.2 uF), CT open (today), reg 1.0 A (EST typ), radio idle | 3.266 | 0.498 | pass |
-| TL-MOD-003 (10.2 uF), CT open (today), reg 1.0 A (EST typ), TX burst at the same time | 3.257 | 0.498 | pass |
-| TL-MOD-003 (10.2 uF), CT = 1 nF (proposed), reg 0.4 A (min), radio idle | 3.297 | 0.026 | pass |
-| TL-MOD-003 (10.2 uF), CT = 1 nF (proposed), reg 0.4 A (min), TX burst at the same time | 3.288 | 0.026 | pass |
+| TL-MOD-004 (0.2 uF), CT open (before S-1), reg 0.4 A (min), radio idle | 3.295 | 0.058 | pass |
+| TL-MOD-004 (0.2 uF), CT open (before S-1), reg 0.4 A (min), TX burst at the same time | 3.286 | 0.058 | pass |
+| TL-MOD-004 (0.2 uF), CT open (before S-1), reg 1.0 A (EST typ), radio idle | 3.295 | 0.058 | pass |
+| TL-MOD-004 (0.2 uF), CT open (before S-1), reg 1.0 A (EST typ), TX burst at the same time | 3.286 | 0.058 | pass |
+| TL-MOD-003 (10.2 uF), CT open (before S-1), reg 0.4 A (min), radio idle | 3.015 | 0.497 | pass |
+| TL-MOD-003 (10.2 uF), CT open (before S-1), reg 0.4 A (min), TX burst at the same time | 2.795 | 0.497 | FAIL |
+| TL-MOD-003 (10.2 uF), CT open (before S-1), reg 1.0 A (EST typ), radio idle | 3.266 | 0.498 | pass |
+| TL-MOD-003 (10.2 uF), CT open (before S-1), reg 1.0 A (EST typ), TX burst at the same time | 3.257 | 0.498 | pass |
+| TL-MOD-003 (10.2 uF), CT = 1 nF (fitted), reg 0.4 A (min), radio idle | 3.297 | 0.026 | pass |
+| TL-MOD-003 (10.2 uF), CT = 1 nF (fitted), reg 0.4 A (min), TX burst at the same time | 3.288 | 0.026 | pass |
 
 ## B2 Radio TX burst
 
@@ -80,7 +80,7 @@ At what VBUS does the power mux take USB, across reference and resistor toleranc
 | aon_ron | 0.09 | TPS22917 RON 90 mOhm typ at VIN 3.6 V, 25 C (SLVSDW8B 6.5) |
 | aon_slew | 44000 | TPS22917 SRON 44 mV/us with CT open at VIN 3.6 V (SLVSDW8B 6.6); C27-30 are DNP |
 | aon_slew_ct | 1.9e+06 | TPS22917 SRON 1900 (mV/us)*pF with CT >= 100 pF at VIN 3.6 V (SLVSDW8B 6.6) |
-| ct_fix | 1e-09 | Proposed: populate C27-C30 (CT, DNP today) with 1 nF |
+| ct_fix | 1e-09 | C27-C30 1 nF from CT to VIN (fitted 2026-11-20, finding S-1) |
 | c_slot | 1e-06 | C13-C16 1 uF on each V3V3_AON_n (intended-netlist.json) |
 | c_mod003 | 1.02e-05 | TL-MOD-003 card: C3 10 uF + C1, C2 100 nF on V3V3_AON |
 | c_mod004 | 2e-07 | TL-MOD-004 card: C1, C2 100 nF on V3V3_AON |

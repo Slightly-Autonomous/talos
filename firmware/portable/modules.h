@@ -167,9 +167,12 @@ class Tmag5273ContactDriver {
   static constexpr std::uint16_t kManufacturerId = 0x5449;  // "TI"
   static constexpr std::uint8_t kSleep100Ms = 0x07;
   static constexpr std::uint8_t kModeSleep = 0x01, kModeContinuous = 0x02, kModeWakeSleep = 0x03;
-  static constexpr std::int32_t kOpenUt = 1'500;   // door counts as open below 1.5 mT
-  static constexpr std::int32_t kCloseUt = 3'000;  // and closed above 3 mT (hysteresis)
-  static constexpr std::int32_t kLsbPerMt = 820;   // +/-40 mT range
+  // Door counts as open below 10 mT and closed above 20 mT (hysteresis). With the reference
+  // 20 x 5 x 3 mm N35 magnet: closed within ~10 mm, open beyond ~14 mm (magnet_sim.py, S-5).
+  // 3 / 1.5 mT read closed up to ~24 mm. Provisional until bench C1-06 measures the real door.
+  static constexpr std::int32_t kOpenUt = 10'000;
+  static constexpr std::int32_t kCloseUt = 20'000;
+  static constexpr std::int32_t kLsbPerMt = 820;  // +/-40 mT range
   bool init(SlotIo& io, IEventSink& sink, TimeMs now);
   void poll(SlotIo& io, IEventSink& sink, TimeMs now);
   TimeMs due_ms(TimeMs) const { return kNever; }

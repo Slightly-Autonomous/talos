@@ -134,7 +134,7 @@ TEST_P(HallContact, OpenCloseOnAnyAxisAndReArms) {
   };
   Node n(default_board());
   n.insert(0, ModuleCode::kTmag5273Contact);
-  auto closed = field(axis == 1 ? -8'000 : 8'000);  // either magnet polarity
+  auto closed = field(axis == 1 ? -30'000 : 30'000);  // either magnet polarity
   n.hall(0).set_field(closed[0], closed[1], closed[2]);
   n.boot();
   n.run_for(5);
@@ -146,7 +146,7 @@ TEST_P(HallContact, OpenCloseOnAnyAxisAndReArms) {
   EXPECT_FALSE(n.gpio.read(0));
 
   // A small wobble while closed raises nothing.
-  auto wobble = field(axis == 1 ? -6'000 : 6'000);
+  auto wobble = field(axis == 1 ? -15'000 : 15'000);  // between the thresholds: still closed
   n.hall(0).set_field(wobble[0], wobble[1], wobble[2]);
   n.run_for(10);
   EXPECT_TRUE(of_kind(n.drain_and_ack(), EventKind::kContact).empty());
@@ -176,6 +176,8 @@ INSTANTIATE_TEST_SUITE_P(Axes, HallContact, ::testing::Values(0, 1, 2));
 TEST(HallContactCodes, ThresholdCodesAndBootOpen) {
   EXPECT_EQ(Tmag5273ContactDriver::threshold_code(1'500), 5);  // 5 x 0.3125 mT = 1.56 mT
   EXPECT_EQ(Tmag5273ContactDriver::threshold_code(3'000), 10);
+  EXPECT_EQ(Tmag5273ContactDriver::threshold_code(Tmag5273ContactDriver::kOpenUt), 32);   // 10 mT
+  EXPECT_EQ(Tmag5273ContactDriver::threshold_code(Tmag5273ContactDriver::kCloseUt), 64);  // 20 mT
   EXPECT_EQ(Tmag5273ContactDriver::threshold_code(0), 1);
   EXPECT_EQ(Tmag5273ContactDriver::threshold_code(100'000), 127);
   Node n(default_board());
@@ -397,12 +399,12 @@ TEST(Imu, RegisterThatDoesNotTakeWritesFailsInit) {
 TEST(HallContact, ObliqueMagnetOpeningIsSeenDespiteStaleAxes) {
   Node n(default_board());
   n.insert(0, ModuleCode::kTmag5273Contact);
-  n.hall(0).set_field(6'000, 5'000, 0);  // magnet at an angle: X dominant, Y strong too
+  n.hall(0).set_field(24'000, 20'000, 0);  // magnet at an angle: X dominant, Y strong too
   n.boot();
   n.run_for(5);
   n.drain_and_ack();
   // Door opens. Only X is armed while closed, so Y's result register still
-  // holds 5 mT from the last full conversion.
+  // holds 20 mT from the last full conversion.
   n.hall(0).set_field(200, 150, 0);
   n.run_for(10);
   auto opened = of_kind(n.drain_and_ack(), EventKind::kContact);
@@ -565,6 +567,16 @@ TEST(MuxReset, CardHoldingTheBusIsCutOffByTheMuxReset) {
     } else {
       EXPECT_EQ(n.board_io().source(), PowerSource::kUnknown);  // only a power cycle helps
     }
+  }
+}
+
+TEST(SlotPower, AdmissionBudgetsFitTheRegulator) {
+  // Every module rail on TL-SN-001 comes from the TPS63900: 0.4 A x 3.3 V = 1320 mW guaranteed,
+  // ~500 mW of it for the MCU's TX burst. No power source may admit more than the rest.
+  const BoardSupport b = tl_sn_001_board();
+  constexpr std::uint32_t kRegulatorMw = 400 * 3300 / 1000, kMcuTxMw = 123 * 3300 / 1000 + 100;
+  for (std::uint32_t budget : {b.usb_sustained_mw, b.solar_sustained_mw, b.battery_sustained_mw}) {
+    EXPECT_LE(budget, kRegulatorMw - kMcuTxMw);
   }
 }
 
