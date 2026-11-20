@@ -23,6 +23,7 @@ import uuid
 import pcbnew
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import layout_tweaks  # noqa: E402
 import place_opt  # noqa: E402
 from talos_footprints import (CARD_TONGUE_DEPTH, CARD_TONGUE_WIDTH, HSEC8_EDGE_Y,  # noqa: E402
                               HSEC8_PIN1_X, HSEC8_PITCH, HSEC8_SLOT)
@@ -30,6 +31,8 @@ from talos_footprints import (CARD_TONGUE_DEPTH, CARD_TONGUE_WIDTH, HSEC8_EDGE_Y
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 KICAD = ROOT / "hardware" / "kicad"
 TALOS_FP = KICAD / "libraries" / "talos-footprints.pretty"
+# Experiments write the board into a copy of the project folder elsewhere; inputs always come from KICAD.
+OUT_DIR = pathlib.Path(os.environ.get("TALOS_LAYOUT_OUT", str(KICAD)))
 STOCK_FP = pathlib.Path(os.environ.get(
     "KICAD_FOOTPRINT_DIR", os.path.expanduser("~/Applications/KiCad/KiCad.app/Contents/SharedSupport/footprints")))
 NS = uuid.UUID("6f6b0a52-6a35-4d7e-9f0e-7a1c9e3d2b10")  # must match gen_schematics.py
@@ -51,26 +54,41 @@ def uid(*parts: str) -> str:
 
 # ---- board specs ------------------------------------------------------------------------
 # Each spec: size (w, h) mm, copper layers, fixed placements {ref: (x, y, rot_deg)} in board coords.
-def sn_spec() -> dict:
-    w, h = 100.0, 80.0
+SOCKET_PITCH_MM = 24.0  # HSEC8-110-01-S-D-EM2 courtyard 23.29 mm along the edge, plus 0.7 mm
+
+
+def sn_spec(w: float = 80.0, h: float = 70.0, seed: int = 1) -> dict:
+    """80 x 70 mm since 2026-11-20 (the first layout was 100 x 80; layout_search.py compared 100x80,
+    90x75 and 80x70, see hardware/layout/README.md). Starting positions scale from the 100 x 80
+    coordinates below, and the two sockets on each side edge keep SOCKET_PITCH_MM between them."""
     cx = w / 2
+    sx, sy = w / 100.0, h / 80.0
+    y_a, y_b = 28.0 * sy, 54.0 * sy  # socket centres on each side edge
+    # Two HSEC8 sockets on one edge need their courtyards (23.3 mm long) apart, plus a small gap: keep
+    # at least SOCKET_PITCH_MM, spreading symmetrically about the scaled midpoint.
+    if y_b - y_a < SOCKET_PITCH_MM:
+        mid = (y_a + y_b) / 2
+        y_a, y_b = mid - SOCKET_PITCH_MM / 2, mid + SOCKET_PITCH_MM / 2
+    if y_a - SOCKET_PITCH_MM / 2 < 0.5 or y_b + SOCKET_PITCH_MM / 2 > h - 1.0:  # bottom-edge connectors sit inboard of the sockets
+        raise ValueError(f"{w} x {h} mm: no room for two slot sockets per side edge")
     fixed = {
         "U1": (cx, 10.7, 0),  # module top edge on the board edge; antenna strip y=0..5.1 kept clear
         # four slots: two on the left edge, two on the right edge; socket body outside the edge
-        "J4": (1.0, 28.0, 270), "J5": (1.0, 54.0, 270),
-        "J6": (w - 1.0, 28.0, 90), "J7": (w - 1.0, 54.0, 90),
+        "J4": (1.0, y_a, 270), "J5": (1.0, y_b, 270),
+        "J6": (w - 1.0, y_a, 90), "J7": (w - 1.0, y_b, 90),
         # power entry along the bottom edge
-        "J1": (14.0, h - 4.0, 0), "J2": (36.0, h - 5.0, 0), "J3": (86.0, h - 5.0, 0),
-        "U2": (24.0, h - 10.0, 0), "U3": (36.0, h - 18.0, 0), "U4": (52.0, h - 18.0, 0),
-        "U5": (68.0, h - 18.0, 0),
-        "U14": (cx, 30.0, 0), "U15": (32.0, 40.0, 90), "U16": (68.0, 40.0, 90), "U17": (cx, 48.0, 0),
+        "J1": (14.0 * sx, h - 4.0, 0), "J2": (36.0 * sx, h - 5.0, 0), "J3": (w - 14.0, h - 5.0, 0),
+        "U2": (24.0 * sx, h - 10.0, 0), "U3": (36.0 * sx, h - 18.0, 0), "U4": (52.0 * sx, h - 18.0, 0),
+        "U5": (68.0 * sx, h - 18.0, 0),
+        "U14": (cx, 30.0 * sy, 0), "U15": (32.0 * sx, 40.0 * sy, 90), "U16": (68.0 * sx, 40.0 * sy, 90),
+        "U17": (cx, 48.0 * sy, 0),
     }
     for n in range(4):
-        y = 28.0 if n % 2 == 0 else 54.0
+        y = y_a if n % 2 == 0 else y_b
         fixed[f"U{6 + n}"] = (15.0 if n < 2 else w - 15.0, y - 6.0, 0)
         fixed[f"U{10 + n}"] = (15.0 if n < 2 else w - 15.0, y + 6.0, 0)
-    fixed["D4"], fixed["D5"] = (7.0, 18.0, 0), (7.0, 44.0, 0)
-    fixed["D6"], fixed["D7"] = (w - 7.0, 18.0, 0), (w - 7.0, 44.0, 0)
+    fixed["D4"], fixed["D5"] = (7.0, y_a - 10.0, 0), (7.0, y_b - 10.0, 0)
+    fixed["D6"], fixed["D7"] = (w - 7.0, y_a - 10.0, 0), (w - 7.0, y_b - 10.0, 0)
     near = {r: "U1" for r in ("C1", "C2", "C3", "R1", "R2", "R3", "R4", "D1", "SW1", "SW2", "R7", "R8", "C4")}
     near.update({r: "U3" for r in ("C5", "C6", "C7", "C8", "R12", "R13", "R14", "R15")})
     near.update({r: "U4" for r in ("C9", "C10", "R16", "R17")})
@@ -81,7 +99,8 @@ def sn_spec() -> dict:
     # is just a starting point for the placement optimiser (place_opt.py).
     pinned = {"U1", "J1", "J2", "J3", "J4", "J5", "J6", "J7"}
     return {"size": (w, h), "layers": 4, "slot_sockets": ["J4", "J5", "J6", "J7"], "fixed": fixed, "keepout_top": 5.2, "near": near, "gap": 1.0,
-            "pinned": pinned, "optimize": True,
+            "pinned": pinned, "optimize": True, "seed": seed,
+            "w_group": float(os.environ.get("TALOS_W_GROUP", "1.5")),
             # The 41-pin core rail is a plane: the autorouter could not build that tree as tracks.
             "plane_nets": {pcbnew.In2_Cu: "V3V3_CORE"}}
 
@@ -121,7 +140,11 @@ def dbg_spec() -> dict:
             "pinned": {"J1", "J2", "JP1", "JP2"}, "optimize": True, "slot_sockets": ["J2"]}
 
 
-SPECS = {"TL-SN-001": sn_spec()}
+# Layout experiments (hardware/scripts/layout_search.py) set these; unset, the Rev A board is built.
+_SN_SIZE = os.environ.get("TALOS_SN_SIZE")  # "WxH" in mm
+_SN_SEED = int(os.environ.get("TALOS_SEED", "1"))
+SPECS = {"TL-SN-001": sn_spec(*(float(v) for v in _SN_SIZE.split("x")), seed=_SN_SEED) if _SN_SIZE
+         else sn_spec(seed=_SN_SEED)}
 for b in ("TL-MOD-001", "TL-MOD-002", "TL-MOD-003", "TL-MOD-004", "TL-TEST-001"):
     SPECS[b] = card_spec(b)
 SPECS["TL-DBG-001"] = dbg_spec()
@@ -180,8 +203,11 @@ def overlaps(a, b, gap=0.6) -> bool:
     return not (a[2] + gap <= b[0] or b[2] + gap <= a[0] or a[3] + gap <= b[1] or b[3] + gap <= a[1])
 
 
+PLANE_NETS = {"GND", "V3V3_CORE"}  # nets with a plane on some board: never an anchor relationship
+
+
 def anchor_of(ref: str, part: dict, parts: dict, fixed: dict) -> str | None:
-    nets = {n for n in part["pins"].values() if n and n not in ("GND",)}
+    nets = {n for n in part["pins"].values() if n and n not in PLANE_NETS}
     best, score = None, 0
     for other, op in parts.items():
         if other == ref or other not in fixed:
@@ -311,9 +337,69 @@ def flip_two_pad_parts(fps: dict, pinned: set) -> None:
             fp.SetOrientationDegrees(fp.GetOrientationDegrees() - 180)
 
 
-def optimise_placement(spec, parts, fps, w, h, margin, keep_top, keep_bottom) -> None:
-    """Refine the rule-based start with the annealing placer; pinned parts stay where the spec put them."""
+def _rot(dx: float, dy: float, deg: int) -> tuple[float, float]:
+    """Rotate an offset the way KiCad turns a footprint by `deg` (counter-clockwise on screen, y down)."""
+    a = math.radians(deg)
+    c, s_ = round(math.cos(a)), round(math.sin(a))
+    return dx * c + dy * s_, -dx * s_ + dy * c
+
+
+def slot_correspondence(parts: dict, groups: dict[str, list[str]], n_slots: int,
+                        skip: set[str] = frozenset()) -> list[dict[str, str]]:
+    """For each slot n, a map slot-0 ref -> slot-n ref, matching parts by value and slot-normalised nets.
+
+    The four slots are the same circuit with their nets renumbered (SLOT0_SDA / SLOT1_SDA, V3V3_AON_0 /
+    V3V3_AON_1, ...), so a part's (value, pin -> normalised net) signature identifies its twin."""
+    import re
+
+    def sig(ref: str, n: int) -> tuple:
+        pins = parts[ref]["pins"]
+        norm = []
+        for pin, net in sorted(pins.items()):
+            net = net or ""
+            net = re.sub(rf"^SLOT{n}_", "SLOTx_", net)
+            net = re.sub(rf"(?<=[A-Z_]){n}$", "x", net) if re.search(r"(SLOT|AON|SW|ILIM|WAKE|CT|EN)_?\d$", net) else net
+            norm.append((pin, net))
+        value = re.sub(rf"\bslot {n}\b", "slot x", parts[ref]["value"])
+        return (value, parts[ref]["footprint"], tuple(norm))
+
+    base = {}
+    slot0 = [r for r in groups["slot0"] if r not in skip]
+    for ref in slot0:
+        base.setdefault(sig(ref, 0), []).append(ref)
+    maps = []
+    for n in range(n_slots):
+        avail = {k: list(v) for k, v in base.items()}
+        m = {}
+        for ref in groups[f"slot{n}"]:
+            if ref in skip:
+                continue
+            k = sig(ref, n)
+            if not avail.get(k):
+                raise SystemExit(f"slot {n}: {ref} has no twin in slot 0 (signature {k})")
+            m[avail[k].pop(0)] = ref
+        if len(m) != len(slot0):
+            raise SystemExit(f"slot {n}: {len(m)} of {len(slot0)} parts matched")
+        maps.append(m)
+    return maps
+
+
+def load_groups(board_name: str) -> dict[str, list[str]]:
+    path = KICAD / board_name / f"{board_name}.groups.json"
+    if not path.exists():
+        return {}
+    return {g["name"]: g["refs"] for g in json.load(open(path))["groups"]}
+
+
+def optimise_placement(spec, parts, fps, w, h, margin, keep_top, keep_bottom, board_name="") -> None:
+    """Refine the rule-based start with the annealing placer; pinned parts stay where the spec put them.
+
+    With functional blocks (<board>.groups.json) the placer keeps each block together; with slot
+    sockets it then lays out one slot and copies that arrangement to the other three (block reuse), so
+    the four identical circuits are laid out identically, and finishes the rest around them."""
     pinned = spec.get("pinned", set())
+    groups = load_groups(board_name) if spec.get("w_group") else {}
+    group_of = {r: g for g, refs in groups.items() for r in refs}
     probs = {}
     for ref, fp in fps.items():
         x0, y0 = (pcbnew.ToMM(v) - o for v, o in zip((fp.GetPosition().x, fp.GetPosition().y), ORIGIN))
@@ -334,13 +420,80 @@ def optimise_placement(spec, parts, fps, w, h, margin, keep_top, keep_bottom) ->
         is_ic = ref.startswith("U")
         probs[ref] = place_opt.Part(ref=ref, movable=ref not in pinned, shapes=shapes, x=x0, y=y0,
                                     rot=rot0 if rot0 in place_opt.ROTS else 0,
-                                    halo=0.8 if is_ic else 0.35, anchor=spec.get("near", {}).get(ref))
+                                    halo=0.8 if is_ic else 0.35, anchor=spec.get("near", {}).get(ref),
+                                    group=group_of.get(ref))
+    # The rotation convention _rot() assumes must be the one pcbnew used for the shapes.
+    some = next(p for p in probs.values() if len(p.shapes[0][1]) > 1)
+    for rot in place_opt.ROTS:
+        for (ax, ay, _), (bx, by, _) in zip(some.shapes[0][1], some.shapes[rot][1]):
+            rx, ry = _rot(ax, ay, rot)
+            assert abs(rx - bx) < 0.01 and abs(ry - by) < 0.01, "footprint rotation convention changed"
     area = (margin, keep_top + margin, w - margin, h - keep_bottom - margin)
-    prob = place_opt.Problem(parts=probs, area=area, plane_nets={"GND"})
-    sol = place_opt.optimize(prob, seed=spec.get("seed", 1), iterations=spec.get("iterations", 150_000))
+    # Every net with its own plane drops to it through a via: it is not wiring for the placer to shorten.
+    # (V3V3_CORE used to count here, so its ~30 pins pulled the whole board towards the regulator.)
+    plane_nets = {"GND"} | set(spec.get("plane_nets", {}).values())
+    w_group = spec.get("w_group", 0.0) if groups else 0.0
+    prob = place_opt.Problem(parts=probs, area=area, plane_nets=plane_nets, w_group=w_group)
+    seed = spec.get("seed", 1)
+    sol = place_opt.optimize(prob, seed=seed, iterations=spec.get("iterations", 150_000))
+    sockets = spec.get("slot_sockets", [])
+    if groups and len(sockets) > 1 and all(f"slot{n}" in groups for n in range(len(sockets))):
+        maps = slot_correspondence(parts, groups, len(sockets), pinned)
+        pl = place_opt.Placer(prob, seed)
+
+        def slot_cost(n):  # internal wiring + spread of slot n as placed
+            refs = set(groups[f"slot{n}"])
+            nets = {k for r in refs for k in pl.part_nets[r]}
+            return sum(pl.net_len[k] for k in nets) + w_group * pl.group_cost(f"slot{n}")
+        tmpl = min(range(len(sockets)), key=slot_cost)
+        inv = {v: k for k, v in maps[tmpl].items()}  # slot-tmpl ref -> slot-0 ref
+        sk = probs[sockets[tmpl]]
+        for n in range(len(sockets)):
+            if n == tmpl:
+                continue
+            sj = probs[sockets[n]]
+            d = (sj.rot - sk.rot) % 360
+            for r_t in groups[f"slot{tmpl}"]:
+                if r_t in pinned:
+                    continue
+                src = probs[r_t]
+                lx, ly = _rot(src.x - sk.x, src.y - sk.y, -sk.rot % 360)
+                gx, gy = _rot(lx, ly, sj.rot)
+                if maps[n][inv[r_t]] in pinned:  # a hand-placed twin stays where it was put
+                    continue
+                dst = probs[maps[n][inv[r_t]]]
+                dst.x, dst.y, dst.rot = round((sj.x + gx) * 100) / 100, round((sj.y + gy) * 100) / 100, (src.rot + d) % 360
+        # Freeze the copied slots where they are legal against the fixed parts and the outline; the rest
+        # of the board re-settles around them (short, cool anneal) and is legalised.
+        pl2 = place_opt.Placer(prob, seed)
+        frozen = 0
+        for n in range(len(sockets)):
+            for r in groups[f"slot{n}"]:
+                if r in pinned:
+                    continue
+                part = probs[r]
+                x0, y0, x1, y1 = area
+                bb = pl2.box(r, halo=False)
+                inside = bb[0] >= x0 and bb[1] >= y0 and bb[2] <= x1 and bb[3] <= y1
+                clash = any(o != r and not probs[o].movable and place_opt_overlap(pl2.box(r), pl2.box(o, halo=False))
+                            for o in probs)
+                if inside and not clash:
+                    part.movable = False
+                    frozen += 1
+        print(f"  place: slot {tmpl} copied to the other slots ({frozen} parts frozen)")
+        sol = place_opt.optimize(prob, seed=seed, iterations=spec.get("iterations", 150_000) // 3, t0=0.6, step0=4.0)
+        for n in range(len(sockets)):
+            for r in groups[f"slot{n}"]:
+                if r not in pinned:
+                    probs[r].movable = True
+                    sol[r] = (probs[r].x, probs[r].y, probs[r].rot)
     for ref, (x, y, rot) in sol.items():
         fps[ref].SetOrientationDegrees(rot)
         fps[ref].SetPosition(pt(x, y))
+
+
+def place_opt_overlap(a, b) -> bool:
+    return min(a[2], b[2]) > max(a[0], b[0]) and min(a[3], b[3]) > max(a[1], b[1])
 
 
 FIDUCIAL = "Fiducial:Fiducial_1mm_Mask2mm"
@@ -371,12 +524,25 @@ def add_marking(board, name, spec, fps, w, h, copper) -> None:
     """Board name, revision and a serial box on the bottom silk (bench §8: all boards); fiducials on
     the assembled boards big enough to carry them; card-specific marks."""
     cards = spec.get("finger_zone")
-    size = 0.7 if cards else 1.0
-    y = 3.0 if cards else h - (12.0 if name == "TL-SN-001" else 8.0)
+    size = 0.8 if cards else 1.0  # 0.8 mm is the project's minimum text height
     x = w / 2
-    silk_text(board, f"{name} rev {REVISION}", x, y, size, pcbnew.B_SilkS)
-    silk_text(board, "S/N", x - (2.4 if cards else 4.5), y + size * 1.8, size * 0.8, pcbnew.B_SilkS)
     bw, bh = (5.0, 1.6) if cards else (9.0, 2.4)
+    # Bottom silk must stay off exposed copper on the back: through-hole pads (USB-C shield, headers).
+    tht = []
+    for fp in fps.values():
+        for pad in fp.Pads():
+            if pad.IsOnLayer(pcbnew.B_Cu):
+                b = pad.GetBoundingBox()
+                tht.append((pcbnew.ToMM(b.GetX()) - ORIGIN[0], pcbnew.ToMM(b.GetY()) - ORIGIN[1],
+                            pcbnew.ToMM(b.GetRight()) - ORIGIN[0], pcbnew.ToMM(b.GetBottom()) - ORIGIN[1]))
+    text_w = len(f"{name} rev {REVISION}") * size * 0.9
+    for y in ([3.0] if cards else [h - (12.0 if name == "TL-SN-001" else 8.0), h / 2, h / 2 + 4.0, h / 2 - 4.0]):
+        area = (x - max(text_w / 2, bw / 2 + 3.0), y - size, x + max(text_w / 2, bw / 2 + 1.5), y + size * 1.8 + bh / 2)
+        if not any(overlaps(area, t, 0.3) for t in tht):
+            break
+    silk_text(board, f"{name} rev {REVISION}", x, y, size, pcbnew.B_SilkS)
+    # label left of the box with a clear gap (it used to touch the box: a DRC silk_overlap)
+    silk_text(board, "S/N", x - bw / 2 + 1.0 - size * 1.7, y + size * 1.8, max(0.8, size * 0.8), pcbnew.B_SilkS)
     silk_box(board, x - bw / 2 + 1.0, y + size * 1.8 - bh / 2, x + bw / 2 + 1.0, y + size * 1.8 + bh / 2,
              pcbnew.B_SilkS)
     if name == "TL-SN-001":  # smaller boards rely on the JLCPCB panel-rail fiducials
@@ -467,6 +633,12 @@ def build(board_name: str) -> dict:
         board.Add(fp)
         fps[ref] = fp
 
+    # Hand tweaks (layout_tweaks.py capture) override the spec and are pinned for the placer.
+    tweaks = layout_tweaks.load(board_name)
+    if tweaks:
+        spec = dict(spec, fixed={**spec["fixed"], **{r: tuple(v) for r, v in tweaks.items() if r in parts}},
+                    pinned=set(spec.get("pinned", set())) | set(tweaks))
+        print(f"{board_name}: {len(tweaks)} hand-placed part(s) pinned from {board_name}.placement.json")
     # fixed placements
     for ref, (x, y, rot) in spec["fixed"].items():
         fp = fps[ref]
@@ -521,8 +693,15 @@ def build(board_name: str) -> dict:
             raise SystemExit(f"{board_name}: no room for {ref}")
 
     if spec.get("optimize"):
-        optimise_placement(spec, parts, fps, w, h, margin, keep_top, keep_bottom)
-        flip_two_pad_parts(fps, spec.get("pinned", set()))
+        optimise_placement(spec, parts, fps, w, h, margin, keep_top, keep_bottom, board_name)
+        keep = set(spec.get("pinned", set()))
+        if spec.get("w_group"):  # flipping one slot's resistor would break the four-slot copy
+            keep |= {r for g, refs in load_groups(board_name).items() if g.startswith("slot") for r in refs}
+        flip_two_pad_parts(fps, keep)
+
+    for ref in tweaks:  # stay locked, so the next capture keeps them
+        if ref in fps:
+            fps[ref].SetLocked(True)
 
     if spec.get("parts_clear_bottom"):
         intruders = [r for r, b in placed.items() if not r.startswith("_cut") and r != "J1"
@@ -557,9 +736,9 @@ def build(board_name: str) -> dict:
 
     add_marking(board, board_name, spec, fps, w, h, copper)
 
-    (KICAD / board_name / f"{board_name}.kicad_dru").write_text(
+    (OUT_DIR / board_name / f"{board_name}.kicad_dru").write_text(
         {"TL-SN-001": DRU_SN, "TL-DBG-001": DRU_DBG}.get(board_name, DRU_CARD))
-    out = KICAD / board_name / f"{board_name}.kicad_pcb"
+    out = OUT_DIR / board_name / f"{board_name}.kicad_pcb"
     board.Save(str(out))
     return {"board": board_name, "footprints": len(fps), "nets": len(nets), "size": f"{w}x{h} mm",
             "layers": spec["layers"]}

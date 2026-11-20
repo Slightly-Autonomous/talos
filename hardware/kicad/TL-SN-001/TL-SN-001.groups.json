@@ -1,0 +1,334 @@
+{
+ "schema": 1,
+ "board": "TL-SN-001.kicad_pcb",
+ "groups": [
+  {
+   "name": "slot0",
+   "role": "interface",
+   "anchor": "J4",
+   "near": [
+    "bus",
+    "regulator"
+   ],
+   "refs": [
+    "C13",
+    "C17",
+    "C27",
+    "C31",
+    "D4",
+    "J4",
+    "R21",
+    "R25",
+    "R29",
+    "R34",
+    "R35",
+    "R45",
+    "R46",
+    "R47",
+    "R48",
+    "R49",
+    "R72",
+    "R78",
+    "R79",
+    "R80",
+    "R81",
+    "U6",
+    "U10"
+   ],
+   "why": "slot 0: HSEC8 socket, AON switch with CT cap and EN pull-down, SW current-limit switch with ILIM, bleed and input cap, branch pull-ups, UART series and pull-ups, TVS"
+  },
+  {
+   "name": "slot1",
+   "role": "interface",
+   "anchor": "J5",
+   "near": [
+    "bus",
+    "regulator"
+   ],
+   "refs": [
+    "C14",
+    "C18",
+    "C28",
+    "C32",
+    "D5",
+    "J5",
+    "R22",
+    "R26",
+    "R30",
+    "R36",
+    "R37",
+    "R50",
+    "R51",
+    "R52",
+    "R53",
+    "R54",
+    "R73",
+    "R82",
+    "R83",
+    "R84",
+    "R85",
+    "U7",
+    "U11"
+   ],
+   "why": "slot 1: HSEC8 socket, AON switch with CT cap and EN pull-down, SW current-limit switch with ILIM, bleed and input cap, branch pull-ups, UART series and pull-ups, TVS"
+  },
+  {
+   "name": "slot2",
+   "role": "interface",
+   "anchor": "J6",
+   "near": [
+    "bus",
+    "regulator"
+   ],
+   "refs": [
+    "C15",
+    "C19",
+    "C29",
+    "C33",
+    "D6",
+    "J6",
+    "R23",
+    "R27",
+    "R31",
+    "R38",
+    "R39",
+    "R55",
+    "R56",
+    "R57",
+    "R58",
+    "R59",
+    "R74",
+    "R86",
+    "R87",
+    "R88",
+    "R89",
+    "U8",
+    "U12"
+   ],
+   "why": "slot 2: HSEC8 socket, AON switch with CT cap and EN pull-down, SW current-limit switch with ILIM, bleed and input cap, branch pull-ups, UART series and pull-ups, TVS"
+  },
+  {
+   "name": "slot3",
+   "role": "interface",
+   "anchor": "J7",
+   "near": [
+    "bus",
+    "regulator"
+   ],
+   "refs": [
+    "C16",
+    "C20",
+    "C30",
+    "C34",
+    "D7",
+    "J7",
+    "R24",
+    "R28",
+    "R32",
+    "R40",
+    "R41",
+    "R60",
+    "R61",
+    "R62",
+    "R63",
+    "R64",
+    "R75",
+    "R90",
+    "R91",
+    "R92",
+    "R93",
+    "U9",
+    "U13"
+   ],
+   "why": "slot 3: HSEC8 socket, AON switch with CT cap and EN pull-down, SW current-limit switch with ILIM, bleed and input cap, branch pull-ups, UART series and pull-ups, TVS"
+  },
+  {
+   "name": "usb_in",
+   "role": "interface",
+   "anchor": "J1",
+   "near": [
+    "pmux",
+    "mcu"
+   ],
+   "refs": [
+    "C5",
+    "C25",
+    "C26",
+    "J1",
+    "R10",
+    "R11",
+    "R66",
+    "R67",
+    "R68",
+    "TP12",
+    "TP21",
+    "TP22",
+    "U2"
+   ],
+   "why": "USB-C receptacle, CC pull-downs, USBLC6 ESD, USB data 0R links and DNP shunt caps"
+  },
+  {
+   "name": "pv_in",
+   "role": "interface",
+   "anchor": "J2",
+   "near": [
+    "pmux"
+   ],
+   "refs": [
+    "D2",
+    "J2"
+   ],
+   "why": "PV input: connector, reverse diode, TVS"
+  },
+  {
+   "name": "pmux",
+   "role": "power",
+   "anchor": "U3",
+   "near": [
+    "usb_in",
+    "pv_in",
+    "charger"
+   ],
+   "refs": [
+    "C6",
+    "C7",
+    "C8",
+    "D3",
+    "R12",
+    "R13",
+    "R14",
+    "R15",
+    "TP13",
+    "TP14",
+    "TP15",
+    "TP27",
+    "U3"
+   ],
+   "why": "TPS2121 power mux with priority divider, ILIM, soft-start, status pull-up and input caps"
+  },
+  {
+   "name": "charger",
+   "role": "power",
+   "anchor": "U4",
+   "near": [
+    "pmux",
+    "regulator"
+   ],
+   "refs": [
+    "C9",
+    "C10",
+    "J3",
+    "JP1",
+    "Q1",
+    "R7",
+    "R16",
+    "R17",
+    "R69",
+    "R70",
+    "TP7",
+    "TP8",
+    "TP16",
+    "TP17",
+    "TP18",
+    "TP26",
+    "U4"
+   ],
+   "why": "BQ25186 linear charger, pack connector, reverse-pack P-FET and its gate resistor, NTC"
+  },
+  {
+   "name": "regulator",
+   "role": "power",
+   "anchor": "U5",
+   "near": [
+    "charger",
+    "mcu"
+   ],
+   "refs": [
+    "C11",
+    "C12",
+    "JP2",
+    "L1",
+    "R18",
+    "R19",
+    "R20",
+    "R71",
+    "TP1",
+    "TP23",
+    "TP24",
+    "U5"
+   ],
+   "why": "TPS63900 buck-boost with inductor, CFG straps, input/output caps and the meter splits"
+  },
+  {
+   "name": "mcu",
+   "role": "core",
+   "anchor": "U1",
+   "near": [
+    "bus",
+    "usb_in"
+   ],
+   "refs": [
+    "C1",
+    "C2",
+    "C3",
+    "C4",
+    "D1",
+    "J8",
+    "R1",
+    "R2",
+    "R3",
+    "R4",
+    "R8",
+    "R65",
+    "SW1",
+    "SW2",
+    "TP2",
+    "TP3",
+    "TP4",
+    "TP5",
+    "TP6",
+    "U1"
+   ],
+   "why": "ESP32-H2 module with enable/boot strapping, status LED, VBAT divider, UART0 header and buttons"
+  },
+  {
+   "name": "bus",
+   "role": "core",
+   "anchor": "U14",
+   "near": [
+    "mcu",
+    "slot0",
+    "slot1",
+    "slot2",
+    "slot3"
+   ],
+   "refs": [
+    "C21",
+    "C22",
+    "C23",
+    "C24",
+    "R5",
+    "R6",
+    "R9",
+    "R33",
+    "R42",
+    "R43",
+    "R44",
+    "R76",
+    "R77",
+    "TP9",
+    "TP10",
+    "TP11",
+    "TP19",
+    "TP20",
+    "TP25",
+    "U14",
+    "U15",
+    "U16",
+    "U17"
+   ],
+   "why": "I2C mux, two expanders, UART mux, root pull-ups and their decaps"
+  }
+ ],
+ "note": "Generated by hardware/scripts/layout_groups.py; edit the script, not this file."
+}

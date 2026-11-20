@@ -14,6 +14,9 @@ Checks, per board:
      agree with the main board slot pinout (sensor_edge_v1); PRESENT_N must be grounded on every card.
   4. Safe defaults (HWR-007): power/reset/CS/mux control nets have a defining resistor.
   5. Footprint audit: assigned footprints exist in the KiCad library; missing ones are listed.
+  6. PCB DRC with schematic parity: errors fail; each warning type must be listed with a count and a
+     reason under the board's "warnings_allowed" in layout-status.json, so layout quality (silkscreen
+     overlaps, text over pads) can only regress on purpose. CI checks committed layouts; it never routes.
 Exit code is non-zero if any check fails.
 """
 
@@ -111,6 +114,12 @@ def pcb_drc(cli: str, board: str, tmp: str) -> tuple[bool, dict, list[str]]:
             if v["severity"] == "error" and not (partial and v["type"] == "unconnected_items"):
                 errors.append(f"  - **{v['type']}**: {v['description']} "
                               f"({'; '.join(i['description'] for i in v['items'])})")
+    allowed = layout_status().get(board, {}).get("warnings_allowed", {})
+    for k, n in sorted(counts.items()):
+        sev, typ = k.split(":", 1)
+        if sev == "warning" and n > allowed.get(typ, {}).get("max", 0):
+            errors.append(f"  - **warning budget**: {n} {typ} warning(s), {allowed.get(typ, {}).get('max', 0)} allowed "
+                          f"(layout-status.json warnings_allowed)")
     summary = ", ".join(f"{k.split(':')[1]} {n}" for k, n in sorted(counts.items())) or "none"
     lines = [f"- PCB DRC (with schematic parity): {summary}"]
     if partial:

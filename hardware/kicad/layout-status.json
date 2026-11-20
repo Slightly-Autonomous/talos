@@ -1,7 +1,13 @@
 {
  "TL-SN-001": {
   "routing": "complete",
-  "note": "Autorouted, 0 DRC errors, no hand fixes. Needs layout-engineer review before any order."
+  "note": "80 x 70 mm, block-aware placement with the four slots laid out identically. Autorouted, 0 DRC errors, no hand fixes. Needs layout-engineer review before any order.",
+  "warnings_allowed": {
+   "silk_edge_clearance": {
+    "max": 6,
+    "why": "Edge-mount HSEC8 sockets (and the ESP32-H2 module's antenna end on TL-SN-001) straddle the board edge by design; their footprint silkscreen crosses Edge.Cuts"
+   }
+  }
  },
  "TL-MOD-001": {
   "routing": "complete"
@@ -20,6 +26,12 @@
  },
  "TL-DBG-001": {
   "routing": "complete",
-  "note": "Autorouted, 0 DRC errors, no hand fixes. Bench tool, not a product board; still needs a layout review before ordering."
+  "note": "Autorouted, 0 DRC errors, no hand fixes. Bench tool, not a product board; still needs a layout review before ordering.",
+  "warnings_allowed": {
+   "silk_edge_clearance": {
+    "max": 1,
+    "why": "The slot socket straddles the top edge by design"
+   }
+  }
  }
 }

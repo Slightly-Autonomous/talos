@@ -10,6 +10,8 @@ first DRC-clean attempt wins and the rest are stopped. If none is clean, a repai
 attempt's tracks, rips up any track in a clearance violation and stitches each connection that is
 still open with a short clearance-checked track (seconds, instead of another ~30 min attempt).
 
+After routing, silk_pass.py places every reference designator clear of pads and other silk.
+
 Freerouting is a general-purpose autorouter: the result is a connectivity-correct first pass, not a
 reviewed layout (no impedance control, no deliberate RF or power-loop placement).
 """
@@ -31,6 +33,8 @@ import pcbnew
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 KICAD = ROOT / "hardware" / "kicad"
+# Layout experiments route a board in a copy of its project folder (layout_search.py); default: the repo.
+BOARDS_DIR = pathlib.Path(os.environ.get("TALOS_LAYOUT_OUT", str(KICAD)))
 BOARDS = ["TL-SN-001", "TL-MOD-001", "TL-MOD-002", "TL-MOD-003", "TL-MOD-004", "TL-TEST-001", "TL-DBG-001"]
 JAR = os.path.expanduser(os.environ.get("FREEROUTING_JAR", "~/.cache/talos-tools/freerouting-2.5.0.jar"))
 JAVA = os.environ.get("JAVA", "java")
@@ -40,7 +44,7 @@ APP = os.path.expanduser(os.environ.get("FREEROUTING_APP", ""))
 # already connect), so it always runs every pass: 200 passes took ~39 min an attempt. The first
 # passes do nearly all the work; the repair pass picks up what a short attempt leaves.
 PASSES = os.environ.get("FREEROUTING_PASSES", "60")
-REPAIR_ROUNDS = int(os.environ.get("REPAIR_ROUNDS", "2"))
+REPAIR_ROUNDS = int(os.environ.get("REPAIR_ROUNDS", "5"))  # rip-up can take a few rounds to settle
 ATTEMPTS = int(os.environ.get("ROUTE_ATTEMPTS", "6"))
 # Each Freerouting JVM keeps a few cores busy and may take ~6 GB: a quarter of the cores (3 on a
 # 12-core, 24 GB Mac) keeps the machine responsive.
@@ -235,6 +239,49 @@ def plane_fanout(board, via_d=0.6, drill=0.3, clear=0.2, track_w=0.25, stub_clea
     return added
 
 
+def plane_connected_pins(board) -> dict[str, set[str]]:
+    """Plane-net pins the planes already reach, per DSN net name: through-hole pins, and SMD pads with a
+    same-net track (the plane fanout stub) ending on them. Freerouting does not credit a connection made
+    through a power plane, so it keeps chasing these pins: ~40 min an attempt on the Sensor Node."""
+    planes = {z.GetNetname() for z in board.Zones()
+              if not z.GetIsRuleArea() and board.GetLayerType(z.GetLayer()) == pcbnew.LT_POWER}
+    ends: dict[int, list] = {}
+    for t in board.GetTracks():
+        if t.GetNetname() in planes:
+            pts = [t.GetPosition()] if t.GetClass() == "PCB_VIA" else [t.GetStart(), t.GetEnd()]
+            ends.setdefault(t.GetNetCode(), []).extend(pts)
+    out: dict[str, set[str]] = {}
+    for pad in board.GetPads():
+        net = pad.GetNetname()
+        if net not in planes:
+            continue
+        reached = pad.GetAttribute() == pcbnew.PAD_ATTRIB_PTH or any(
+            pad.HitTest(pt) for pt in ends.get(pad.GetNetCode(), ()))
+        if reached:
+            out.setdefault(net, set()).add(f"{pad.GetParentFootprint().GetReference()}-{pad.GetNumber()}")
+    return out
+
+
+def drop_plane_pins(dsn: str, connected: dict[str, set[str]]) -> int:
+    """Remove already-plane-connected pins from the DSN network, so Freerouting routes only real work.
+    Duplicate-numbered pads (U1-49@3: the module's ground pads) go with their base pin."""
+    import re
+    text = open(dsn).read()
+    dropped = 0
+
+    def fix(m):
+        nonlocal dropped
+        name, body = m.group(1), m.group(2)
+        done = connected.get(name, set())
+        keep = [t for t in body.split() if t.split("@")[0] not in done]
+        dropped += len(body.split()) - len(keep)
+        return f"(net {name}\n      (pins {' '.join(keep)})"
+    text = re.sub(r'\(net ("?[^\s()]+"?)\s*\(pins ([^()]*)\)', lambda m: fix(m) if m.group(1).strip('"') in connected
+                  else m.group(0), text)
+    open(dsn, "w").write(text)
+    return dropped
+
+
 def freeroute(board, name: str, passes: str, clearance_mm: float) -> int:
     """One Freerouting round trip on a loaded board; existing tracks are kept and extended."""
     # Copper pours on signal layers would be exported as planes, and Freerouting would then skip
@@ -251,9 +298,12 @@ def freeroute(board, name: str, passes: str, clearance_mm: float) -> int:
         dsn, ses = os.path.join(tmp, f"{name}.dsn"), os.path.join(tmp, f"{name}.ses")
         if not pcbnew.ExportSpecctraDSN(board, dsn):
             raise SystemExit(f"{name}: DSN export failed")
+        if os.environ.get("ROUTE_PLANE_PINS") != "1":  # default: hide pins the planes already connect
+            dropped = drop_plane_pins(dsn, plane_connected_pins(board))
+            print(f"    dsn: {dropped} plane-connected pins hidden from Freerouting", flush=True)
         args = ["-de", dsn, "-do", ses, "-mp", passes, "--gui.enabled=false"]
         cmd = [APP] + args if APP else [JAVA, "-jar", JAR] + args
-        p = subprocess.run(cmd, capture_output=True, text=True, timeout=5400)
+        p = subprocess.run(cmd, capture_output=True, text=True, timeout=int(os.environ.get("FREEROUTING_TIMEOUT_S", "9000")))
         summary = [ln for ln in (p.stdout + p.stderr).splitlines()
                    if any(k in ln.lower() for k in ("unrouted", "incomplete", "completed", "pass #"))]
         for ln in summary[-4:]:
@@ -395,6 +445,14 @@ def stitch(board, report: list[dict], margin_mm: float = 0.01) -> int:
                     break
             if done:
                 break
+        if not done:  # needs a detour: grid maze route around the obstacles, small window first
+            import maze_route
+            for window, rip in ((8.0, False), (20.0, False), (20.0, True)):
+                if maze_route.connect(board, a, b, window, rip):
+                    print(f"    stitch: {a.GetNetname()} maze-routed (window {window:.0f} mm{', rip-up' if rip else ''})")
+                    done = True
+                    copper = list(board.GetPads()) + list(board.GetTracks())
+                    break
         if done:
             fixed += 1
         else:
@@ -427,7 +485,7 @@ def repair(path: pathlib.Path, name: str) -> None:
 def _workdir(tmp: pathlib.Path, tag: str, name: str, board: pathlib.Path) -> pathlib.Path:
     """Copy the board folder so each worker has its own project (DRC needs the .kicad_pro and rules)."""
     root = tmp / tag
-    shutil.copytree(KICAD / name, root / name)
+    shutil.copytree(BOARDS_DIR / name, root / name)
     (root / "libraries").symlink_to(KICAD / "libraries")  # fp/sym tables use ${KIPRJMOD}/../libraries
     out = root / name / f"{name}.kicad_pcb"
     shutil.copy(board, out)
@@ -461,7 +519,7 @@ def route_until_clean(name: str) -> bool:
 
     With no clean attempt, repair the best one instead of throwing its routing away.
     """
-    path = KICAD / name / f"{name}.kicad_pcb"
+    path = BOARDS_DIR / name / f"{name}.kicad_pcb"
     with tempfile.TemporaryDirectory(prefix=f"route-{name}-") as tmpdir:
         tmp = pathlib.Path(tmpdir)
         placed = tmp / f"{name}.placed.kicad_pcb"
@@ -536,9 +594,12 @@ def main() -> int:
         else:
             repair(pcb, name)
         return 0
+    import silk_pass  # same folder; finishing pass on the routed board (references only, no copper)
     ok = True
     for name in sys.argv[1:] or BOARDS:
         ok &= route_until_clean(name)
+        r = silk_pass.finish(str(BOARDS_DIR / name / f"{name}.kicad_pcb"))
+        print(f"{name}: silkscreen {r['placed']} references placed, {r['fab_only']} on the fab layer only")
     return 0 if ok else 1
 
 

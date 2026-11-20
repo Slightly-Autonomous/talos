@@ -8,10 +8,14 @@ The owner chose to start layout before an EE review. Treat everything here as a 
 |---|---|---|
 | Schematic + netlist | `scripts/gen_schematics.py` | `kicad/<board>/<board>.kicad_sch`, project rules, Talos symbol and footprint libraries |
 | Placement | `scripts/gen_pcbs.py` (KiCad's Python) | Outline, stackup, nets, footprints linked to symbols, pours, keepouts, custom rules (`.kicad_dru`) |
-| Placement optimisation | `scripts/place_opt.py` (called by `gen_pcbs.py` for TL-SN-001) | Simulated annealing (seeded, deterministic) over every part except the connectors and the radio module. Minimises Manhattan MST wirelength, decoupling-cap distance to its IC pin, and RUDY routing congestion, then legalises with courtyard halos. KiCad has no auto-placer |
+| Functional blocks | `scripts/layout_groups.py` | `kicad/TL-SN-001/TL-SN-001.groups.json`: which parts form each block (a slot, the regulator, the charger, the MCU, the bus), derived from the netlist. KiCadRoutingTools' groups format |
+| Placement optimisation | `scripts/place_opt.py` (called by `gen_pcbs.py`) | Simulated annealing (seeded and deterministic, including across Python hash seeds) over every part except the connectors and the radio module. Minimises Manhattan MST wirelength, decoupling-cap distance to its IC pin, RUDY routing congestion and **block spread** (each block pulled to its centroid, plus whole-block moves). It then **lays out slot 0 once and copies it to the other three slots** (the right-hand pair rotated 180°), re-settles the rest around them, and legalises with courtyard halos. KiCad has no auto-placer |
+| Hand tweaks | `scripts/layout_tweaks.py` | Lock parts you moved in KiCad, run `capture`, and `gen_pcbs.py` pins them from then on (`<board>.placement.json`) |
 | Plane fanout | `scripts/route_pcbs.py` | Before autorouting, every SMD pad on a plane net (GND→In1, V3V3_CORE→In2) gets a clearance-checked stub and via, sized to the pad, so the router only handles signals |
-| Routing | `scripts/route_pcbs.py` + Freerouting 2.5.0 | Routed `.kicad_pcb`. Attempts run in parallel (`ROUTE_JOBS`, default a quarter of the cores), each in its own temp copy of the board folder, and each is DRC-gated. The first clean attempt wins and the rest are stopped. If none is clean, a repair pass keeps the best attempt, rips up tracks in clearance violations and stitches leftover open connections with short clearance-checked tracks; the best result is kept |
-| Checks | `scripts/check_kicad.py` | ERC, netlist round-trip, cross-board, safe defaults, **PCB DRC with schematic parity** |
+| Routing | `scripts/route_pcbs.py` + Freerouting 2.5.0 | Routed `.kicad_pcb`. Attempts run in parallel (`ROUTE_JOBS`, default a quarter of the cores), each in its own temp copy of the board folder, and each is DRC-gated. Pins the planes already reach are hidden from Freerouting (it doesn't credit plane connections and otherwise spends ~40 min chasing them). The first clean attempt wins and the rest are stopped. If none is clean, a repair pass keeps the best attempt, rips up tracks in clearance violations and closes leftover open connections: short straight/L tracks first, then a grid maze router (`maze_route.py`, A* on both outer layers with vias, then rip-up of other nets' tracks) |
+| Silkscreen | `scripts/silk_pass.py` (run by `route_pcbs.py`) | Every reference designator moved to a spot clear of pads, other silk and the edge; modules carry theirs on the body; a part with no room keeps its reference on the fab layer only. Back-side text is mirrored |
+| Block map | `scripts/layout_view.py` | PNG of courtyards coloured by block (with `--tracks`, the routing): the picture used to judge structure |
+| Checks | `scripts/check_kicad.py` | ERC, netlist round-trip, cross-board, safe defaults, **PCB DRC with schematic parity**, and a **warning budget**: each DRC warning type must be listed with a count and a reason in `kicad/layout-status.json`, so layout quality can't silently regress. CI checks committed layouts and never routes |
 | Fab package | `scripts/export_fab.py` | `fab/<board>/`: Gerbers + drill (zip), pick-and-place CSV, BOM CSV, JLCPCB BOM/CPL (`-jlc-bom.csv`, `-jlc-cpl.csv`), a not-assembled list, top/bottom renders |
 | JLCPCB sourcing | `scripts/jlc_sourcing.py` | Maps every part to a stocked LCSC part (`sourcing/jlc-parts.csv`). `refresh` queries JLCPCB, `check` runs offline in CI. Parts JLCPCB can't place are listed with their risk ID |
 
@@ -33,7 +37,7 @@ Freerouting is not committed. It is the GPL-3.0 macOS build: Freerouting 2.5.0, 
 
 | Board | Size | Layers | Notes |
 |---|---|---|---|
-| TL-SN-001 | 100 × 80 mm | 4: F signal / In1 solid GND plane / In2 solid V3V3_CORE plane / B signal | **Routed, 0 DRC errors, no hand fixes.** Annealed placement, two-pad parts with symmetric courtyards turned to face their nets (pin headers never flipped), three board fiducials, DNP PPK2 split headers JP1/JP2, plane fanout except fine-pitch plane pins next to a power pin, Freerouting (200 passes). Four HSEC8 sockets with locating slots cut into the side edges. Only silkscreen warnings remain. Module at the top edge with the antenna strip clear. Two slots per side edge. USB-C, PV and battery along the bottom |
+| TL-SN-001 | **80 × 70 mm** (was 100 × 80 until 2026-11-20, commit 6f28369) | 4: F signal / In1 solid GND plane / In2 solid V3V3_CORE plane / B signal | **Routed, 0 DRC errors, no hand fixes.** Block-aware annealed placement with the four slots laid out identically, two-pad parts with symmetric courtyards turned to face their nets (pin headers never flipped), three board fiducials, DNP PPK2 split headers JP1/JP2, plane fanout except fine-pitch plane pins next to a power pin, Freerouting. Four HSEC8 sockets with locating slots cut into the side edges. Only silkscreen warnings remain. Module at the top edge with the antenna strip clear. Two slots per side edge. USB-C, PV and battery along the bottom |
 | TL-MOD-001..004 | 16 × 26 mm (PIR card 18 × 30) | 2 | **Routed, 0 DRC errors.** A 9.25 mm wide, 8.5 mm deep tongue carries the gold fingers; the outline is cut back either side of it. Fingers stop 0.15 mm short of the bevel. No parts anywhere on the tongue, because it goes into the socket body (`gen_pcbs.py` refuses a placement that puts one there). Tracks only in the 4 mm finger zone (no pour, no vias) |
 | TL-TEST-001 | 22 × 32 mm | 2 | **Routed, 0 DRC errors.** Same tongue and finger zone |
 | TL-DBG-001 | 40 × 36 mm | 2 | **Routed, 0 DRC errors**, no hand fixes. Slot socket straddles the top edge with its locating slot cut beside pin 1 (card plugs in beside it), USB-C on the bottom edge, PPK2 meter headers either side of the socket ([HW-0007](../architecture/decisions/0007-slot-socket-and-debug-adapter.md)) |
@@ -48,8 +52,39 @@ Design rules (project file):
 
 These sit inside typical 2- and 4-layer prototype-service limits. Confirm them against the chosen fab's capability sheet.
 
+## Layout evaluation (2026-11-20)
+
+The first layout was compact enough to route but looked scattered: the placer minimised wirelength with no idea of which parts belong together. The overhaul, and what each step bought:
+
+| Step | Result |
+|---|---|
+| Router benchmark on one placement: Freerouting vs KiCadRoutingTools' autorouter | Freerouting: 0 open, 470 vias, 5654 mm. KRT: 7 open, 694 vias, 5879 mm. **Freerouting kept** |
+| Placer benchmark: ours vs KRT `place_simple` | KRT groups by function but leaves loose clusters and moved the fiducials; ours was compact but unstructured. **Ours kept, given blocks** |
+| Block cohesion, whole-block moves, slot template copy | Blocks stay together; all four slot circuits are identical copies |
+| Outline sweep (100×80, 90×75, 80×70, 75×65) | 75×65 has no room for the debug header. 80×70 places and routes clean once the two sockets per edge keep their 24 mm pitch (their courtyards are 23.3 mm long) |
+| Hide plane-connected pins from Freerouting | Same incremental job: 42 → 16 min |
+| Silkscreen pass | DRC warnings 100 → 6 (all six are deliberate edge-straddling footprints) |
+
+**TL-SN-001 at 80 × 70 mm vs the 100 × 80 mm first layout:**
+
+| | 100 × 80 (old) | 80 × 70 (now) |
+|---|---:|---:|
+| Area | 8000 mm² | 5600 mm² (−30 %) |
+| Track length | 5654 mm | 5156 mm (−9 %) |
+| Vias | 470 | 476 |
+| DRC errors | 0 | 0 |
+| DRC warnings | 100 (silkscreen) | 6 (sockets and module straddling the edge by design; budgeted in `layout-status.json`) |
+| Routing time | ~32 min (6 attempts, 3 at a time) | ~37 min (4 attempts at once, plane pins hidden) |
+| Hottest part (kisi, 25 °C) | U4 58 °C | U4 60 °C |
+
+**What is still not possible automatically, and why.**
+- **Hand-quality power layout.** No open-source placer knows that the TPS63900's input cap, inductor and output cap form a hot loop to keep tiny, or that the BQ25186 needs thermal vias. Next: per-block templates from each vendor's layout example (fixed relative positions inside the block, placed as one rigid macro).
+- **Every reference on silk.** At 0.8 mm text, about a third of the densely packed passives have no clear spot, so their references stay on the fab layer (the assembly drawing). Smaller text would fail the fab's minimum text height.
+- **Routing time.** Freerouting is still 30–90 min an attempt on this board and not deterministic, so routing stays local: in parallel, never in CI.
+- **The last connection or two.** When Freerouting leaves one, the maze router with rip-up closes most of them. Two nets fighting over one channel can still be left open; another Freerouting attempt usually fixes that.
+
 ## Finishing the Sensor Node layout
-Reproduce: `gen_pcbs.py` (placement), then `route_pcbs.py TL-SN-001` (fanout + parallel Freerouting attempts + repair, about 20–40 min on a 12-core Mac instead of 3–4 h one attempt at a time), then `gen_schematics.py` again (a pcbnew save rewrites the `.kicad_pro`, and CI checks generated files are current).
+Reproduce: `gen_pcbs.py` (placement), then `route_pcbs.py TL-SN-001` (fanout + parallel Freerouting attempts + repair, about 60–70 min on a 12-core Mac with four attempts in parallel), then `gen_schematics.py` again (a pcbnew save rewrites the `.kicad_pro`, and CI checks generated files are current).
 
 Two placement and fanout rules replaced the hand edits that `finish_sn.py` used to make:
 - After annealing, `gen_pcbs.py` turns each two-pad part 180° (only where its courtyard stays put, so pin headers are never turned) when that brings its pads nearer their own nets. Wirelength can't tell the two orientations apart, but L1 the wrong way round forced LX2 to cross LX1.

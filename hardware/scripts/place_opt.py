@@ -13,6 +13,9 @@ Cost (lower is better):
   rail.
 - congestion: RUDY (rectangular uniform wire density) on a grid; demand above the cell's routing
   capacity is penalised quadratically. This is what keeps parts from piling up into unroutable knots.
+- group cohesion: each functional block (layout_groups.py: a slot, the regulator, the MCU) pays the
+  Manhattan distance from each member to the block's centroid, so blocks stay compact and do not
+  interleave. Annealing also moves whole blocks at once, so a block can travel without being torn apart.
 - legality: courtyard overlap (with a halo) and leaving the placement area are penalised heavily
   during annealing and removed exactly by a final legalisation pass.
 
@@ -39,6 +42,7 @@ class Part:
     rot: int
     halo: float = 0.4  # extra clearance around the courtyard (routing room)
     anchor: str | None = None  # affinity target (hinted part)
+    group: str | None = None  # functional block (layout_groups.py)
 
 
 @dataclass
@@ -52,6 +56,7 @@ class Problem:
     w_affinity: float = 3.0
     w_congestion: float = 4.0
     w_overlap: float = 200.0
+    w_group: float = 0.0  # group cohesion weight; 0 ignores groups
 
 
 class Placer:
@@ -75,6 +80,11 @@ class Placer:
         self.gw = int((x1 - x0 + 10) / prob.grid_mm) + 1
         self.gh = int((y1 - y0 + 10) / prob.grid_mm) + 1
         self.demand = [0.0] * (self.gw * self.gh)
+        self.groups: dict[str, list[str]] = {}
+        for r in self.refs:
+            if self.parts[r].group:
+                self.groups.setdefault(self.parts[r].group, []).append(r)
+        self.movable_groups = [g for g, m in sorted(self.groups.items()) if any(self.parts[r].movable for r in m)]
         self.net_len: dict[str, float] = {}
         self.net_box: dict[str, tuple[float, float, float, float]] = {}
         for n in self.nets:
@@ -163,6 +173,16 @@ class Placer:
                     best = min(best, abs(px - qx) + abs(py - qy))
         return best
 
+    def group_cost(self, g: str) -> float:
+        """Spread of one block: sum of member distances (Manhattan) to the block centroid."""
+        m = self.groups[g]
+        cx = sum(self.parts[r].x for r in m) / len(m)
+        cy = sum(self.parts[r].y for r in m) / len(m)
+        return sum(abs(self.parts[r].x - cx) + abs(self.parts[r].y - cy) for r in m)
+
+    def _groups_of(self, rs) -> set[str]:
+        return {self.parts[r].group for r in rs if self.parts[r].group} if self.p.w_group else set()
+
     def overlap_of(self, r: str) -> float:
         b = self.box(r)
         tot = 0.0
@@ -184,16 +204,21 @@ class Placer:
         af = sum(self.affinity(r) for r in self.refs)
         ov = sum(self.overlap_of(r) for r in self.movable)
         cg = self.congestion()
-        return {"wirelength": wl, "affinity": af, "congestion": cg, "overlap": ov,
-                "cost": wl + self.p.w_affinity * af + self.p.w_congestion * cg + self.p.w_overlap * ov}
+        gr = sum(self.group_cost(g) for g in self.groups) if self.p.w_group else 0.0
+        return {"wirelength": wl, "affinity": af, "congestion": cg, "overlap": ov, "group": gr,
+                "cost": wl + self.p.w_affinity * af + self.p.w_congestion * cg + self.p.w_overlap * ov
+                + self.p.w_group * gr}
 
     # ---- annealing ---------------------------------------------------------------------
     def _local_cost(self, rs):
         nets = sorted({n for r in rs for n in self.part_nets[r]})
         wl = sum(self.net_len[n] for n in nets)
-        af = sum(self.affinity(o) for o in {d for r in rs for d in self.dependents[r]} | rs)
-        ov = sum(self.overlap_of(r) for r in rs)
-        return wl + self.p.w_affinity * af + self.p.w_overlap * ov, nets
+        # Sorted: summing in set order (string hashes differ per process) made the float cost, and so the
+        # whole anneal, differ between runs with the same seed.
+        af = sum(self.affinity(o) for o in sorted({d for r in rs for d in self.dependents[r]} | set(rs)))
+        ov = sum(self.overlap_of(r) for r in sorted(rs))
+        gr = sum(self.group_cost(g) for g in sorted(self._groups_of(rs)))
+        return wl + self.p.w_affinity * af + self.p.w_overlap * ov + self.p.w_group * gr, nets
 
     def _apply(self, moves, nets):
         for n in nets:
@@ -215,7 +240,18 @@ class Placer:
             r = rng.choice(self.movable)
             part = self.parts[r]
             kind = rng.random()
-            if kind < 0.1:  # swap with a similar-sized movable part
+            if kind < 0.06 and self.movable_groups:  # shift a whole block
+                g = rng.choice(self.movable_groups)
+                dx, dy = rng.gauss(0, step), rng.gauss(0, step)
+                moves = {}
+                for m in self.groups[g]:
+                    pm = self.parts[m]
+                    if pm.movable:
+                        moves[m] = (round(min(max(pm.x + dx, x0), x1) * 20) / 20,
+                                    round(min(max(pm.y + dy, y0), y1) * 20) / 20, pm.rot)
+                if not moves:
+                    continue
+            elif kind < 0.1:  # swap with a similar-sized movable part
                 o = rng.choice(self.movable)
                 if o == r:
                     continue
@@ -279,10 +315,11 @@ class Placer:
         return {r: (p.x, p.y, p.rot) for r, p in self.parts.items() if p.movable}
 
 
-def optimize(prob: Problem, seed: int = 1, iterations: int = 150_000, log=print) -> dict[str, tuple[float, float, int]]:
+def optimize(prob: Problem, seed: int = 1, iterations: int = 150_000, log=print,
+             t0: float = 4.0, step0: float = 12.0) -> dict[str, tuple[float, float, int]]:
     pl = Placer(prob, seed)
     log(f"  place: start {fmt(pl.total())}")
-    pl.anneal(iterations)
+    pl.anneal(iterations, t0=t0, step0=step0)
     log(f"  place: annealed {fmt(pl.total())}")
     failed = pl.legalize()
     if failed:

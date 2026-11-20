@@ -711,6 +711,8 @@ def write_board(board: Board, libs: SymbolLibraries) -> dict:
     (out_dir / "sym-lib-table").write_text(dump(sym_table) + "\n", encoding="utf-8")
     fp_libs = sorted({(p.footprint if p.footprint is not None else syms[p.lib_id].prop("Footprint")).split(":")[0]
                       for p in board.parts} - {""})
+    if board.name == "TL-SN-001":  # board-only fiducials (gen_pcbs.py) come from the stock Fiducial library
+        fp_libs = sorted(set(fp_libs) | {"Fiducial"})
     fp_table = ["fp_lib_table", ["version", "7"]]
     for lib in fp_libs:
         uri = ("${KIPRJMOD}/../libraries/talos-footprints.pretty" if lib == "talos"

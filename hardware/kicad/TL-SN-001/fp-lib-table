@@ -43,6 +43,13 @@
 		(descr "")
 	)
 	(lib
+		(name "Fiducial")
+		(type "KiCad")
+		(uri "${KICAD10_FOOTPRINT_DIR}/Fiducial.pretty")
+		(options "")
+		(descr "")
+	)
+	(lib
 		(name "Inductor_SMD")
 		(type "KiCad")
 		(uri "${KICAD10_FOOTPRINT_DIR}/Inductor_SMD.pretty")
