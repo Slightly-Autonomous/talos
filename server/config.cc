@@ -258,21 +258,82 @@ Result<ParsedDocument> parse_document(const v1::ConfigDocument& doc,
   return out;
 }
 
+namespace {
+
+// Token hashes and device keys published in deploy/config (hub.dev.yaml,
+// dev-device-keys.yaml). Anyone can read them, so they are never accepted on
+// a network-facing hub, whatever dev_mode says (red team #16).
+constexpr const char* kKnownDevTokenHashes[] = {
+    "8ac4afa44f3f01da2d47daaee53270af09cdf9b0482481377b750332904ddd94",  // owner
+    "d967787d3023c82861961e4fb7acaacf48d1175fa1873b4b679bec86c69afd7c",  // mcp-agent
+    "a069201469e8a354bbd72208f9377a2f6c78d76b83a8fde56e763072dc7f42d8",  // metrics
+    "a5272572495630914856ca946d2c9868fb9cfce8fc1a674e411989cdd4c5a1bc",  // sync-worker
+    "3a0c053a94f5d03270628729fd2f84ba52065698f1b95719409e93042df778a3",  // node-07
+    "65060935b3f93197b2100a6d3137aefa655a8961fe06f9dbade7a5bc86cb988f",  // node-12
+    "d53ebf5b31fe00c0381b5ec2dcd95a1981018ddde6064236be8eed5720fb720d",  // patio_speaker
+    "dd63e701464b4a0530f6b22693a920496c64086aab7ff8f045db279a1b28948f",  // lock-3
+};
+constexpr const char* kKnownDevDeviceKeys[] = {
+    "000102030405060708090a0b0c0d0e0f",
+    "101112131415161718191a1b1c1d1e1f",
+};
+
+bool loopback(const std::string& h) { return h == "127.0.0.1" || h == "localhost" || h == "::1"; }
+
+std::string hex_of(const std::vector<std::uint8_t>& bytes) {
+  static constexpr char kHex[] = "0123456789abcdef";
+  std::string out;
+  for (auto b : bytes) {
+    out += kHex[b >> 4];
+    out += kHex[b & 15];
+  }
+  return out;
+}
+
+}  // namespace
+
+bool is_known_dev_token_hash(const std::string& sha256_hex) {
+  for (const char* h : kKnownDevTokenHashes) {
+    if (sha256_hex == h) return true;
+  }
+  return false;
+}
+
+bool is_known_dev_device_key(const std::vector<std::uint8_t>& key) {
+  const std::string hex = hex_of(key);
+  for (const char* k : kKnownDevDeviceKeys) {
+    if (hex == k) return true;
+  }
+  return false;
+}
+
 Status check_dev_mode_hosts(const v1::HubConfig& hub, const std::string& http_host,
-                            bool allow_dev_on_network) {
-  if (!hub.dev_mode() || allow_dev_on_network) return Status::Ok();
-  auto loopback = [](const std::string& h) {
-    return h == "127.0.0.1" || h == "localhost" || h == "::1";
-  };
+                            bool allow_dev_on_network,
+                            const std::vector<std::vector<std::uint8_t>>& device_keys) {
+  if (allow_dev_on_network) return Status::Ok();
+  std::string why;
+  if (hub.dev_mode()) why = "config has dev_mode=true (well-known dev tokens and keys)";
+  for (const auto& p : hub.principals()) {
+    if (why.empty() && is_known_dev_token_hash(p.token_sha256())) {
+      why = "principal " + p.id() + " uses a published dev token";
+    }
+  }
+  for (const auto& d : hub.devices()) {
+    if (why.empty() && is_known_dev_token_hash(d.token_sha256())) {
+      why = "device " + d.device_id() + " uses a published dev token";
+    }
+  }
+  for (const auto& k : device_keys) {
+    if (why.empty() && is_known_dev_device_key(k)) why = "a CoAP device key is a published dev key";
+  }
+  if (why.empty()) return Status::Ok();
   std::vector<std::string> hosts{http_host};
   if (hub.coap().enabled()) {
     hosts.push_back(hub.coap().listen_host().empty() ? http_host : hub.coap().listen_host());
   }
   for (const auto& h : hosts) {
     if (!loopback(h)) {
-      return Error{"dev_mode_on_network",
-                   "refusing to listen on " + h +
-                       ": config has dev_mode=true (well-known dev tokens and keys)."};
+      return Error{"dev_mode_on_network", "refusing to listen on " + h + ": " + why + "."};
     }
   }
   return Status::Ok();

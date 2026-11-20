@@ -21,6 +21,13 @@
 ## Projection rule
 For each capability, current observed state keeps the value with the **highest source position** from that device: boot epoch first, then sequence. A late (reordered) observation is journaled and visible in history, but it does not overwrite a newer value. Together with `journal_seq` ordering, this makes the final state independent of how independent devices' deliveries interleave. A seeded metamorphic test covers this.
 
+## Amendment (2026-11-20, red team): bounded positions and owner reset
+One forged report with boot epoch `0xFFFFFFFF` used to hold every capability of a device forever, across restarts and key rotations: every later genuine report was "late". Now:
+- **Bounds.** A sequence is at most `UINT32_MAX` (the wire width) and at most 2^20 past the highest seen in its boot. A new boot epoch is at most 64 past the newest one seen. A device with no history accepts epochs up to 2^20. The caller may raise the epoch limit with a ceiling: the HTTP device API passes hub time + 300 s, because HTTP adapters (devsim, Frigate) use Unix-second epochs; the CoAP path passes none. Anything beyond is refused as `source_position_out_of_range`.
+- **Health.** Refused jumps, and accepted reports from an older boot than the held position, mark the device `FAULTED` ("reports ignored as late") in `/v1/health/devices` for the offline window, instead of `HEALTHY`.
+- **Recovery.** `POST /v1/devices/{id}/sequence/reset` (owner only) journals a `SourceReset`. Replay and restore drop the device's dedup windows, the held positions of its capabilities fall to zero (values stay, still subject to freshness), and pending commands' dispatch baselines for it are cleared. The next genuine report becomes current again. Because the dedup window for that device is reopened, rotate the device's key at the same time, so old frames cannot be replayed.
+- **Device contract** (CoAP firmware): `boot_epoch` is a persistent counter incremented by exactly 1 per boot, never time-based; `sequence` restarts at each boot, increments by 1 per event and stays within 32 bits. A device that boots more than 64 times without one accepted report, or that is reflashed with a reset counter, needs an owner reset. HTTP adapters may use Unix-second epochs. See ADR 0014.
+
 ## Snapshots
 A snapshot is a `PropertyState` with `through_seq`. `replay(snapshot, journal)` applies only entries after `through_seq`, and it is tested to equal a full replay. Reducing an entry at or below `through_seq` is a no-op.
 

@@ -21,9 +21,34 @@ bool payload_fits(const CapabilityId& capability, const ObservationPayload& p) {
   return true;
 }
 
+// Rules trigger on event_type while the UI renders the payload, so the two
+// must agree: each payload kind has a fixed set of event types, and a value
+// specific type ("lock.unlocked") must match the value.
+bool event_type_fits(const std::string& t, const ObservationPayload& p) {
+  if (const auto* m = std::get_if<MotionState>(&p)) {
+    return t == (m->detected ? "motion.detected" : "motion.cleared");
+  }
+  if (const auto* c = std::get_if<ContactState>(&p)) {
+    return t == "contact.state" || t == (c->open ? "contact.opened" : "contact.closed");
+  }
+  if (const auto* l = std::get_if<LockState>(&p)) {
+    return t == "lock.state" || t == (l->locked ? "lock.locked" : "lock.unlocked");
+  }
+  if (const auto* a = std::get_if<AudioPlayback>(&p)) {
+    return t == "audio.playback" ||
+           t == (a->playing ? "audio.playback_started" : "audio.playback_stopped");
+  }
+  if (std::holds_alternative<ImpactDetected>(p)) return t == "impact.detected";
+  if (std::holds_alternative<TemperatureHumidity>(p)) return t == "environment.reading";
+  if (std::holds_alternative<ObjectDetected>(p)) return t == "camera.object_detected";
+  if (std::holds_alternative<Heartbeat>(p)) return t == "device.heartbeat";
+  return false;
+}
+
 }  // namespace
 
-IngestResult Ingestor::ingest(const ObservationEnvelope& env, Timestamp received_at) {
+IngestResult Ingestor::ingest(const ObservationEnvelope& env, Timestamp received_at,
+                              IngestOptions options) {
   if (Status s = validate_envelope(env); !s) {
     return {IngestStatus::kRejected, std::nullopt, s.error()};
   }
@@ -48,12 +73,25 @@ IngestResult Ingestor::ingest(const ObservationEnvelope& env, Timestamp received
                   "payload kind does not fit " + env.source.capability.str()}};
   }
 
-  const auto check = tracker_.check(env.source.device, env.position);
+  if (!event_type_fits(env.event_type, env.payload)) {
+    return {IngestStatus::kRejected, std::nullopt,
+            Error{"event_type_does_not_match_payload",
+                  "event_type " + env.event_type + " does not fit the payload"}};
+  }
+
+  const auto check = tracker_.check(env.source.device, env.position, options.epoch_ceiling);
   switch (check.verdict) {
     case SourceTracker::Verdict::kDuplicate:
       return {IngestStatus::kDuplicate, std::nullopt, {}};
     case SourceTracker::Verdict::kTooOld:
       return {IngestStatus::kTooOld, std::nullopt, {}};
+    case SourceTracker::Verdict::kOutOfRange:
+      return {
+          IngestStatus::kRejected, std::nullopt,
+          Error{"source_position_out_of_range",
+                "boot epoch " + std::to_string(env.position.boot_epoch) + " / sequence " +
+                    std::to_string(env.position.sequence) +
+                    " jumps too far past what the hub has seen from " + env.source.device.str()}};
     case SourceTracker::Verdict::kNew:
       break;
   }
@@ -68,6 +106,8 @@ void Ingestor::restore() {
   for (const auto& entry : read_all(journal_)) {
     if (const auto* obs = std::get_if<ObservationRecorded>(&entry.event)) {
       tracker_.record(obs->envelope.source.device, obs->envelope.position);
+    } else if (const auto* reset = std::get_if<SourceReset>(&entry.event)) {
+      tracker_.reset(reset->device);
     }
   }
 }

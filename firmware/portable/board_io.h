@@ -113,6 +113,7 @@ class BoardIo final : public IPower {
 
   // IPower
   bool begin() override;
+  bool resume(std::uint8_t aon_on, bool& board_ok) override;
   void set_rail(std::uint8_t slot, Rail rail, bool on) override;
   std::uint32_t battery_mv() override;
   PowerSource source() override;
@@ -143,6 +144,7 @@ class BoardIo final : public IPower {
   PinRef ref(const ExpanderPin& p);
   // Writes the safe pattern to every expander (outputs, then directions).
   bool configure_expanders();
+  void configure_charger();
   // Retries the expander configuration if begin() did not complete it.
   bool ensure_ready() { return expanders_ready_ || configure_expanders(); }
   struct Plan {

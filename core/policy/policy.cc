@@ -40,13 +40,14 @@ Authorization evaluate(const Principal& principal, const Command& command,
 }
 
 Authorization authorize_arm_change(const Principal& principal, const PropertyId& property,
-                                   ArmMode target) {
+                                   ArmMode current, ArmMode target) {
   const Grant* grant = nullptr;
   for (const auto& g : principal.grants) {
     if (g.property == property) grant = &g;
   }
   if (principal.id.empty() || !grant) return {false, "no_grant_for_property"};
-  if (target == ArmMode::kDisarmed) {
+  // ArmMode is ordered by protection level.
+  if (static_cast<int>(target) < static_cast<int>(current)) {
     if (principal.kind != PrincipalKind::kHuman) return {false, "requires_human_authorization"};
     if (grant->max_risk < RiskClass::kSecurityCritical) return {false, "risk_exceeds_grant"};
     return {true, "granted"};

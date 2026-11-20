@@ -103,6 +103,48 @@ describe("zoneActivity", () => {
       "unknown",
     );
   });
+  // Red team #14: one fresh-quiet PIR must not hide a stale or silent one.
+  test("a zone with any stale or never-reported PIR is not quiet", () => {
+    const pir = (deviceId: string, detected: boolean, ageMs: number, freshness: Freshness) => ({
+      ref: { deviceId, slot: 0, capabilityId: "motion.detect" },
+      value: { kind: { case: "motion" as const, value: { detected } } },
+      receivedAtUnixMs: BigInt(NOW - ageMs),
+      freshness,
+    });
+    const quiet = pir("node-07", false, 120_000, Freshness.FRESH);
+    const dead = pir("node-12", false, 120_000, Freshness.STALE);
+    expect(
+      zoneActivity(property, state({ capabilities: [quiet, dead] }), NOW).get("backyard"),
+    ).toBe("unknown");
+    // Order does not matter.
+    expect(
+      zoneActivity(property, state({ capabilities: [dead, quiet] }), NOW).get("backyard"),
+    ).toBe("unknown");
+    // Positive evidence still shows.
+    const active = pir("node-07", true, 1000, Freshness.FRESH);
+    expect(
+      zoneActivity(property, state({ capabilities: [active, dead] }), NOW).get("backyard"),
+    ).toBe("active");
+    // A declared PIR that never reported counts as unknown.
+    const declared = create(PropertySchema, {
+      id: "house-01",
+      zones: property.zones,
+      devices: [
+        { id: "node-07", zoneId: "backyard", capabilities: ["motion.detect"] },
+        { id: "node-12", zoneId: "backyard", capabilities: ["motion.detect"] },
+      ],
+    });
+    expect(zoneActivity(declared, state({ capabilities: [quiet] }), NOW).get("backyard")).toBe(
+      "unknown",
+    );
+    expect(
+      zoneActivity(
+        declared,
+        state({ capabilities: [quiet, pir("node-12", false, 90_000, Freshness.FRESH)] }),
+        NOW,
+      ).get("backyard"),
+    ).toBe("quiet");
+  });
 });
 
 describe("portalStatus", () => {

@@ -16,7 +16,11 @@ namespace talos::fw {
 class CoapLink final : public ILink {
  public:
   static constexpr std::size_t kMaxIdLen = 31;
-  static constexpr std::size_t kPending = 8;
+  // Requests whose reply is still accepted. One per queue entry
+  // (NodeRuntime::kQueueCapacity): a Thread SED reply waits for the child's
+  // next data poll, so a backlog's ACKs arrive well after newer sends (red
+  // team RT-07). The oldest is overwritten; 16 B each.
+  static constexpr std::size_t kPending = 32;
   static constexpr std::size_t kInbox = 32;
 
   // `device_id` and `key` must outlive the link.

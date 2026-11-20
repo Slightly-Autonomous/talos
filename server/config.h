@@ -1,7 +1,9 @@
 // Hub configuration loading and validation (ADR 0010).
 #pragma once
 
+#include <cstdint>
 #include <string>
+#include <vector>
 
 #include "core/base/result.h"
 #include "core/engine/engine.h"
@@ -45,11 +47,15 @@ Result<ParsedDocument> parse_document(const talos::server::v1::ConfigDocument& d
 Result<std::vector<Principal>> with_rule_principals(std::vector<Principal> base,
                                                     const std::vector<Rule>& rules,
                                                     const PropertyId& property);
-// dev_mode configs carry well-known tokens and device keys: refuse a
-// non-loopback HTTP host, and a non-loopback CoAP host when CoAP is enabled,
-// unless the operator explicitly allows it (TALOS_ALLOW_DEV_ON_NETWORK=1).
+// Well-known dev credentials (dev_mode configs, or any published dev token
+// hash or device key, with or without dev_mode): refuse a non-loopback HTTP
+// host, and a non-loopback CoAP host when CoAP is enabled, unless the operator
+// explicitly allows it (TALOS_ALLOW_DEV_ON_NETWORK=1).
 Status check_dev_mode_hosts(const talos::server::v1::HubConfig& hub, const std::string& http_host,
-                            bool allow_dev_on_network);
+                            bool allow_dev_on_network,
+                            const std::vector<std::vector<std::uint8_t>>& device_keys = {});
+bool is_known_dev_token_hash(const std::string& sha256_hex);
+bool is_known_dev_device_key(const std::vector<std::uint8_t>& key);
 
 Result<LoadedConfig> build_config(talos::server::v1::HubConfig hub, const std::string& base_dir);
 

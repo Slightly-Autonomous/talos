@@ -1,10 +1,18 @@
 #include "server/http_server.h"
 
+#include <arpa/inet.h>
 #include <google/protobuf/util/json_util.h>
 #include <httplib.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
+#include <unistd.h>
 
 #include <algorithm>
 #include <charconv>
+#include <chrono>
+#include <condition_variable>
+#include <set>
+#include <thread>
 
 #include "codec/codec.h"
 
@@ -38,6 +46,134 @@ void send_error(httplib::Response& res, int status, const std::string& code,
   send(res, status, e);
 }
 
+// Slowloris guard (red team #9). cpp-httplib's read timeout restarts on every
+// byte, so a client trickling headers holds a worker forever. This server
+// gives each connection a deadline for reading a request (headers and body),
+// enforced by a watchdog that shuts the socket down, and caps connections per
+// peer address. Handlers clear the deadline while they run; streaming
+// handlers (SSE) keep it cleared.
+class GuardedServer final : public httplib::Server {
+ public:
+  explicit GuardedServer(HttpServer::ConnectionLimits limits)
+      : limits_(limits), watchdog_([this] { watch(); }) {
+    new_task_queue = [] { return new httplib::ThreadPool(16, 128, 256); };
+  }
+  ~GuardedServer() override {
+    {
+      std::lock_guard lock(mu_);
+      stopping_ = true;
+    }
+    cv_.notify_all();
+    watchdog_.join();
+  }
+
+  // Called on the worker thread that serves the connection.
+  static void headers_received() {
+    if (tl_conn_) arm(tl_conn_->read_deadline_s);
+  }
+  static void handler_entered() { arm(0); }
+  // Writing the response, keep-alive idle time and the next request's headers.
+  static void handler_left() {
+    if (tl_conn_ && !tl_conn_->streaming) arm(3 * tl_conn_->read_deadline_s);
+  }
+  static void mark_streaming() {
+    if (tl_conn_) tl_conn_->streaming = true;
+    arm(0);
+  }
+
+ protected:
+  bool process_and_close_socket(socket_t sock) override {
+    sockaddr_storage addr{};
+    socklen_t len = sizeof addr;
+    std::string peer = "?";
+    if (::getpeername(sock, reinterpret_cast<sockaddr*>(&addr), &len) == 0) {
+      char host[64] = {};
+      if (addr.ss_family == AF_INET) {
+        ::inet_ntop(AF_INET, &reinterpret_cast<sockaddr_in*>(&addr)->sin_addr, host, sizeof host);
+      } else if (addr.ss_family == AF_INET6) {
+        ::inet_ntop(AF_INET6, &reinterpret_cast<sockaddr_in6*>(&addr)->sin6_addr, host,
+                    sizeof host);
+      }
+      peer = host;
+    }
+    // A dup keeps the open file description alive until we close it, so the
+    // watchdog's shutdown() can never hit a reused descriptor.
+    Conn conn{::dup(sock), peer, limits_.read_deadline_seconds};
+    {
+      std::lock_guard lock(mu_);
+      if (conn.fd < 0 || per_peer_[peer] >= limits_.max_connections_per_peer) {
+        if (conn.fd >= 0) ::close(conn.fd);
+        ::shutdown(sock, SHUT_RDWR);
+        ::close(sock);
+        return false;
+      }
+      ++per_peer_[peer];
+      conns_.insert(&conn);
+    }
+    tl_conn_ = &conn;
+    arm(conn.read_deadline_s);
+    const bool ret = httplib::Server::process_and_close_socket(sock);
+    tl_conn_ = nullptr;
+    {
+      std::lock_guard lock(mu_);
+      conns_.erase(&conn);
+      if (--per_peer_[peer] <= 0) per_peer_.erase(peer);
+    }
+    ::close(conn.fd);
+    return ret;
+  }
+
+ private:
+  struct Conn {
+    int fd;
+    std::string peer;
+    int read_deadline_s;
+    std::atomic<std::int64_t> deadline_ms{0};  // 0: none
+    bool streaming = false;
+  };
+  static std::int64_t now_ms() {
+    return std::chrono::duration_cast<std::chrono::milliseconds>(
+               std::chrono::steady_clock::now().time_since_epoch())
+        .count();
+  }
+  static void arm(int seconds) {
+    if (tl_conn_) tl_conn_->deadline_ms = seconds > 0 ? now_ms() + seconds * 1000 : 0;
+  }
+  void watch() {
+    std::unique_lock lock(mu_);
+    while (!stopping_) {
+      cv_.wait_for(lock, std::chrono::milliseconds(200));
+      const auto now = now_ms();
+      for (Conn* c : conns_) {
+        const auto d = c->deadline_ms.load();
+        if (d != 0 && now > d) {
+          ::shutdown(c->fd, SHUT_RDWR);  // the worker's read fails and it closes
+          c->deadline_ms = 0;
+        }
+      }
+    }
+  }
+
+  static thread_local Conn* tl_conn_;
+  const HttpServer::ConnectionLimits limits_;
+  std::mutex mu_;
+  std::condition_variable cv_;
+  bool stopping_ = false;
+  std::set<Conn*> conns_;
+  std::map<std::string, int> per_peer_;
+  std::thread watchdog_;
+};
+
+thread_local GuardedServer::Conn* GuardedServer::tl_conn_ = nullptr;
+
+// RAII marker for "a handler is running on this connection".
+struct HandlerScope {
+  HandlerScope() { GuardedServer::handler_entered(); }
+  ~HandlerScope() { GuardedServer::handler_left(); }
+  HandlerScope(const HandlerScope&) = delete;
+  HandlerScope& operator=(const HandlerScope&) = delete;
+};
+
 }  // namespace
 
 int http_status_for(const Error& e) {
@@ -45,6 +181,7 @@ int http_status_for(const Error& e) {
   if (e.code == "not_found") return 404;
   if (e.code == "unknown_principal") return 403;
   if (e.code == "conflict" || e.code == "stale_revision") return 409;
+  if (e.code == "rate_limited") return 429;
   // Hub-side failures are not the caller's fault: never report them as 400.
   if (e.code == "storage_error" || e.code == "corrupt_journal" || e.code == "encode_error" ||
       e.code == "crypto_unavailable" || e.code == "schema_too_new" ||
@@ -88,17 +225,33 @@ std::uint64_t query_u64(const httplib::Request& req, const char* key, std::uint6
 }  // namespace
 
 HttpServer::HttpServer(HubService& hub, const Authenticator& auth,
-                       std::vector<std::string> cors_origins, int max_event_streams)
+                       std::vector<std::string> cors_origins, int max_event_streams,
+                       ConnectionLimits limits)
     : hub_(hub),
       auth_(auth),
       cors_origins_(std::move(cors_origins)),
       max_event_streams_(max_event_streams),
-      server_(std::make_unique<httplib::Server>()) {
+      server_(std::make_unique<GuardedServer>(limits)) {
   server_->set_payload_max_length(kMaxFirmwareBodyBytes);
   routes();
 }
 
 HttpServer::~HttpServer() { stop(); }
+
+bool HttpServer::acquire_stream(const PrincipalId& who) {
+  const bool owner = hub_.is_owner(who);
+  std::lock_guard lock(streams_->mu);
+  const int reserved = std::min(kReservedOwnerStreams, max_event_streams_ / 2);
+  const int limit = owner ? max_event_streams_ : max_event_streams_ - reserved;
+  int& mine = streams_->per_principal[who];
+  if (streams_->total >= limit || mine >= kMaxStreamsPerPrincipal) {
+    if (mine == 0) streams_->per_principal.erase(who);
+    return false;
+  }
+  ++mine;
+  ++streams_->total;
+  return true;
+}
 
 Result<int> HttpServer::bind(const std::string& host, int port) {
   if (port == 0) {
@@ -134,6 +287,7 @@ void HttpServer::routes() {
       res.set_header("Access-Control-Allow-Methods", "GET, POST, PUT, OPTIONS");
     }
     ++hub_.metrics().http_requests;
+    GuardedServer::headers_received();  // the body must follow within the deadline
     if (req.method == "OPTIONS") {
       res.status = 204;
       return httplib::Server::HandlerResponse::Handled;
@@ -144,6 +298,7 @@ void HttpServer::routes() {
   // Wraps a handler that requires a principal (person/agent) identity.
   auto principal = [this](auto handler) {
     return [this, handler](const httplib::Request& req, httplib::Response& res) {
+      HandlerScope scope;
       auto id = auth_.authenticate(req.get_header_value("Authorization"));
       if (!id) return send_error(res, 401, "unauthenticated", "missing or invalid bearer token");
       if (id->kind != Identity::Kind::kPrincipal) {
@@ -154,6 +309,7 @@ void HttpServer::routes() {
   };
   auto device = [this](auto handler) {
     return [this, handler](const httplib::Request& req, httplib::Response& res) {
+      HandlerScope scope;
       auto id = auth_.authenticate(req.get_header_value("Authorization"));
       if (!id) return send_error(res, 401, "unauthenticated", "missing or invalid bearer token");
       if (id->kind != Identity::Kind::kDevice) {
@@ -163,8 +319,10 @@ void HttpServer::routes() {
     };
   };
 
-  s.Get("/v1/health",
-        [this](const httplib::Request&, httplib::Response& res) { send(res, 200, hub_.health()); });
+  s.Get("/v1/health", [this](const httplib::Request&, httplib::Response& res) {
+    HandlerScope scope;
+    send(res, 200, hub_.health());
+  });
 
   s.Get("/v1/property",
         principal([this](const PrincipalId&, const httplib::Request&, httplib::Response& res) {
@@ -192,16 +350,16 @@ void HttpServer::routes() {
   // streaming, not EventSource): tokens never go in URLs.
   // Each stream holds a worker thread, so streams are capped well below the
   // pool size: device ingest and commands must always find a free worker.
-  s.Get("/v1/events",
-        principal([this](const PrincipalId&, const httplib::Request& req, httplib::Response& res) {
-          if (active_streams_->fetch_add(1) >= max_event_streams_) {
-            active_streams_->fetch_sub(1);
+  s.Get("/v1/events", principal([this](const PrincipalId& who, const httplib::Request& req,
+                                       httplib::Response& res) {
+          if (!acquire_stream(who)) {
             res.set_header("Retry-After", "5");
             return send_error(res, 503, "too_many_streams", "too many live event streams");
           }
+          GuardedServer::mark_streaming();
           auto cursor = std::make_shared<std::uint64_t>(query_u64(req, "after", 0));
           res.set_header("Cache-Control", "no-cache");
-          auto streams = active_streams_;
+          auto streams = streams_;
           res.set_chunked_content_provider(
               "text/event-stream",
               [this, cursor](std::size_t, httplib::DataSink& sink) {
@@ -219,7 +377,11 @@ void HttpServer::routes() {
                 }
                 return true;
               },
-              [streams](bool) { streams->fetch_sub(1); });
+              [streams, who](bool) {
+                std::lock_guard lock(streams->mu);
+                --streams->total;
+                if (--streams->per_principal[who] <= 0) streams->per_principal.erase(who);
+              });
         }));
 
   s.Get("/v1/config",
@@ -263,6 +425,19 @@ void HttpServer::routes() {
           }
           send(res, 200, hub_.diagnostics(DeviceId(req.get_param_value("device_id"))));
         }));
+
+  // Owner only: forget a device's source positions (journaled SourceReset),
+  // after a poisoned boot epoch or a reflash with a rotated key (ADR 0008).
+  s.Post(R"(/v1/devices/([A-Za-z0-9_\-]+)/sequence/reset)",
+         principal(
+             [this](const PrincipalId& who, const httplib::Request& req, httplib::Response& res) {
+               if (Status st = hub_.reset_device_sequence(who, DeviceId(req.matches[1])); !st) {
+                 return send_error(res, st.error());
+               }
+               api::IngestResponse out;
+               out.set_status("reset");
+               send(res, 200, out);
+             }));
 
   s.Post(R"(/v1/devices/([A-Za-z0-9_\-]+)/config)",
          principal(

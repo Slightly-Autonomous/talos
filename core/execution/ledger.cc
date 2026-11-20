@@ -30,14 +30,17 @@ RequestResult CommandLedger::request(const Command& command, const Authorization
                                      Timestamp now) const {
   if (auto it = by_idempotency_key_.find({command.principal, command.idempotency_key});
       !command.idempotency_key.empty() && it != by_idempotency_key_.end()) {
-    return {it->second, true, false, {}, {}};
+    return {it->second, true, false, {}, {}, false, {}};
   }
   if (auto it = records_.find(command.id); it != records_.end()) {
-    if (it->second.command.principal != command.principal) return {command.id, false, true, {}, {}};
-    return {command.id, true, false, {}, {}};
+    if (it->second.command.principal != command.principal)
+      return {command.id, false, true, {}, {}, false, {}};
+    return {command.id, true, false, {}, {}, false, {}};
   }
+  if (denied_.contains({command.principal, command.id}))
+    return {command.id, true, false, {}, {}, false, {}};
 
-  RequestResult r{command.id, false, false, {}, {}};
+  RequestResult r{command.id, false, false, {}, {}, false, {}};
   CommandTransition created = make(command.id, CommandStatus::kRequested, now, "requested");
   created.created = command;
   r.transitions.push_back(std::move(created));
@@ -111,6 +114,9 @@ std::vector<CommandTransition> CommandLedger::on_observation(const ObservationEn
     const auto& expect = *rec.command.expect;
     if (expect.source != obs.source || expect.payload != obs.payload) continue;
     if (received_at < *rec.dispatched_at) continue;  // predates the command
+    // A report the device made before (or at) dispatch says nothing about
+    // what the command did (ADR 0004 amendment).
+    if (rec.baseline && !(*rec.baseline < obs.position)) continue;
     auto t = make(id, CommandStatus::kVerified, received_at, "observed expected state",
                   received_at > rec.verification_deadline());
     t.evidence = obs.event_id;
@@ -166,11 +172,50 @@ void CommandLedger::apply(const CommandTransition& t) {
   it->second.status = t.to;
   if (t.to == CommandStatus::kDispatched) it->second.dispatched_at = t.at;
   it->second.history.push_back(t);
+  if (t.to != CommandStatus::kDenied) return;
+  // Denied requests move out of the id namespace and are kept bounded.
+  auto node = records_.extract(it);
+  std::pair key{node.mapped().command.principal, t.command};
+  denied_.insert_or_assign(key, std::move(node.mapped()));
+  denied_order_.push_back(key);
+  while (denied_order_.size() > kMaxDenied) {
+    const auto old = denied_order_.front();
+    denied_order_.pop_front();
+    auto d = denied_.find(old);
+    if (d == denied_.end()) continue;
+    const auto& key_str = d->second.command.idempotency_key;
+    if (auto k = by_idempotency_key_.find({old.first, key_str});
+        k != by_idempotency_key_.end() && k->second == old.second) {
+      by_idempotency_key_.erase(k);
+    }
+    denied_.erase(d);
+  }
+}
+
+void CommandLedger::set_baseline(const CommandId& id, std::optional<SourcePosition> position) {
+  if (auto it = records_.find(id); it != records_.end()) it->second.baseline = position;
+}
+
+void CommandLedger::clear_baselines(const DeviceId& device) {
+  for (auto& [id, rec] : records_) {
+    if (rec.command.expect && rec.command.expect->source.device == device) rec.baseline.reset();
+  }
 }
 
 const CommandRecord* CommandLedger::find(const CommandId& id) const {
-  auto it = records_.find(id);
-  return it == records_.end() ? nullptr : &it->second;
+  if (auto it = records_.find(id); it != records_.end()) return &it->second;
+  for (const auto& [key, rec] : denied_) {
+    if (key.second == id) return &rec;
+  }
+  return nullptr;
+}
+
+const CommandRecord* CommandLedger::find(const PrincipalId& principal, const CommandId& id) const {
+  if (auto it = records_.find(id); it != records_.end()) {
+    return it->second.command.principal == principal ? &it->second : nullptr;
+  }
+  auto it = denied_.find({principal, id});
+  return it == denied_.end() ? nullptr : &it->second;
 }
 
 }  // namespace talos

@@ -82,6 +82,22 @@ class EventQueue {
     return false;
   }
 
+  // Removes every queued event matching pred (heartbeat coalescing, telemetry
+  // TTL). Returns how many were removed; they count as expired, not dropped.
+  template <typename F>
+  std::size_t remove_if(F&& pred) {
+    std::size_t n = 0;
+    for (auto& s : slots_) {
+      if (s.used && pred(s.event)) {
+        s.used = false;
+        ++n;
+      }
+    }
+    expired_ += static_cast<std::uint32_t>(n);
+    return n;
+  }
+  std::uint32_t expired() const { return expired_; }
+
   std::size_t size() const {
     std::size_t n = 0;
     for (const auto& s : slots_) n += s.used ? 1 : 0;
@@ -123,6 +139,7 @@ class EventQueue {
   std::uint64_t next_order_ = 0;
   std::uint32_t dropped_ = 0;
   std::uint32_t dropped_p0_ = 0;
+  std::uint32_t expired_ = 0;
 };
 
 }  // namespace talos::fw

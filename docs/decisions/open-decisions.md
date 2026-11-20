@@ -20,6 +20,9 @@ A living register (spec §55). Nothing here is decided until an ADR, a test, a b
 | P0 | Device provisioning | Claim/commissioning flow that generates per-device CoAP keys (today a YAML file, ADR 0014) | Spec §37 design + HIL |
 | P1 | Thread validation | OTNS/OpenThread POSIX harness for partitions, parent switching, sleepy polling | Linux CI job with OTNS |
 | P1 | Dedup window | Is 1024 sequences per (device, boot) enough given device-side queue depth? (ADR 0008) | Firmware queue design, Phase 5/6 |
+| P1 | Uplink freshness | Bounds (epoch +64, sequence +2^20) and owner reset limit epoch poisoning; an authenticated monotonic uplink counter or a proof-carrying new epoch would remove the need for a reset (ADR 0008/0014 amendments) | Firmware wire-format change |
+| P1 | API pagination | `/v1/state` returns every non-denied command; paginate or window it (red team #8) | Measured history sizes |
+| P2 | Device credentials | Devices hold both an HTTP token and a CoAP key; CoAP-only nodes could drop the token (red team #4) | Provisioning flow (spec §37) |
 | P1 | NVR | Frigate vs custom adapter, RTSP/ONVIF profiles | Integration proof of concept |
 | P1 | Hub hardware | Pi model vs mini-PC; MQTT placement; RCP firmware | Measured load |
 | P1 | Twin calibration | All PIR/camera/impact/latency parameters in `simulation/scenarios/sites` are placeholders (ADR 0009) | Bench and field measurements, Phase 8 |

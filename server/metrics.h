@@ -20,6 +20,11 @@ struct Metrics {
   std::atomic<std::uint64_t> coap_duplicate_messages{0};
   std::atomic<std::uint64_t> ota_chunks_sent{0};
   std::atomic<std::uint64_t> journal_append_failures{0};
+  std::atomic<std::uint64_t> coap_replayed{0};  // verified but not fresh
+  std::atomic<std::uint64_t> commands_rate_limited{0};
+  std::atomic<std::uint64_t> denials_unrecorded{0};
+  std::atomic<std::uint64_t> rule_command_conflicts{0};
+  std::atomic<std::uint64_t> ingest_superseded{0};
   std::atomic<std::uint64_t> journal_seq{0};
 
   std::string prometheus() const;

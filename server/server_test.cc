@@ -1,9 +1,16 @@
+#include <arpa/inet.h>
 #include <google/protobuf/util/json_util.h>
 #include <gtest/gtest.h>
 #include <httplib.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
+#include <unistd.h>
 
 #include <atomic>
+#include <cerrno>
+#include <csignal>
 #include <cstdlib>
+#include <cstring>
 #include <filesystem>
 #include <thread>
 
@@ -16,6 +23,12 @@
 #include "server/jwt.h"
 #include "server/persistence/config_store.h"
 #include "server/persistence/sqlite_journal.h"
+
+#ifdef MSG_NOSIGNAL
+#define MSG_NOSIGNAL_COMPAT MSG_NOSIGNAL
+#else
+#define MSG_NOSIGNAL_COMPAT 0
+#endif
 
 namespace talos::server {
 namespace {
@@ -42,6 +55,7 @@ const std::string kNodeToken = "node-07-secret";
 const std::string kSpeakerToken = "speaker-secret";
 const std::string kNode12Token = "node-12-secret";
 const std::string kLockToken = "lock-3-secret";
+const std::string kMetricsToken = "metrics-secret";
 
 sv::HubConfig hub_config(const std::string& sqlite_path) {
   sv::HubConfig h;
@@ -72,16 +86,18 @@ rules:
   // Parsed through the YAML loader to exercise the real config path.
   EXPECT_TRUE(codec::parse_yaml(yaml, h));
   h.mutable_storage()->set_sqlite_path(sqlite_path);
-  auto add_principal = [&](const std::string& id, sv::PrincipalKind kind,
-                           const std::string& token) {
+  auto add_principal = [&](const std::string& id, sv::PrincipalKind kind, const std::string& token,
+                           talos::v1::RiskClass risk = talos::v1::RISK_CLASS_SECURITY_CRITICAL) {
     auto* p = h.add_principals();
     p->set_id(id);
     p->set_kind(kind);
-    p->set_max_risk(talos::v1::RISK_CLASS_SECURITY_CRITICAL);
+    p->set_max_risk(risk);
     p->set_token_sha256(sha256_hex(token));
   };
   add_principal("owner", sv::PRINCIPAL_KIND_HUMAN, kOwnerToken);
   add_principal("agent-1", sv::PRINCIPAL_KIND_AGENT, kAgentToken);
+  add_principal("metrics", sv::PRINCIPAL_KIND_SYSTEM, kMetricsToken,
+                talos::v1::RISK_CLASS_INFORMATIONAL);
   auto add_device = [&](const std::string& id, const std::string& token) {
     auto* d = h.add_devices();
     d->set_device_id(id);
@@ -107,7 +123,7 @@ TEST(Config, ValidConfigBuilds) {
   ASSERT_TRUE(c.ok()) << c.error().message;
   EXPECT_EQ(c.value().engine.rules.size(), 1u);
   // Rule principal auto-added.
-  EXPECT_EQ(c.value().engine.principals.size(), 3u);
+  EXPECT_EQ(c.value().engine.principals.size(), 4u);
 }
 
 TEST(Config, ReservedSwitchesFailLoudly) {
@@ -188,6 +204,30 @@ TEST(Config, DevModeRefusesNetworkHostsForHttpAndCoap) {
   EXPECT_TRUE(check_dev_mode_hosts(c, "0.0.0.0", false));
 }
 
+// Red team #16: published dev credentials are refused on the network even
+// without dev_mode.
+TEST(Config, PublishedDevCredentialsAreRefusedOnTheNetworkWithoutDevMode) {
+  auto c = hub_config(temp_db());
+  ASSERT_FALSE(c.dev_mode());
+  EXPECT_TRUE(check_dev_mode_hosts(c, "0.0.0.0", false));
+  auto dev_owner = c;  // hub.dev.yaml's owner hash
+  dev_owner.mutable_principals(0)->set_token_sha256(
+      "8ac4afa44f3f01da2d47daaee53270af09cdf9b0482481377b750332904ddd94");
+  EXPECT_EQ(check_dev_mode_hosts(dev_owner, "0.0.0.0", false).error().code, "dev_mode_on_network");
+  EXPECT_TRUE(check_dev_mode_hosts(dev_owner, "127.0.0.1", false));
+  auto dev_device = c;
+  dev_device.mutable_devices(0)->set_token_sha256(
+      "3a0c053a94f5d03270628729fd2f84ba52065698f1b95719409e93042df778a3");
+  EXPECT_FALSE(check_dev_mode_hosts(dev_device, "192.168.1.10", false));
+  // dev-device-keys.yaml's node-07 key, with CoAP on the network.
+  c.mutable_coap()->set_enabled(true);
+  c.mutable_coap()->set_listen_host("0.0.0.0");
+  std::vector<std::uint8_t> dev_key;
+  for (int i = 0; i < 16; ++i) dev_key.push_back(static_cast<std::uint8_t>(i));
+  EXPECT_FALSE(check_dev_mode_hosts(c, "127.0.0.1", false, {dev_key}));
+  EXPECT_TRUE(check_dev_mode_hosts(c, "127.0.0.1", false, {std::vector<std::uint8_t>(16, 0x5a)}));
+}
+
 TEST(HttpStatus, HubFailuresAreServerErrors) {
   EXPECT_EQ(http_status_for(Error{"storage_error", ""}), 500);
   EXPECT_EQ(http_status_for(Error{"corrupt_journal", ""}), 500);
@@ -260,14 +300,16 @@ auto motion(std::uint64_t seq) {
 class Hub {
  public:
   Hub(const std::string& db, AtomicClock& clock,
-      int max_event_streams = HttpServer::kMaxEventStreams) {
+      int max_event_streams = HttpServer::kMaxEventStreams,
+      HttpServer::ConnectionLimits limits = {}) {
     auto cfg = build_config(hub_config(db), ".");
     EXPECT_TRUE(cfg.ok()) << (cfg.ok() ? "" : cfg.error().message);
     auth_ = std::make_unique<Authenticator>(cfg.value().hub);
     service_ = std::make_unique<HubService>(cfg.value(), SqliteJournal::open(db).value(), clock,
                                             SqliteConfigStore::open(db).value());
-    http_ = std::make_unique<HttpServer>(
-        *service_, *auth_, std::vector<std::string>{"http://localhost:5173"}, max_event_streams);
+    http_ = std::make_unique<HttpServer>(*service_, *auth_,
+                                         std::vector<std::string>{"http://localhost:5173"},
+                                         max_event_streams, limits);
     port_ = http_->bind("127.0.0.1", 0).value();
     thread_ = std::thread([this] { http_->listen(); });
     http_->wait_until_ready();
@@ -841,6 +883,243 @@ TEST_F(HttpE2E, LiveEventStreamsAreCapped) {
   // Wake the streams so their receivers see `stop`.
   post(c, "/v1/arm", kOwnerToken, R"({"mode":"ARM_MODE_ARMED_HOME"})");
   for (auto& t : streams) t.join();
+}
+
+// --- Red team (2026-11-20), ported from scratchpad/redteam ------------------------------
+
+std::uint32_t lock_pending(httplib::Client& c) {
+  return static_cast<std::uint32_t>(lock_queue_size(c));
+}
+
+// #1 (a11_late_verify.py): a delayed, older "locked" report must not verify
+// the lock command while the newer state says unlocked.
+TEST_F(HttpE2E, StaleObservationNeverVerifiesALockCommand) {
+  Hub hub(db, clock);
+  auto c = hub.client();
+  ASSERT_EQ(post(c, "/v1/devices/observations", kLockToken, json(lock_state(6, false)))->status,
+            200);
+  auto r = command_response(post(c, "/v1/commands", kOwnerToken, R"({
+    "commandId": "own-lock-1", "operation": "access.set_locked",
+    "target": {"deviceId": "lock-3", "capabilityId": "access.lock"},
+    "args": {"setLocked": {"locked": true}}})"));
+  ASSERT_EQ(r.status(), talos::v1::COMMAND_STATUS_ACCEPTED);
+  ASSERT_EQ(lock_pending(c), 1u);  // dispatched
+  clock.advance(100);
+  ASSERT_EQ(post(c, "/v1/devices/observations", kLockToken, json(lock_state(4, true)))->status,
+            200);
+  auto view = parse<api::CommandView>(c.Get("/v1/commands/own-lock-1", bearer(kOwnerToken))->body);
+  EXPECT_NE(view.status(), talos::v1::COMMAND_STATUS_VERIFIED);
+  EXPECT_NE(view.outcome(), api::COMMAND_OUTCOME_VERIFIED);
+}
+
+// #2 (a2_preclaim.py): a low-privilege principal cannot pre-claim the
+// predictable ids of rule commands; the rule still acts.
+TEST_F(HttpE2E, ForeignPrincipalCannotPreclaimRuleCommandIds) {
+  Hub hub(db, clock);
+  auto c = hub.client();
+  ASSERT_EQ(post(c, "/v1/arm", kOwnerToken, R"({"mode":"ARM_MODE_ARMED_AWAY"})")->status, 200);
+  for (int seq = 1; seq <= 5; ++seq) {
+    auto squat = post(c, "/v1/commands", kMetricsToken,
+                      R"({"commandId": "cmd:backyard_motion_warning@1:node-07:1:)" +
+                          std::to_string(seq) + R"(:0", "operation": "state.read"})");
+    EXPECT_EQ(squat->status, 400) << squat->body;  // the rule namespace is reserved
+  }
+  // A denied request under any other id never holds that id either.
+  command_response(post(c, "/v1/commands", kMetricsToken, R"({
+    "commandId": "shared-id", "operation": "audio.speak",
+    "target": {"deviceId": "patio_speaker", "capabilityId": "audio.speak"},
+    "args": {"audioSpeak": {"text": "hi"}}})"));
+  auto owner = command_response(post(c, "/v1/commands", kOwnerToken, R"({
+    "commandId": "shared-id", "operation": "audio.speak",
+    "target": {"deviceId": "patio_speaker", "capabilityId": "audio.speak"},
+    "args": {"audioSpeak": {"text": "hi"}}})"));
+  EXPECT_EQ(owner.status(), talos::v1::COMMAND_STATUS_ACCEPTED);
+
+  ASSERT_EQ(post(c, "/v1/devices/observations", kNodeToken, json(motion(3)))->status, 200);
+  auto state = parse<api::StateResponse>(c.Get("/v1/state", bearer(kOwnerToken))->body);
+  bool rule_command = false;
+  for (const auto& v : state.commands()) {
+    rule_command |= v.command().principal_id() == "rule:backyard" &&
+                    v.command().causation_id() == "node-07:1:3";
+  }
+  EXPECT_TRUE(rule_command);
+}
+
+// #8 (a7_spam.py): command requests are rate limited per principal, and
+// denials stop being journaled once the principal's audit budget is spent.
+TEST_F(HttpE2E, CommandFloodIsRateLimitedAndDenialsAreBounded) {
+  Hub hub(db, clock);
+  auto c = hub.client();
+  const auto before = hub.service().health().journal_seq();
+  int limited = 0;
+  for (int i = 0; i < 200; ++i) {
+    auto r = post(c, "/v1/commands", kMetricsToken,
+                  R"({"commandId": "spam-)" + std::to_string(i) +
+                      R"(", "operation": "audio.speak",
+    "target": {"deviceId": "patio_speaker", "capabilityId": "audio.speak"},
+    "args": {"audioSpeak": {"text": "hi"}}})");
+    if (r->status == 429) ++limited;
+    if (i % 10 == 9) clock.advance(1'000);  // 10 requests per second, sustained
+  }
+  EXPECT_GT(limited, 0);
+  // At most the audit burst plus what refilled was journaled (2 entries each).
+  const auto journaled = hub.service().health().journal_seq() - before;
+  EXPECT_LE(journaled, 2u * (HubService::kDenialAuditBurst + 10));
+  // The owner is unaffected by another principal's budget.
+  post(c, "/v1/devices/observations", kLockToken, json(lock_state(1, true)));
+  auto ok = command_response(post(c, "/v1/commands", kOwnerToken, R"({
+    "commandId": "owner-ok", "operation": "access.set_locked",
+    "target": {"deviceId": "lock-3", "capabilityId": "access.lock"},
+    "args": {"setLocked": {"locked": true}}})"));
+  EXPECT_EQ(ok.status(), talos::v1::COMMAND_STATUS_ACCEPTED);
+}
+
+// #7: an agent cannot step ARMED_AWAY down to ARMED_HOME over the API.
+TEST_F(HttpE2E, AgentCannotLowerTheArmMode) {
+  Hub hub(db, clock);
+  auto c = hub.client();
+  ASSERT_EQ(post(c, "/v1/arm", kOwnerToken, R"({"mode":"ARM_MODE_ARMED_AWAY"})")->status, 200);
+  auto r = post(c, "/v1/arm", kAgentToken, R"({"mode":"ARM_MODE_ARMED_HOME"})");
+  EXPECT_EQ(r->status, 403);
+  EXPECT_EQ(parse<api::StateResponse>(c.Get("/v1/state", bearer(kOwnerToken))->body).arm_mode(),
+            talos::v1::ARM_MODE_ARMED_AWAY);
+}
+
+// #12: device text is bounded, event ids are namespaced by the device, and
+// event_type must agree with the payload.
+TEST_F(HttpE2E, ObservationFieldsAreBoundedAndConsistent) {
+  Hub hub(db, clock);
+  auto c = hub.client();
+  auto lie = lock_state(1, true);
+  lie.set_event_type("lock.unlocked");
+  auto r = post(c, "/v1/devices/observations", kLockToken, json(lie));
+  EXPECT_EQ(r->status, 422);
+  EXPECT_EQ(parse<api::IngestResponse>(r->body).error_code(), "event_type_does_not_match_payload");
+  auto huge = lock_state(2, true);
+  huge.set_event_id("lock-3:" + std::string(30'000, 'a'));
+  EXPECT_EQ(post(c, "/v1/devices/observations", kLockToken, json(huge))->status, 422);
+  auto foreign_id = lock_state(3, true);
+  foreign_id.set_event_id("node-07:1:3");
+  EXPECT_EQ(post(c, "/v1/devices/observations", kLockToken, json(foreign_id))->status, 400);
+  talos::v1::CommandAck ack;
+  ack.set_command_id("nope");
+  ack.set_detail(std::string(1'000, 'x'));
+  EXPECT_EQ(post(c, "/v1/devices/acks", kLockToken, json(ack))->status, 400);
+}
+
+// #4 (a8_epoch.py): a huge boot epoch is refused; a device whose real reports
+// land behind its record is not "healthy"; the owner can reset it.
+TEST_F(HttpE2E, PoisonedBootEpochIsRefusedSurfacedAndRecoverable) {
+  Hub hub(db, clock);
+  auto c = hub.client();
+  auto poison = motion(1);
+  poison.mutable_position()->set_boot_epoch(0xFFFF'FFFFu);
+  poison.mutable_position()->set_sequence(0xFFFF'FFFF'FFFF'FFFFull);
+  auto r = post(c, "/v1/devices/observations", kNodeToken, json(poison));
+  EXPECT_EQ(r->status, 422);
+  EXPECT_EQ(parse<api::IngestResponse>(r->body).error_code(), "source_position_out_of_range");
+  auto health_of = [&](const std::string& id) {
+    auto h = parse<api::HealthListResponse>(c.Get("/v1/health/devices", bearer(kOwnerToken))->body);
+    for (const auto& d : h.devices()) {
+      if (d.device_id() == id) return d.status();
+    }
+    return talos::v1::HEALTH_STATUS_UNSPECIFIED;
+  };
+  auto beat = envelope("node-07", std::nullopt, "device.health", "device.heartbeat", 2,
+                       R"({"heartbeat":{"batteryMv":3900}})");
+  ASSERT_EQ(post(c, "/v1/devices/observations", kNodeToken, json(beat))->status, 200);
+  EXPECT_EQ(health_of("node-07"), talos::v1::HEALTH_STATUS_FAULTED);
+  // Owner only.
+  EXPECT_EQ(post(c, "/v1/devices/node-07/sequence/reset", kAgentToken, "")->status, 403);
+  EXPECT_EQ(post(c, "/v1/devices/node-07/sequence/reset", kOwnerToken, "")->status, 200);
+  EXPECT_EQ(health_of("node-07"), talos::v1::HEALTH_STATUS_HEALTHY);
+  auto journal = parse<api::JournalPage>(c.Get("/v1/journal", bearer(kOwnerToken))->body);
+  EXPECT_TRUE(journal.entries(journal.entries_size() - 1).has_source_reset());
+}
+
+// #11 (a6b.py): a low-privilege principal cannot take every live stream.
+TEST_F(HttpE2E, LowPrivilegePrincipalCannotTakeTheOwnersStreams) {
+  constexpr int kCap = 6;  // 3 reserved for owners
+  Hub hub(db, clock, kCap);
+  std::atomic<bool> stop{false};
+  std::atomic<int> open{0};
+  std::vector<std::thread> streams;
+  auto stream = [&](const std::string& token) {
+    streams.emplace_back([&, token] {
+      auto c = hub.client();
+      c.set_read_timeout(30, 0);
+      bool counted = false;
+      c.Get(
+          "/v1/events", bearer(token),
+          [&](const httplib::Response& res) {
+            if (!counted && res.status == 200) ++open;
+            counted = true;
+            return res.status == 200;
+          },
+          [&](const char*, std::size_t) { return !stop.load(); });
+    });
+  };
+  for (int i = 0; i < 3; ++i) stream(kAgentToken);
+  for (int i = 0; i < 1000 && open.load() < 3; ++i) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+  }
+  ASSERT_EQ(open.load(), 3);
+  auto c = hub.client();
+  EXPECT_EQ(c.Get("/v1/events", bearer(kAgentToken))->status, 503);  // non-owner share used
+  stream(kOwnerToken);
+  for (int i = 0; i < 1000 && open.load() < 4; ++i) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+  }
+  EXPECT_EQ(open.load(), 4);  // the owner still gets a stream
+  stop = true;
+  post(c, "/v1/arm", kOwnerToken, R"({"mode":"ARM_MODE_ARMED_HOME"})");
+  for (auto& t : streams) t.join();
+}
+
+// #9 (a5_slowloris.py): connections trickling headers are cut at the read
+// deadline, and one peer cannot hold more than its share of connections.
+TEST_F(HttpE2E, SlowlorisConnectionsAreCutAndCapped) {
+  Hub hub(db, clock, HttpServer::kMaxEventStreams,
+          {/*read_deadline_seconds=*/1,
+           /*max_connections_per_peer=*/4});
+  std::signal(SIGPIPE, SIG_IGN);  // writes to sockets the hub cut
+  const int port = hub.client().port();
+  auto slow = [&] {
+    const int fd = ::socket(AF_INET, SOCK_STREAM, 0);
+    sockaddr_in a{};
+    a.sin_family = AF_INET;
+    a.sin_port = htons(static_cast<std::uint16_t>(port));
+    ::inet_pton(AF_INET, "127.0.0.1", &a.sin_addr);
+    EXPECT_EQ(::connect(fd, reinterpret_cast<sockaddr*>(&a), sizeof a), 0);
+    const char* start = "GET /v1/state HTTP/1.1\r\nHost: x\r\n";
+    EXPECT_GT(::send(fd, start, std::strlen(start), 0), 0);
+    return fd;
+  };
+  std::vector<int> fds;
+  for (int i = 0; i < 4; ++i) fds.push_back(slow());
+  std::this_thread::sleep_for(std::chrono::milliseconds(200));
+  // A fifth connection from the same peer is refused at once.
+  {
+    auto c = hub.client();
+    auto r = c.Get("/v1/state", bearer(kOwnerToken));
+    EXPECT_FALSE(r && r->status == 200);
+  }
+  // Keep trickling header bytes well past the deadline: the hub cuts them.
+  bool all_closed = false;
+  for (int t = 0; t < 40 && !all_closed; ++t) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    all_closed = true;
+    for (int fd : fds) {
+      (void)::send(fd, "X", 1, MSG_NOSIGNAL_COMPAT);
+      char b;
+      const auto n = ::recv(fd, &b, 1, MSG_DONTWAIT);
+      all_closed &= n == 0 || (n < 0 && errno != EAGAIN && errno != EWOULDBLOCK);
+    }
+  }
+  EXPECT_TRUE(all_closed);
+  for (int fd : fds) ::close(fd);
+  std::this_thread::sleep_for(std::chrono::milliseconds(100));
+  EXPECT_EQ(hub.client().Get("/v1/state", bearer(kOwnerToken))->status, 200);
 }
 
 // --- Supabase JWT auth (ADR 0015) ---------------------------------------------------------

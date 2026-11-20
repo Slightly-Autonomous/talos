@@ -87,7 +87,19 @@ Property build_property(const v1::Site& site, const World& world) {
     dev.property = p.id;
     if (d.has_board_id()) dev.board = BoardId(d.board_id());
     if (auto zone = world.zone_at(to_vec(d.position()))) dev.zone = ZoneId(*zone);
+    // Declare what the twin device reports or is commanded on: an empty list
+    // declares nothing (fail closed).
+    auto declare = [&](const std::string& c) {
+      if (!c.empty() && std::find(dev.capabilities.begin(), dev.capabilities.end(),
+                                  CapabilityId(c)) == dev.capabilities.end()) {
+        dev.capabilities.emplace_back(c);
+      }
+    };
+    if (d.has_lock()) declare("access.lock");
+    if (d.has_speaker()) declare("audio.speak");
+    if (d.has_notifier()) declare("notify");
     for (const auto& s : d.sensors()) {
+      declare(capability_for(s));
       if (s.slot() < kMaxSlots) dev.slots[s.slot()] = ModuleId(s.module_id());
       const std::string* portal = nullptr;
       if (s.has_contact()) portal = &s.contact().portal_id();
@@ -458,7 +470,12 @@ class Run {
           const auto& x = e.command();
           std::uint32_t n = 0;
           std::string statuses;
-          for (const auto& [id, rec] : state.commands.records()) {
+          // Denied requests live apart from the id namespace in the ledger.
+          std::vector<const CommandRecord*> all;
+          for (const auto& [id, rec] : state.commands.records()) all.push_back(&rec);
+          for (const auto& [key, rec] : state.commands.denied()) all.push_back(&rec);
+          for (const CommandRecord* r : all) {
+            const CommandRecord& rec = *r;
             if (rec.command.operation != x.operation()) continue;
             if (!x.target_device_id().empty() &&
                 rec.command.target.device.str() != x.target_device_id()) {
@@ -481,6 +498,11 @@ class Run {
             if (rec.command.operation == e.no_command().operation()) {
               fail(e.name(), "unexpected command " + id.str() + " (" +
                                  std::string(to_string(rec.status)) + ")");
+            }
+          }
+          for (const auto& [key, rec] : state.commands.denied()) {
+            if (rec.command.operation == e.no_command().operation()) {
+              fail(e.name(), "unexpected command " + key.second.str() + " (denied)");
             }
           }
           break;

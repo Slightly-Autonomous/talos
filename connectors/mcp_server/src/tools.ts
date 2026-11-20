@@ -27,12 +27,24 @@ export interface ToolResult {
   isError?: boolean;
 }
 
+// JSON.stringify leaves <, > and & alone, so device-controlled text could
+// close the wrapper ("</hub_data>") and talk to the agent outside it. Escape
+// them as JSON unicode escapes: the payload stays valid, identical JSON, and
+// the only literal tags are ours (red team #13).
+export function escapeForWrapper(json: string): string {
+  return json.replace(
+    /[<>&\u2028\u2029]/g,
+    (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, "0")}`,
+  );
+}
+
 export function asData(value: unknown): ToolResult {
+  const body = escapeForWrapper(JSON.stringify(value, null, 2) ?? "null");
   return {
     content: [
       {
         type: "text",
-        text: `${UNTRUSTED_NOTE}\n<hub_data>\n${JSON.stringify(value, null, 2)}\n</hub_data>`,
+        text: `${UNTRUSTED_NOTE}\n<hub_data>\n${body}\n</hub_data>`,
       },
     ],
   };
@@ -126,7 +138,7 @@ export async function requestSpeaker(
   const target = { deviceId: args.speaker_device_id, capabilityId: "audio.speak" };
   const r = await hub.requestCommand(
     create(CommandRequestSchema, {
-      commandId: `mcp-speak-${Date.now()}`,
+      commandId: `mcp-speak-${crypto.randomUUID()}`,
       operation: "audio.speak",
       target,
       args: {
@@ -147,7 +159,7 @@ export async function requestNotification(
 ): Promise<ToolResult> {
   const r = await hub.requestCommand(
     create(CommandRequestSchema, {
-      commandId: `mcp-notify-${Date.now()}`,
+      commandId: `mcp-notify-${crypto.randomUUID()}`,
       operation: "notify",
       target: { deviceId: args.notifier_device_id, capabilityId: "notify" },
       args: {

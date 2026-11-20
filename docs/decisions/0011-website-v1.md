@@ -7,7 +7,8 @@
 - **Geometry is part of `talos.v1.Property`** (additive fields): zone polygons, walls, portal segments on assets, device positions and nominal coverage wedges. Core ignores geometry. Coverage is display metadata, not a calibrated sensing guarantee.
 - **Live data:** load the property, the full journal (paged) and the state, then follow `/v1/events` over fetch streaming (the token stays in a header). After each new entry the client refetches `/v1/state`, and it also re-reads every 5 s because freshness depends on time. On error it reconnects with backoff and resumes from the last `journal_seq`.
 - **Conservative presentation:** pure view-model functions in `web/src/model/view.ts`, unit-tested.
-  - Zones are shaded by **region-level** evidence: active, recent, quiet or unknown. There are no fabricated XY tracks, because a PIR cannot say where in its zone someone is (spec §21).
+  - Zones are shaded by **region-level** evidence: active, recent, quiet or unknown. There are no fabricated XY tracks, because a PIR cannot say where in its zone someone is (spec §21). Every PIR in the zone counts, including declared ones that never reported: any stale or unknown PIR makes the zone unknown unless another is active, so "quiet" means every PIR is fresh and clear.
+  - Command ids are random UUIDs (`ui-lock-<uuid>`); a 409 means another principal holds the id, so the UI retries once under a fresh id and otherwise reports a failure, never "sent".
   - Missing or stale data shows as **unknown**, never as clear or healthy.
   - Only `VERIFIED` renders as success. Unverified and unknown outcomes get distinct warning badges (invariant 6).
 - **Replay** scrubs and plays the journal timeline. The state at each instant comes from the hub's `/v1/state_at`, which reduces the same journal the live engine uses. The heatmap counts motion detections per zone up to the scrub time.

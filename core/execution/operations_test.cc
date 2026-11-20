@@ -91,5 +91,19 @@ TEST(Operations, TtlAndWindowAreBoundedByRisk) {
   EXPECT_EQ(normalize_command(speak).error().code, "verification_window_out_of_bounds");
 }
 
+// Red team #8: free text in command args is bounded.
+TEST(Operations, FreeTextArgsAreBounded) {
+  EXPECT_TRUE(
+      normalize_command(command("audio.speak", kSpeaker, AudioSpeak{std::string(280, 'a'), 50}))
+          .ok());
+  EXPECT_EQ(
+      normalize_command(command("audio.speak", kSpeaker, AudioSpeak{std::string(281, 'a'), 50}))
+          .error()
+          .code,
+      "args_out_of_bounds");
+  EXPECT_EQ(normalize_command(command("audio.speak", kSpeaker, AudioSpeak{"x", 101})).error().code,
+            "args_out_of_bounds");
+}
+
 }  // namespace
 }  // namespace talos

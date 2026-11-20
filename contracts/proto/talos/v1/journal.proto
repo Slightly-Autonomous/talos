@@ -33,6 +33,14 @@ message ConfigRevisionApplied {
   string principal_id = 3;
 }
 
+// The owner cleared the hub's record of a device's source positions (dedup
+// windows and held capability positions), e.g. after a poisoned boot epoch or
+// a key rotation (ADR 0008 amendment). Capability values are kept.
+message SourceReset {
+  string device_id = 1;
+  string principal_id = 2;
+}
+
 // Journal entry (ADR 0008). journal_seq is the only cross-device ordering
 // authority. received_at is non-decreasing in journal order.
 message JournalEntry {
@@ -44,5 +52,6 @@ message JournalEntry {
     CommandTransition command_transition = 5;
     ArmModeChanged arm_mode_changed = 6;
     ConfigRevisionApplied config_revision_applied = 7;
+    SourceReset source_reset = 8;
   }
 }

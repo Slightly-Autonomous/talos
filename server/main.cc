@@ -143,6 +143,14 @@ int main(int argc, char** argv) {
       std::fprintf(stderr, "device keys error: %s\n", keys.error().message.c_str());
       return 2;
     }
+    std::vector<std::vector<std::uint8_t>> key_bytes;
+    for (const auto& [id, k] : keys.value()) key_bytes.push_back(k);
+    if (talos::Status st = check_dev_mode_hosts(
+            hub_cfg, host, allow_dev && std::string(allow_dev) == "1", key_bytes);
+        !st) {
+      std::fprintf(stderr, "%s\n", st.error().message.c_str());
+      return 2;
+    }
     coap = std::make_unique<CoapServer>(hub, std::move(keys).value(),
                                         hub_cfg.coap().rate_per_second(), hub_cfg.coap().burst());
     const std::string coap_host =

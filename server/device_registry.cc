@@ -60,6 +60,10 @@ const char* fault_name(fw::ModuleFault f) {
       return "slot switched rail overloaded and shut off";
     case fw::ModuleFault::kPowerQuarantined:
       return "slot held unpowered after a reset while powering it";
+    case fw::ModuleFault::kCardRemoved:
+      return "module card removed";
+    case fw::ModuleFault::kWakeLineFault:
+      return "module wake line never rose";
   }
   return "fault";
 }
@@ -122,6 +126,32 @@ bool DeviceRegistry::observe_unjournaled(const DeviceId& device, const fw::Devic
   return true;
 }
 
+bool DeviceRegistry::unjournaled_is_new(const DeviceId& device, const fw::DeviceEvent& e) const {
+  const auto* t = find(device);
+  if (!t) return true;
+  const std::pair<std::uint32_t, std::uint32_t> pos{e.boot_epoch, e.seq};
+  const auto& seen = t->unjournaled_seen;
+  if (seen.contains(pos)) return false;
+  return !(seen.size() >= kSeenPerDevice && pos < *seen.begin());
+}
+
+void DeviceRegistry::note_behind(const DeviceId& device, Timestamp at) {
+  auto& a = anomalies_[device];
+  ++a.behind;
+  a.last = at;
+}
+
+void DeviceRegistry::note_out_of_range(const DeviceId& device, Timestamp at) {
+  auto& a = anomalies_[device];
+  ++a.out_of_range;
+  a.last = at;
+}
+
+const SourceAnomaly* DeviceRegistry::anomaly(const DeviceId& device) const {
+  auto it = anomalies_.find(device);
+  return it == anomalies_.end() ? nullptr : &it->second;
+}
+
 const DeviceTelemetry* DeviceRegistry::find(const DeviceId& device) const {
   auto it = devices_.find(device);
   return it == devices_.end() ? nullptr : &it->second;
@@ -136,7 +166,7 @@ std::vector<talos::v1::Diagnostic> DeviceRegistry::diagnostics(const DeviceId& d
 talos::v1::Health project_health(const DeviceId& device, const DeviceTelemetry* t,
                                  Freshness health_freshness,
                                  std::optional<Timestamp> health_last_seen, Timestamp now,
-                                 Millis offline_after) {
+                                 Millis offline_after, const SourceAnomaly* anomaly) {
   talos::v1::Health h;
   h.set_device_id(device.str());
   std::optional<Timestamp> seen = t && t->last_seen ? t->last_seen : health_last_seen;
@@ -156,6 +186,14 @@ talos::v1::Health project_health(const DeviceId& device, const DeviceTelemetry* 
     return status(talos::v1::HEALTH_STATUS_OFFLINE,
                   "no report for " + std::to_string((now - *seen).count / 1000) + " s",
                   "Check power, battery and radio coverage");
+  }
+  if (anomaly && anomaly->last && now - *anomaly->last <= offline_after) {
+    return status(talos::v1::HEALTH_STATUS_FAULTED,
+                  std::to_string(anomaly->behind) + " reports ignored as late, " +
+                      std::to_string(anomaly->out_of_range) +
+                      " refused: the hub holds a newer source position than the device sends",
+                  "Check the device's credentials, then reset its sequence state "
+                  "(POST /v1/devices/<id>/sequence/reset)");
   }
   if (!t) return status(talos::v1::HEALTH_STATUS_HEALTHY, "reporting", "");
   if (t->ota_state && (*t->ota_state == 1 || *t->ota_state == 2 || *t->ota_state == 3)) {

@@ -52,10 +52,20 @@ Freshness HubEngine::freshness_of(const CapabilityRef& ref) const {
   return freshness(state_, ref, clock_.now(), config_.freshness_max_age);
 }
 
-IngestResult HubEngine::on_observation(const ObservationEnvelope& env) {
-  IngestResult r = ingestor_.ingest(env, clock_.now());
+IngestResult HubEngine::on_observation(const ObservationEnvelope& env, IngestOptions options) {
+  IngestResult r = ingestor_.ingest(env, clock_.now(), options);
   if (r.status != IngestStatus::kAccepted) return r;
   state_ = reduce(std::move(state_), *r.entry);
+
+  // Only an observation that became current state (newest source position,
+  // ADR 0008) is evidence or a trigger. A late, superseded one is history:
+  // it must neither verify a command against newer state nor fire rules.
+  auto it = state_.capabilities.find(env.source);
+  if (it == state_.capabilities.end() || it->second.journal_seq != r.entry->journal_seq) {
+    r.superseded = true;
+    if (it != state_.capabilities.end()) r.held_position = it->second.position;
+    return r;
+  }
 
   // Evidence for pending commands, using hub receipt time.
   if (Status s = journal_all(state_.commands.on_observation(env, r.entry->received_at)); !s) {
@@ -63,16 +73,24 @@ IngestResult HubEngine::on_observation(const ObservationEnvelope& env) {
     return r;
   }
 
-  // Rules react to state changes only: a late observation that did not become
-  // current state (superseded at its source) is history, not a trigger.
-  auto it = state_.capabilities.find(env.source);
-  if (it == state_.capabilities.end() || it->second.journal_seq != r.entry->journal_seq) return r;
-
   const RuleContext ctx{state_.arm_mode, config_.local_minute_of_day
                                              ? config_.local_minute_of_day(clock_.now())
                                              : std::uint16_t{0}};
   for (const auto& intent : evaluate_rules(config_.rules, config_.property, env, ctx)) {
-    RequestResult req = submit(to_command(intent, clock_.now()), Origin::kRule);
+    Command c = to_command(intent, clock_.now());
+    RequestResult req = submit(c, Origin::kRule);
+    if (req.conflict) {
+      // Another principal holds this id (only possible with a journal from
+      // before ids were reserved). Never drop a rule action silently: record
+      // it under a fallback id; its idempotency key still dedupes it.
+      ++r.rule_conflicts;
+      c.id = CommandId(c.id.str() + ":conflict-" + std::to_string(r.entry->journal_seq));
+      req = submit(c, Origin::kRule);
+      if (req.conflict) {
+        r.error = Error{"rule_command_conflict", "rule command id " + c.id.str() + " is held"};
+        return r;
+      }
+    }
     if (req.error) {
       r.error = req.error;
       return r;
@@ -81,8 +99,8 @@ IngestResult HubEngine::on_observation(const ObservationEnvelope& env) {
   return r;
 }
 
-RequestResult HubEngine::request(const Command& command) {
-  return submit(command, Origin::kRequest);
+RequestResult HubEngine::request(const Command& command, bool record_denial) {
+  return submit(command, Origin::kRequest, record_denial);
 }
 
 Authorization HubEngine::authorize(const Command& command, Origin origin,
@@ -109,13 +127,19 @@ Authorization HubEngine::authorize(const Command& command, Origin origin,
   return evaluate(*principal, normalized, {clock_.now(), f == Freshness::kFresh});
 }
 
-RequestResult HubEngine::submit(const Command& command, Origin origin) {
+RequestResult HubEngine::submit(const Command& command, Origin origin, bool record_denial) {
   const Timestamp now = clock_.now();
   Command normalized = command;
   const Authorization auth = authorize(command, origin, normalized);
   // Denied requests are recorded as asked, for audit; accepted ones as checked.
   RequestResult req = state_.commands.request(auth.allowed ? normalized : command, auth, now);
   if (req.duplicate || req.conflict) return req;
+  if (!auth.allowed && !record_denial) {
+    RequestResult out{command.id, false, false, {}, {}, false, {}};
+    out.unrecorded_denial = true;
+    out.denied_reason = auth.reason;
+    return out;
+  }
   if (Status s = journal_all(req.transitions); !s) {
     req.error = s.error();
     return req;
@@ -175,9 +199,16 @@ Status HubEngine::tick() {
 Status HubEngine::set_arm_mode(ArmMode mode, const PrincipalId& principal_id) {
   const Principal* principal = find_principal(principal_id);
   if (!principal) return Error{"unknown_principal", principal_id.str()};
-  Authorization auth = authorize_arm_change(*principal, config_.property.id, mode);
+  Authorization auth = authorize_arm_change(*principal, config_.property.id, state_.arm_mode, mode);
   if (!auth.allowed) return Error{"denied", auth.reason};
   if (state_.arm_mode != mode) return journal(ArmModeChanged{mode, principal_id});
+  return Status::Ok();
+}
+
+Status HubEngine::reset_source(const DeviceId& device, const PrincipalId& principal) {
+  if (!config_.property.find_device(device)) return Error{"not_found", device.str()};
+  if (Status s = journal(SourceReset{device, principal}); !s) return s;
+  ingestor_.reset(device);
   return Status::Ok();
 }
 

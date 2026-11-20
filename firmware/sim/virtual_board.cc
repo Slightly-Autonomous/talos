@@ -34,7 +34,7 @@ bool I2cBus::held() const {
 
 bool I2cBus::write(std::uint8_t addr, const std::uint8_t* data, std::size_t n) {
   ++transactions_;
-  if (held()) return false;
+  if (held() || glitch()) return false;
   if (addr == mux_) {
     if (n != 1 || mux_nack) return false;
     mask_ = data[0];
@@ -47,7 +47,7 @@ bool I2cBus::write(std::uint8_t addr, const std::uint8_t* data, std::size_t n) {
 bool I2cBus::write_read(std::uint8_t addr, const std::uint8_t* w, std::size_t wn, std::uint8_t* r,
                         std::size_t rn) {
   ++transactions_;
-  if (held()) return false;
+  if (held() || glitch()) return false;
   if (addr == mux_) {  // TCA9546A: a read returns the control register
     if (mux_nack || wn != 0 || rn != 1) return false;
     r[0] = mask_;
@@ -61,7 +61,7 @@ bool I2cBus::write_read(std::uint8_t addr, const std::uint8_t* w, std::size_t wn
 
 bool I2cBus::probe(std::uint8_t addr) {
   ++transactions_;
-  if (held()) return false;
+  if (held() || glitch()) return false;
   if (addr == mux_) return !mux_nack;
   I2cDevice* d = target(addr);
   return d && d->acks();
@@ -370,8 +370,15 @@ std::optional<std::size_t> Store::get(StoreKey key, std::uint8_t* buf, std::size
   return it->second.size();
 }
 
+void Store::erase_working_partition() {
+  for (auto it = kv_.begin(); it != kv_.end();) {
+    it = is_permanent(it->first) ? std::next(it) : kv_.erase(it);
+  }
+}
+
 bool Store::put(StoreKey key, const std::uint8_t* data, std::size_t n) {
   ++puts;
+  ++puts_by_key[key];
   if (fail_puts > 0) {
     --fail_puts;
     return false;  // power lost before the write committed: old value stays
@@ -383,6 +390,16 @@ bool Store::put(StoreKey key, const std::uint8_t* data, std::size_t n) {
 bool Flash::erase(std::uint8_t slot) {
   if (slot > 1) return false;
   std::fill(slots_[slot].begin(), slots_[slot].end(), 0xFF);
+  if (clock) clock->advance(erase_ms_per_block * (slots_[slot].size() / kBlock));
+  return true;
+}
+
+bool Flash::erase_block(std::uint8_t slot, std::uint32_t index) {
+  if (slot > 1 || (static_cast<std::size_t>(index) + 1) * kBlock > slots_[slot].size())
+    return false;
+  const auto first = slots_[slot].begin() + static_cast<std::ptrdiff_t>(index) * kBlock;
+  std::fill(first, first + kBlock, 0xFF);
+  if (clock) clock->advance(erase_ms_per_block);
   return true;
 }
 
@@ -470,6 +487,7 @@ void RevABoard::on_exp_a_write() {
   for (std::uint8_t slot = 0; slot < kSlots; ++slot) {
     const auto& io = board_.slot_io[slot];
     if (!expander_pin(io.aon_enable, false)) {
+      if (aon_enabled_at_[slot]) ++aon_cuts[slot];
       aon_enabled_at_[slot].reset();
     } else if (!aon_enabled_at_[slot]) {
       aon_enabled_at_[slot] = now;
@@ -515,7 +533,9 @@ Node::Node(BoardSupport b, std::uint32_t flash_capacity, ILink* link_override)
       board(b),
       platform_{
           clock, gpio, i2c, select_power(), store, flash, link_override ? *link_override : link,
-          board} {}
+          board} {
+  flash.clock = &clock;
+}
 
 IPower& Node::select_power() {
   if (board.mux_reset_line != 0xFF) {
@@ -587,10 +607,17 @@ void Node::remove(std::uint8_t slot) {
 void Node::boot() {
   runtime_.reset();
   if (rev_a_) board_io_.emplace(i2c, clock, adc, board);  // same storage: platform_ stays bound
-  runtime_.emplace(platform_, &watchdog);
+  runtime_.emplace(platform_, &watchdog, &sleep);
   watchdog.last_feed_ms = clock.now_ms();  // the ESP port arms it right before boot()
   runtime_->boot();
+  sleep.info = WakeInfo{};  // the next reset is a plain one unless a test says otherwise
   for (std::uint8_t l = 0; l < 32; ++l) last_lines_[l] = gpio.read(l);
+}
+
+void Node::wake_from_deep_sleep(std::uint32_t lines) {
+  sleep.info.cause = lines ? ResetCause::kDeepSleepGpio : ResetCause::kDeepSleepTimer;
+  sleep.info.lines = lines;
+  boot();
 }
 
 void Node::run_for(TimeMs ms) {

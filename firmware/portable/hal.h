@@ -49,6 +49,15 @@ class IPower {
   virtual ~IPower() = default;
   // Called once at boot before discovery: put every output in its safe state.
   virtual bool begin() { return true; }
+  // Deep-sleep wake (a CPU reset on the ESP32-H2): the board kept its outputs.
+  // Adopts the AON rails in `aon_on` (bit n = slot n) as already on without
+  // switching anything. Returns false if the board's state can't be confirmed;
+  // the caller then falls back to begin(), which turns every rail off.
+  // `board_ok` is set as begin() would return it.
+  virtual bool resume(std::uint8_t /*aon_on*/, bool& board_ok) {
+    board_ok = begin();
+    return true;
+  }
   virtual void set_rail(std::uint8_t slot, Rail rail, bool on) = 0;
   virtual std::uint32_t battery_mv() = 0;
   virtual PowerSource source() = 0;
@@ -70,14 +79,26 @@ class IBatteryAdc {
 };
 
 // Small atomic key/value store (NVS on ESP32). put() is all-or-nothing.
+// Two volumes: kBootEpoch and kIdentity live in a separate, rarely written
+// partition that is never erased automatically (is_permanent()); everything
+// else lives in the working partition, which ESP-IDF may have to erase.
 enum class StoreKey : std::uint8_t {
   kBootEpoch = 0,
   kConfig = 1,
   kOta = 2,
-  kPendingCritical = 3,
-  kIdentity = 4,   // device ID + link key (serial_link.h), set with diag `provision`
-  kSlotPower = 5,  // slot being powered up + quarantined slots (runtime.cc)
+  kPendingCritical = 3,  // legacy single blob (pre 2026-11-20 red team); no longer written
+  kIdentity = 4,         // device ID + link key (serial_link.h), set with diag `provision`
+  kSlotPower = 5,        // slot being powered up + quarantined slots (runtime.cc)
+  // Unacknowledged P0 events: one small record per ring slot, so persisting an
+  // alarm writes ~40 B instead of the whole set (NVS wear, runtime.cc).
+  kPendingRing0 = 6,
+  kPendingRingLast = 13,  // kPendingRing0 + NodeRuntime::kMaxPendingCritical - 1
+  kPendingAcks = 14,      // which ring records the hub has acknowledged
 };
+
+inline constexpr bool is_permanent(StoreKey k) {
+  return k == StoreKey::kBootEpoch || k == StoreKey::kIdentity;
+}
 
 class IStore {
  public:
@@ -91,6 +112,13 @@ class IStore {
 class IFlash {
  public:
   virtual ~IFlash() = default;
+  // Erase granularity. The OTA erases one block at a time and feeds the
+  // watchdog in between: a whole-slot erase takes seconds on NOR flash.
+  virtual std::uint32_t block_size() const { return slot_capacity(); }
+  // Erases block `index` (block_size() bytes) of the slot.
+  virtual bool erase_block(std::uint8_t slot, std::uint32_t index) {
+    return index == 0 && erase(slot);
+  }
   // The running image passed its health check: cancel the bootloader's
   // rollback (ESP-IDF esp_ota_mark_app_valid_cancel_rollback). Boards without
   // bootloader rollback have nothing to do.
@@ -118,6 +146,38 @@ class IWatchdog {
  public:
   virtual ~IWatchdog() = default;
   virtual void feed() = 0;
+};
+
+// Why the chip started, and which wake lines woke it. On the ESP32-H2 a
+// deep-sleep wake is a CPU reset: app_main and NodeRuntime::boot() run again,
+// but the card rails (AON, on the I/O expanders) and the sensors kept running.
+enum class ResetCause : std::uint8_t {
+  kPowerOn = 0,         // cold start, brownout, or anything that lost the rails
+  kDeepSleepGpio = 1,   // deep-sleep wake from a wake line (ext1)
+  kDeepSleepTimer = 2,  // deep-sleep wake from the timer
+  kSoftware = 3,        // esp_restart(), watchdog, panic: RAM lost, rails may be up
+};
+
+struct WakeInfo {
+  ResetCause cause = ResetCause::kPowerOn;
+  std::uint32_t lines = 0;  // bit n: GPIO n was a wake source that fired
+  bool deep_sleep() const {
+    return cause == ResetCause::kDeepSleepGpio || cause == ResetCause::kDeepSleepTimer;
+  }
+};
+
+// Sleep and wake control (ESP32-H2: esp_sleep ext1 + LP RAM).
+class ISleep {
+ public:
+  virtual ~ISleep() = default;
+  virtual WakeInfo wake_info() = 0;
+  // Arms or masks one GPIO as a deep-sleep wake source. A line stuck high is
+  // masked so it cannot re-wake the node forever; it is re-armed once it falls.
+  virtual bool set_wake_enabled(std::uint8_t line, bool enabled) = 0;
+  // Memory that survives deep sleep but not a power loss (LP RAM): small
+  // runtime state, validated by the runtime (magic + CRC). nullptr if none.
+  virtual std::uint8_t* retained() { return nullptr; }
+  virtual std::size_t retained_size() const { return 0; }
 };
 
 // Unreliable datagrams to/from the hub (UDP over Thread/IPv6 on the node;

@@ -40,6 +40,8 @@ const OperationSpec* find_operation(std::string_view operation);
 // Longest dispatch TTL a command of this risk may ask for.
 Millis max_ttl_for(RiskClass risk);
 inline constexpr Millis kMaxVerificationWindow{5 * 60 * 1000};
+inline constexpr std::size_t kMaxSpeakTextLen = 280;
+inline constexpr std::size_t kMaxNotifyTextLen = 1024;
 
 // The observation that verifies `command`, derived from its operation, args
 // and target. nullopt when the operation has no observable effect (notify):

@@ -9,17 +9,21 @@ Property sample_property() {
   p.zones = {{ZoneId("backyard"), "Backyard", ZoneKind::kOutdoor},
              {ZoneId("patio"), "Patio", ZoneKind::kOutdoor},
              {ZoneId("hallway"), "Hallway", ZoneKind::kIndoor}};
-  auto add = [&](std::string id, std::string zone) {
+  // Capabilities are declared explicitly: an empty list declares none.
+  auto add = [&](std::string id, std::string zone, std::vector<std::string> caps) {
     Device d;
     d.id = DeviceId(std::move(id));
     d.property = p.id;
     d.zone = ZoneId(std::move(zone));
+    for (auto& c : caps) d.capabilities.emplace_back(std::move(c));
     p.devices.push_back(d);
   };
-  add("node-07", "backyard");
-  add("node-12", "hallway");
-  add("patio_speaker", "patio");
-  add("lock-3", "hallway");
+  add("node-07", "backyard",
+      {"motion.detect", "impact.detect", "camera.detection", "environment.temperature_humidity"});
+  add("node-12", "hallway",
+      {"contact.open_state", "motion.detect", "impact.detect", "environment.temperature_humidity"});
+  add("patio_speaker", "patio", {"audio.speak"});
+  add("lock-3", "hallway", {"access.lock"});
   Asset door;
   door.id = AssetId("front_door");
   door.type = "portal.door";

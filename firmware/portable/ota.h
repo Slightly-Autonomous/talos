@@ -51,7 +51,7 @@ struct BootDecision {
 
 class Ota {
  public:
-  explicit Ota(Platform& p) : p_(p) {}
+  explicit Ota(Platform& p, IWatchdog* watchdog = nullptr) : p_(p), watchdog_(watchdog) {}
 
   // Bootloader step: loads the record, decides which slot runs, persists.
   BootDecision boot();
@@ -65,6 +65,11 @@ class Ota {
   // record per 128 B chunk is ~12k writes per 1.5 MB image). A reset resumes
   // from the last saved offset; rewriting the same bytes to NOR flash is harmless.
   static constexpr std::uint32_t kSaveEveryBytes = 4096;
+  // A download that made no progress for this long (uptime) is abandoned: the
+  // next offer replaces it, even for the same version (red team RT-09).
+  static constexpr TimeMs kStallMs = 6u * 60u * 60u * 1000u;
+  // The watchdog is fed every this many bytes while hashing the image.
+  static constexpr std::uint32_t kFeedEveryBytes = 4096;
 
   const OtaRecord& record() const { return rec_; }
   bool reboot_wanted() const { return rec_.state == OtaState::kReadyToBoot; }
@@ -73,11 +78,18 @@ class Ota {
  private:
   bool save();
   bool verify_digest();
+  // Erases the blocks an image of `size` bytes needs, feeding the watchdog per block.
+  bool erase_target(std::uint32_t size);
+  void feed() {
+    if (watchdog_) watchdog_->feed();
+  }
 
   Platform& p_;
+  IWatchdog* watchdog_ = nullptr;
   OtaRecord rec_;
   std::uint32_t running_version_ = 1;
   std::uint32_t saved_received_ = 0;  // rec_.received as last persisted
+  TimeMs last_progress_ms_ = 0;       // uptime of the last offer or chunk
 };
 
 }  // namespace talos::fw

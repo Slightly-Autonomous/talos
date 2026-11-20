@@ -19,9 +19,28 @@ struct Reducer {
                         env.observed_at, entry.received_at, entry.journal_seq};
   }
 
-  void operator()(const CommandTransition& t) const { s.commands.apply(t); }
+  void operator()(const CommandTransition& t) const {
+    s.commands.apply(t);
+    if (t.to != CommandStatus::kDispatched) return;
+    // Remember where the target stood at dispatch: only a newer report from
+    // it can verify the command (ADR 0004 amendment).
+    const CommandRecord* rec = s.commands.find(t.command);
+    if (!rec || !rec->command.expect) return;
+    auto it = s.capabilities.find(rec->command.expect->source);
+    s.commands.set_baseline(t.command, it == s.capabilities.end()
+                                           ? std::nullopt
+                                           : std::optional<SourcePosition>(it->second.position));
+  }
   void operator()(const ArmModeChanged& m) const { s.arm_mode = m.mode; }
   void operator()(const ConfigRevisionApplied& c) const { s.config_revision = c.revision; }
+  void operator()(const SourceReset& r) const {
+    // Values stay (still subject to freshness); positions drop to the floor so
+    // the device's next real report becomes current again.
+    for (auto& [ref, cap] : s.capabilities) {
+      if (ref.device == r.device) cap.position = SourcePosition{};
+    }
+    s.commands.clear_baselines(r.device);
+  }
 };
 
 }  // namespace

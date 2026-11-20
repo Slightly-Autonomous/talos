@@ -28,6 +28,13 @@ cc_library(
     visibility = ["//visibility:public"],
 )
 """,
+    # The hub's slowloris guard (server/http_server.cc) overrides
+    # Server::process_and_close_socket to give each connection a request-read
+    # deadline and a per-peer cap; upstream declares that virtual private.
+    patch_cmds = [
+        "perl -pi -e 's/^(  virtual bool process_and_close_socket\\(socket_t sock\\);)$/protected:\\n$1\\nprivate:/' httplib.h",
+        "grep -B1 '^  virtual bool process_and_close_socket(socket_t sock);$' httplib.h | grep -q '^protected:$'",
+    ],
     sha256 = "4b91c970132cd140586ba880beab099fd16f0dc48425a5a60c418422c04d9fc1",
     strip_prefix = "cpp-httplib-0.46.0",
     urls = ["https://github.com/yhirose/cpp-httplib/archive/refs/tags/v0.46.0.tar.gz"],

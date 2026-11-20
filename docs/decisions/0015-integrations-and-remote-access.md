@@ -12,7 +12,8 @@
   - **Read and plan tools:** `property_overview`, `search_activity`, `device_health`, `preview_rule` (dry-run; it says a human must save).
   - **Request tools:** `request_speaker`, `request_notification`.
   - **No unlock, disarm or rule-saving tools exist.** The connector also runs with an **AGENT** principal token, so even a modified connector is capped by hub policy: no security-critical actions, and outputs only up to `disruptive_output`.
-  - Every tool result is framed as untrusted hub data. A prompt-injection string in device data comes back quoted, never as instructions (spec §24).
+  - Every tool result is framed as untrusted hub data. A prompt-injection string in device data comes back quoted, never as instructions (spec §24). `<`, `>` and `&` inside the JSON are written as `\u003c`-style escapes, so device text cannot close the `<hub_data>` wrapper, and event types and ids are bounded at ingest.
+  - Command ids are random UUIDs, so no other principal can pre-claim them.
 - **Webhook notifier** (`connectors/webhook_notifier`): an out-of-process device adapter for `notify`. It polls its own commands through the HTTP device API, posts them to an ntfy or JSON webhook over HTTPS, and ACKs 2xx as accepted and anything else as rejected. Notify stays ack-only and is never "verified".
 - **Frigate connector** (`connectors/frigate`): polls Frigate's `/api/events` and posts `camera.object_detected` observations with each mapped camera's own device token. Event ids are deduplicated. Video stays in Frigate.
 - **API reference:** `docs/api.md`.

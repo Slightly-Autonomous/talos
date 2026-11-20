@@ -187,3 +187,39 @@ requirements:
     test: //server:coap_test (ForgedFloodCannotThrottleTheGenuineDevice), //core/ingest:ingest_test (CapabilityMustBeDeclaredAndPayloadMustFitIt)
     severity: high
     status: implemented
+  - id: REQ-032
+    statement: Only an observation that is the target's current state, and newer than its position at dispatch, verifies a command; late reordered reports never do
+    subsystem: core.execution, core.engine
+    test: //core/engine:engine_test (OutOfOrderOlderObservationNeverVerifies, ReportNotNewerThanDispatchBaselineNeverVerifies), //server:server_test (HttpE2E.StaleObservationNeverVerifiesALockCommand)
+    severity: critical
+    status: implemented
+  - id: REQ-033
+    statement: No principal can pre-claim or consume another principal's command ids; rule actions are never silently dropped; command requests are rate limited and denied requests are bounded
+    subsystem: core.execution, server.http, web, connectors.mcp_server
+    test: //core/execution:ledger_test (DeniedRequestsDoNotConsumeIdsAndAreBounded), //core/engine:engine_test (RuleCommandIdHeldByAnotherPrincipalStillActs), //server:server_test (ForeignPrincipalCannotPreclaimRuleCommandIds, CommandFloodIsRateLimitedAndDenialsAreBounded), web/src/model/commands.test.ts
+    severity: high
+    status: implemented
+  - id: REQ-034
+    statement: Device source positions are bounded so one forged report cannot freeze a sensor; devices whose reports are ignored show as faulted; the owner can reset a device's sequence state
+    subsystem: core.ingest, server.health
+    test: //core/ingest:ingest_test (HugeBootEpochCannotFreezeLaterGenuineBoots), //core/engine:engine_test (SourceResetRecoversAPoisonedDevice), //server:server_test (PoisonedBootEpochIsRefusedSurfacedAndRecoverable)
+    severity: high
+    status: implemented
+  - id: REQ-035
+    statement: Replayed or spoofed CoAP datagrams cannot throttle a device or poison its replies; HTTP connections have a request-read deadline and a per-peer cap; live streams keep slots for owners
+    subsystem: server.coap, server.http
+    test: //server:coap_test (ReplayedFrameFloodCannotThrottleTheGenuineDevice, SpoofedDatagramsCannotPoisonTheRetransmissionCache), //server:server_test (SlowlorisConnectionsAreCutAndCapped, LowPrivilegePrincipalCannotTakeTheOwnersStreams)
+    severity: high
+    status: implemented
+  - id: REQ-036
+    statement: Firmware releases are keyed by board, revision and version, never replaced, parsed strictly, and a campaign only ever offers the release it was checked against
+    subsystem: server.ota
+    test: //server:coap_test (ImportingAnotherBoardsReleaseCannotChangeAScheduledCampaign, FirmwareStore.VersionsParseStrictlyWithoutWrapping)
+    severity: critical
+    status: implemented
+  - id: REQ-037
+    statement: Lowering the arm mode (including away to home) is a human, security-critical action; agents may only raise it
+    subsystem: core.policy
+    test: //core/policy:policy_test (AgentCannotLowerArmMode), //server:server_test (HttpE2E.AgentCannotLowerTheArmMode)
+    severity: high
+    status: implemented

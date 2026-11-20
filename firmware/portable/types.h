@@ -69,7 +69,18 @@ enum class ModuleFault : std::int32_t {
   kWarmupTimeout = 11,     // sensor never settled after power-up (PIR: > 210 s)
   kRailFault = 12,         // the slot's switched rail hit its current limit and was shut off
   kPowerQuarantined = 13,  // the node reset while powering this slot; held off until cleared
+  kCardRemoved = 14,    // a card that was running is gone (PRESENT_N or its ID stopped answering)
+  kWakeLineFault = 15,  // the sensor latched an event but its WAKE line never rose (stuck low/open)
 };
+// kBusError with b = kFaultDetailUnarmed: a sensor that could not be re-armed
+// after bounded retries (parked in sleep). A detail, not a new ModuleFault, so
+// hub code that switches over ModuleFault needs no change.
+inline constexpr std::uint32_t kFaultDetailUnarmed = 0x10;
+// Supervision faults on a critical slot (stuck WAKE, removal, quarantine, a
+// sensor that can't be re-armed) mean intrusion sensing is lost: the runtime
+// sends them as P0 kModuleFault events. Same wire kind and 28-byte layout as
+// before, so an older hub still decodes them; it only has to treat a P0
+// module fault as a trouble condition (docs/decisions/0013 amendment).
 
 // Downlink messages from the hub.
 struct Ack {

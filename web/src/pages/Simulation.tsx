@@ -4,7 +4,7 @@
 import { useEffect, useState } from "react";
 import { HubError } from "@talos/contracts/client";
 import { useHub } from "../hub/HubProvider";
-import { lockCommandRequest } from "../model/commands";
+import { requestLock } from "../model/commands";
 
 const DEVSIM_URL = import.meta.env.VITE_DEVSIM_URL ?? "http://localhost:8090";
 
@@ -48,8 +48,7 @@ export function Simulation() {
     }
   };
 
-  const lockDoor = (locked: boolean) =>
-    client.requestCommand(lockCommandRequest("lock-3", locked, Date.now()));
+  const lockDoor = (locked: boolean) => requestLock(client, "lock-3", locked);
 
   if (!status) {
     return (

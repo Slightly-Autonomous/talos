@@ -149,6 +149,7 @@ bool PirDriver::init(SlotIo&, IEventSink&, TimeMs now) {
   powered_at_ = now;  // the slot's AON rail came up with discovery
   next_check_ = now;
   low_since_ = now;
+  seen_low_at_ = now;
   warming_ = true;
   timeout_reported_ = false;
   reported_ = false;
@@ -160,15 +161,23 @@ void PirDriver::poll(SlotIo& io, IEventSink& sink, TimeMs now) {
   const bool high = io.read_wake_line();
   if (warming_) {
     next_check_ = now + kWarmCheckMs;
-    if (high) low_since_ = now;
+    if (high) {
+      low_since_ = now;
+    } else {
+      seen_low_at_ = now;
+    }
     if (now - powered_at_ >= kWarmMinMs && !high && now - low_since_ >= kQuietMs) {
       warming_ = false;
-    } else if (now - powered_at_ >= kWarmMaxMs && !timeout_reported_) {
-      timeout_reported_ = true;
-      sink.emit(io.slot(), EventKind::kModuleFault, Priority::kP2Health, false,
-                static_cast<std::int32_t>(ModuleFault::kWarmupTimeout), 0);
+    } else if (now - powered_at_ >= kWarmMaxMs) {
+      if (!timeout_reported_) {
+        timeout_reported_ = true;
+        sink.emit(io.slot(), EventKind::kModuleFault, Priority::kP2Health, false,
+                  static_cast<std::int32_t>(ModuleFault::kWarmupTimeout), 0);
+      }
+      // Still toggling: someone kept moving through warm-up (red team RT-08).
+      if (now - seen_low_at_ <= kToggleWindowMs) warming_ = false;
     }
-    return;
+    if (warming_) return;
   }
   if (high && !reported_) {
     if (high_since_ == kNever) high_since_ = now;
@@ -186,6 +195,17 @@ void PirDriver::poll(SlotIo& io, IEventSink& sink, TimeMs now) {
   }
 }
 
+bool PirDriver::resume(SlotIo& io, IEventSink& sink, TimeMs now, std::uint8_t state) {
+  init(io, sink, now);
+  if (state & 1u) {
+    // AON stayed on through the deep sleep: the sensor is warm. A high output
+    // now is the motion that woke the node (still glitch-filtered).
+    warming_ = false;
+    poll(io, sink, now);
+  }
+  return true;
+}
+
 TimeMs PirDriver::due_ms(TimeMs) const {
   if (warming_) return next_check_;  // check the settle condition a few times a second
   if (high_since_ != kNever && !reported_) return high_since_ + kGlitchMs;
@@ -200,6 +220,15 @@ bool ContactDriver::init(SlotIo& io, IEventSink& sink, TimeMs now) {
   // Boot report of the current state (b = 1): not a transition, so it must
   // never look like a new opening to rules.
   sink.emit(io.slot(), EventKind::kContact, Priority::kP1State, stable_, 0, 1);
+  return true;
+}
+
+bool ContactDriver::resume(SlotIo& io, IEventSink&, TimeMs now, std::uint8_t state) {
+  // No boot report: the hub already has the state. A change while asleep is a
+  // transition, debounced as usual.
+  stable_ = (state & 1u) != 0;
+  candidate_ = io.read_wake_line();
+  since_ = now;
   return true;
 }
 
@@ -294,13 +323,29 @@ bool Tmag5273ContactDriver::init(SlotIo& io, IEventSink& sink, TimeMs) {
   return arm(io, ut);
 }
 
-void Tmag5273ContactDriver::poll(SlotIo& io, IEventSink& sink, TimeMs) {
-  if (!io.read_wake_line()) return;  // WAKE high = latched threshold interrupt
-  std::int32_t ut[3] = {};
-  if (!convert_all(io, ut)) {  // the first access also clears the latch
-    bus_fault(io, sink);
-    return;
+bool Tmag5273ContactDriver::resume(SlotIo& io, IEventSink& sink, TimeMs now, std::uint8_t state) {
+  // The latch (WAKE) is what woke the node; any transaction clears it, so the
+  // decision comes from a fresh conversion compared with the pre-sleep state.
+  std::uint8_t id[2] = {};
+  if (!io.reg_read(kAddr, kManufacturerIdLsb, id, 2) ||
+      static_cast<std::uint16_t>((id[1] << 8) | id[0]) != kManufacturerId) {
+    return false;
   }
+  open_ = (state & 1u) != 0;
+  service(io, sink, now);
+  return true;
+}
+
+void Tmag5273ContactDriver::poll(SlotIo& io, IEventSink& sink, TimeMs now) {
+  // WAKE high = latched threshold interrupt; a pending retry runs regardless:
+  // the failed attempt already cleared the latch (red team RT-04).
+  if (!io.read_wake_line() && now < retry_at_) return;
+  service(io, sink, now);
+}
+
+void Tmag5273ContactDriver::service(SlotIo& io, IEventSink& sink, TimeMs now) {
+  std::int32_t ut[3] = {};
+  if (!convert_all(io, ut)) return failed(io, sink, now);  // the first access clears the latch
   std::int32_t peak = 0;
   for (auto v : ut) peak = std::max(peak, std::abs(v));
   const bool now_open = open_ ? peak <= kCloseUt : peak < kOpenUt;
@@ -309,7 +354,44 @@ void Tmag5273ContactDriver::poll(SlotIo& io, IEventSink& sink, TimeMs) {
     sink.emit(io.slot(), EventKind::kContact, open_ ? Priority::kP0Critical : Priority::kP1State,
               open_, peak, 0);
   }
-  if (!arm(io, ut)) bus_fault(io, sink);  // never leave the sensor in standby (0.45 mA) unarmed
+  if (!arm(io, ut)) return failed(io, sink, now);  // never leave it in standby (0.45 mA) unarmed
+  retry_at_ = kNever;
+  failures_ = 0;
+  unarmed_reported_ = false;
+}
+
+void Tmag5273ContactDriver::failed(SlotIo& io, IEventSink& sink, TimeMs now) {
+  if (failures_ == 0) bus_fault(io, sink);  // one health report per episode, not per retry
+  if (++failures_ < kMaxRetries) {
+    retry_at_ = now + kRetryMs;
+    return;
+  }
+  // Still failing: park it in sleep (5 nA) and say the door is unsupervised.
+  io.reg_write(kAddr, kDeviceConfig2, kModeSleep);
+  if (!unarmed_reported_) {
+    unarmed_reported_ = true;
+    sink.emit(io.slot(), EventKind::kModuleFault, Priority::kP2Health, false,
+              static_cast<std::int32_t>(ModuleFault::kBusError), kFaultDetailUnarmed);
+  }
+  retry_at_ = now + kSlowRetryMs;
+}
+
+void Tmag5273ContactDriver::supervise(SlotIo& io, IEventSink& sink, TimeMs now) {
+  if (retry_at_ != kNever) return;  // already recovering
+  const bool wake = io.read_wake_line();
+  std::uint8_t cfg = 0;
+  if (!io.reg_read(kAddr, kDeviceConfig2, &cfg, 1)) return failed(io, sink, now);
+  if ((cfg & 0x03) == kModeWakeSleep) {
+    wake_fault_reported_ = false;
+    return;
+  }
+  // It fired (W&S drops to standby on a threshold) or lost its config.
+  if (!wake && !wake_fault_reported_) {
+    wake_fault_reported_ = true;
+    sink.emit(io.slot(), EventKind::kModuleFault, Priority::kP2Health, false,
+              static_cast<std::int32_t>(ModuleFault::kWakeLineFault), 0);
+  }
+  service(io, sink, now);
 }
 
 // --- LIS2DW12 ---------------------------------------------------------------------------
@@ -326,6 +408,34 @@ bool Lis2dw12Driver::set_threshold(SlotIo& io, std::uint32_t threshold_mg) {
   return io.reg_write(kAddr, kWakeUpThs, threshold_register(threshold_mg));
 }
 
+namespace {
+struct RegValue {
+  std::uint8_t reg, value;
+};
+std::array<RegValue, 8> lis_config(std::uint32_t threshold_mg) {
+  using L = Lis2dw12Driver;
+  return {{
+      {L::kCtrl2, L::kCtrl2BduIncr},
+      {L::kCtrl1, L::kCtrl1Lp100Hz},
+      {L::kCtrl6, L::kCtrl6HpFds},
+      {L::kWakeUpDur, 0x00},
+      {L::kWakeUpThs, L::threshold_register(threshold_mg)},
+      {L::kCtrl3, L::kCtrl3Lir},
+      {L::kCtrl4Int1, L::kCtrl4Wu},
+      {L::kCtrl7, L::kCtrl7IntEnable},
+  }};
+}
+}  // namespace
+
+bool Lis2dw12Driver::configured(SlotIo& io, std::uint32_t threshold_mg) {
+  for (const auto& w :
+       lis_config(threshold_mg)) {  // a write the part did not take: bad joint or part
+    std::uint8_t got = 0;
+    if (!io.reg_read(kAddr, w.reg, &got, 1) || got != w.value) return false;
+  }
+  return true;
+}
+
 bool Lis2dw12Driver::init(SlotIo& io, IEventSink&, TimeMs, std::uint32_t threshold_mg) {
   std::uint8_t who = 0;
   if (!io.reg_read(kAddr, kWhoAmI, &who, 1) || who != kWhoAmIValue) return false;
@@ -335,27 +445,61 @@ bool Lis2dw12Driver::init(SlotIo& io, IEventSink&, TimeMs, std::uint32_t thresho
   io.delay_ms(5);
   std::uint8_t ctrl2 = 0;
   if (!io.reg_read(kAddr, kCtrl2, &ctrl2, 1) || (ctrl2 & kSoftReset)) return false;
-  struct {
-    std::uint8_t reg, value;
-  } const writes[] = {
-      {kCtrl2, kCtrl2BduIncr},
-      {kCtrl1, kCtrl1Lp100Hz},
-      {kCtrl6, kCtrl6HpFds},
-      {kWakeUpDur, 0x00},
-      {kWakeUpThs, threshold_register(threshold_mg)},
-      {kCtrl3, kCtrl3Lir},
-      {kCtrl4Int1, kCtrl4Wu},
-      {kCtrl7, kCtrl7IntEnable},
-  };
-  for (const auto& w : writes) {
+  for (const auto& w : lis_config(threshold_mg)) {
     if (!io.reg_write(kAddr, w.reg, w.value)) return false;
   }
-  for (const auto& w : writes) {  // a write the part did not take means a bad joint or part
-    std::uint8_t got = 0;
-    if (!io.reg_read(kAddr, w.reg, &got, 1) || got != w.value) return false;
-  }
+  if (!configured(io, threshold_mg)) return false;
   std::uint8_t stale = 0;
   return io.reg_read(kAddr, kAllIntSrc, &stale, 1);  // clears anything latched before reset
+}
+
+bool Lis2dw12Driver::resume(SlotIo& io, IEventSink& sink, TimeMs now, std::uint32_t threshold_mg) {
+  // The wake source first: reading it is what reports (and clears) the impact
+  // that woke the node. A cold-boot init() would discard it as stale.
+  std::uint8_t src = 0;
+  if (io.reg_read(kAddr, kWakeUpSrc, &src, 1) && (src & kWuIa)) report_impact(io, sink);
+  if (configured(io, threshold_mg)) return true;
+  return init(io, sink, now, threshold_mg);  // config lost: the part was power-cycled after all
+}
+
+bool Lis2dw12Driver::report_impact(SlotIo& io, IEventSink& sink) {
+  std::uint8_t raw[6] = {};
+  if (!io.reg_read(kAddr, kOutXL, raw, 6)) {
+    bus_fault(io, sink);
+    return false;
+  }
+  std::int32_t peak = 0;
+  for (int axis = 0; axis < 3; ++axis) {
+    const auto v = static_cast<std::int16_t>(
+        static_cast<std::uint16_t>(raw[2 * axis] | (raw[2 * axis + 1] << 8)));
+    // 14-bit left-justified; 0.244 mg/LSB at +/-2 g.
+    std::int32_t mg = (static_cast<std::int32_t>(v) / 4) * 244 / 1000;
+    if (mg < 0) mg = -mg;
+    if (mg > peak) peak = mg;
+  }
+  // b (duration) is 0 = not measured: one post-event sample cannot give it.
+  sink.emit(io.slot(), EventKind::kImpact, Priority::kP0Critical, true, peak, 0);
+  return true;
+}
+
+void Lis2dw12Driver::supervise(SlotIo& io, IEventSink& sink, TimeMs) {
+  if (io.read_wake_line()) return;  // poll() handles a high line
+  std::uint8_t src = 0;
+  if (!io.reg_read(kAddr, kWakeUpSrc, &src, 1)) {
+    bus_fault(io, sink);
+    return;
+  }
+  if ((src & kWuIa) == 0) {
+    wake_fault_reported_ = false;
+    return;
+  }
+  // Latched with WAKE low: the line never reached the MCU.
+  if (!wake_fault_reported_) {
+    wake_fault_reported_ = true;
+    sink.emit(io.slot(), EventKind::kModuleFault, Priority::kP2Health, false,
+              static_cast<std::int32_t>(ModuleFault::kWakeLineFault), 0);
+  }
+  report_impact(io, sink);
 }
 
 void Lis2dw12Driver::poll(SlotIo& io, IEventSink& sink, TimeMs now) {
@@ -379,22 +523,7 @@ void Lis2dw12Driver::poll(SlotIo& io, IEventSink& sink, TimeMs now) {
     return;
   }
   stuck_reads_ = 0;
-  std::uint8_t raw[6] = {};
-  if (!io.reg_read(kAddr, kOutXL, raw, 6)) {
-    bus_fault(io, sink);
-    return;
-  }
-  std::int32_t peak = 0;
-  for (int axis = 0; axis < 3; ++axis) {
-    const auto v = static_cast<std::int16_t>(
-        static_cast<std::uint16_t>(raw[2 * axis] | (raw[2 * axis + 1] << 8)));
-    // 14-bit left-justified; 0.244 mg/LSB at +/-2 g.
-    std::int32_t mg = (static_cast<std::int32_t>(v) / 4) * 244 / 1000;
-    if (mg < 0) mg = -mg;
-    if (mg > peak) peak = mg;
-  }
-  // b (duration) is 0 = not measured: one post-event sample cannot give it.
-  sink.emit(io.slot(), EventKind::kImpact, Priority::kP0Critical, true, peak, 0);
+  report_impact(io, sink);
 }
 
 // --- TL-TEST-001 -----------------------------------------------------------------------

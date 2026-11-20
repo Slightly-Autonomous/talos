@@ -19,7 +19,7 @@ const Device* Property::find_device(const DeviceId& did) const {
 }
 
 bool Device::declares(const CapabilityId& capability) const {
-  if (capabilities.empty() || capability.str() == "device.health") return true;
+  if (capability.str() == "device.health") return true;
   for (const auto& c : capabilities) {
     if (c == capability) return true;
   }

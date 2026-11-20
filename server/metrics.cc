@@ -27,6 +27,19 @@ std::string Metrics::prometheus() const {
          "\n";
   out += "talos_coap_frames_total{outcome=\"duplicate_message\"} " +
          std::to_string(coap_duplicate_messages) + "\n";
+  out += "talos_coap_frames_total{outcome=\"replayed\"} " + std::to_string(coap_replayed) + "\n";
+  counter("talos_commands_rate_limited_total",
+          "Command requests refused by the per-principal budget.", "", commands_rate_limited);
+  counter("talos_command_denials_unrecorded_total",
+          "Denied command requests answered but not journaled (audit budget spent).", "",
+          denials_unrecorded);
+  counter("talos_rule_command_conflicts_total",
+          "Rule actions whose command id was held by another principal (recorded under a "
+          "fallback id).",
+          "", rule_command_conflicts);
+  counter("talos_ingest_superseded_total",
+          "Accepted observations older than the held source position (history only).", "",
+          ingest_superseded);
   counter("talos_ota_chunks_sent_total", "Firmware chunks sent to devices.", "", ota_chunks_sent);
   counter("talos_journal_append_failures_total", "Journal writes that failed (fail closed).", "",
           journal_append_failures);

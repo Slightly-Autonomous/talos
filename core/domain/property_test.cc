@@ -14,6 +14,7 @@ Property sample() {
   node.id = DeviceId("node-07");
   node.property = p.id;
   node.zone = ZoneId("backyard");
+  node.capabilities = {CapabilityId("contact.open_state")};
   p.devices.push_back(node);
   Asset door;
   door.id = AssetId("front_door");
@@ -40,6 +41,19 @@ TEST(ValidateProperty, RejectsAssetAttachingForeignDevice) {
   Status s = validate_property(p);
   ASSERT_FALSE(s);
   EXPECT_EQ(s.error().code, "cross_property_reference");
+}
+
+// Red team #15: an empty list declares nothing (fail closed), not everything.
+TEST(ValidateProperty, EmptyCapabilityListDeclaresNone) {
+  Device d;
+  d.id = DeviceId("node-07");
+  EXPECT_FALSE(d.declares(CapabilityId("access.lock")));
+  EXPECT_TRUE(d.declares(CapabilityId("device.health")));  // implied for every device
+  Property p = sample();
+  p.devices[0].capabilities.clear();
+  Status s = validate_property(p);
+  ASSERT_FALSE(s);
+  EXPECT_EQ(s.error().code, "undeclared_capability");
 }
 
 TEST(ValidateProperty, RejectsAssetAttachingUndeclaredCapability) {

@@ -420,6 +420,13 @@ Result<JournalEntry> from_proto(const v1::JournalEntry& p) {
                                       p.config_revision_applied().sha256(),
                                       PrincipalId(p.config_revision_applied().principal_id())};
       break;
+    case v1::JournalEntry::kSourceReset:
+      if (p.source_reset().device_id().empty()) {
+        return Error{"invalid_journal_entry", "source_reset without device"};
+      }
+      e.event = SourceReset{DeviceId(p.source_reset().device_id()),
+                            PrincipalId(p.source_reset().principal_id())};
+      break;
     case v1::JournalEntry::EVENT_NOT_SET:
       return Error{"invalid_journal_entry", "no event"};
   }
@@ -441,6 +448,9 @@ v1::JournalEntry to_proto(const JournalEntry& e) {
     out->set_revision(c->revision);
     out->set_sha256(c->sha256);
     out->set_principal_id(c->principal.str());
+  } else if (const auto* r = std::get_if<SourceReset>(&e.event)) {
+    p.mutable_source_reset()->set_device_id(r->device.str());
+    p.mutable_source_reset()->set_principal_id(r->principal.str());
   } else {
     const auto& m = std::get<ArmModeChanged>(e.event);
     p.mutable_arm_mode_changed()->set_mode(arm_to(m.mode));

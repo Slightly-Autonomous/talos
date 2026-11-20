@@ -64,6 +64,15 @@ Result<Command> normalize_command(const Command& command) {
   if (command.args.index() != spec->args_index) {
     return reject("args_do_not_match_operation", "args do not fit " + command.operation);
   }
+  // Bounded free text: it is journaled, spoken and shown to people and agents.
+  if (const auto* speak = std::get_if<AudioSpeak>(&command.args);
+      speak && (speak->text.size() > kMaxSpeakTextLen || speak->volume_percent > 100)) {
+    return reject("args_out_of_bounds", "audio.speak text is at most 280 bytes, volume 0-100");
+  }
+  if (const auto* n = std::get_if<Notify>(&command.args);
+      n && (n->text.size() > kMaxNotifyTextLen || n->recipient_role.size() > 64)) {
+    return reject("args_out_of_bounds", "notify text is at most 1024 bytes, role 64");
+  }
   if (command.target.capability.str() != spec->target_capability) {
     return reject("target_does_not_match_operation",
                   command.operation + " must target " + std::string(spec->target_capability));

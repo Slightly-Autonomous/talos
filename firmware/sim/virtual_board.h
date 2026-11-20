@@ -38,8 +38,13 @@ class Watchdog final : public IWatchdog {
   explicit Watchdog(const Clock& clock) : clock_(clock) {}
   void feed() override {
     ++feeds;
-    last_feed_ms = clock_.now_ms();
+    const TimeMs now = clock_.now_ms();
+    if (now - last_feed_ms > max_gap_ms) max_gap_ms = now - last_feed_ms;
+    last_feed_ms = now;
   }
+  // Longest stretch without a feed: a blocking call inside one step (a flash
+  // erase) starves the real task watchdog even if the step feeds afterwards.
+  TimeMs max_gap_ms = 0;
   TimeMs timeout_ms = 5'000;  // firmware/esp_idf/main/main.cc kWatchdogTimeoutMs
   std::uint32_t feeds = 0;
   std::uint32_t bites = 0;
@@ -51,7 +56,11 @@ class Watchdog final : public IWatchdog {
 
 class Gpio final : public IGpio {
  public:
-  bool read(std::uint8_t line) override { return line < lines_.size() && lines_[line]; }
+  bool read(std::uint8_t line) override {
+    return line < lines_.size() && lines_[line] && !force_low[line];
+  }
+  // Fault: the line never reaches the MCU high (a TVS failed short, an open contact).
+  std::array<bool, 32> force_low{};
   void set(std::uint8_t line, bool v) { lines_.at(line) = v; }
   // Output lines (mux reset): the board model decides what is wired there.
   bool write(std::uint8_t line, bool level) override {
@@ -98,8 +107,11 @@ class I2cBus final : public II2c {
                   std::size_t rn) override;
   bool probe(std::uint8_t addr) override;
   std::uint32_t transactions() const { return transactions_; }
+  // Glitch injection: the Nth transaction from now (0 = the next) fails, once.
+  int fail_in = -1;
 
  private:
+  bool glitch() { return fail_in >= 0 && fail_in-- == 0; }
   I2cDevice* target(std::uint8_t addr);
   bool held() const;
   std::array<bool, 8> stuck_{};
@@ -189,6 +201,7 @@ class RevABoard {
   std::array<bool, kSlots> seated{};       // a card grounds PRESENT_N
   std::array<bool, kSlots> alert_low{};    // a card pulls ALERT_N low
   std::array<bool, kSlots> sw_overload{};  // the card overloads SW: its switch asserts FAULT_N
+  std::array<std::uint32_t, kSlots> aon_cuts{};  // times each slot's AON went from on to off
   Source source = Source::kUsb;
   bool aon_on(std::uint8_t slot) const;  // TPS22917 ON level (1M pull-down when not driven)
   bool sw_on(std::uint8_t slot) const;   // 1M pull-down when not driven
@@ -316,6 +329,10 @@ class Store final : public IStore {
   bool put(StoreKey key, const std::uint8_t* data, std::size_t n) override;
   int fail_puts = 0;
   std::uint32_t puts = 0;
+  std::map<StoreKey, std::uint32_t> puts_by_key;
+  // ESP-IDF erasing the working NVS partition (NO_FREE_PAGES / NEW_VERSION_FOUND):
+  // the permanent partition (boot epoch, identity) is a different partition and survives.
+  void erase_working_partition();
 
  private:
   std::map<StoreKey, std::vector<std::uint8_t>> kv_;
@@ -337,11 +354,36 @@ class Flash final : public IFlash {
     ++valid_marks;
     return !fail_mark_valid;
   }
+  std::uint32_t block_size() const override { return kBlock; }
+  bool erase_block(std::uint8_t slot, std::uint32_t index) override;
   std::uint32_t valid_marks = 0;  // bootloader told the running image is good
   bool fail_mark_valid = false;
+  // NOR erase time: blocks the calling task (4 KiB sector erase, 45 ms typ).
+  static constexpr std::uint32_t kBlock = 4096;
+  Clock* clock = nullptr;
+  TimeMs erase_ms_per_block = 0;
 
  private:
   std::array<std::vector<std::uint8_t>, 2> slots_;
+};
+
+// Deep-sleep wake info and LP RAM. Node::wake_from_deep_sleep() sets `info`;
+// the masks record what the runtime armed.
+class Sleep final : public ISleep {
+ public:
+  WakeInfo wake_info() override { return info; }
+  bool set_wake_enabled(std::uint8_t line, bool enabled) override {
+    if (line >= 32) return false;
+    const auto bit = 1u << line;
+    masked = enabled ? (masked & ~bit) : (masked | bit);
+    return true;
+  }
+  std::uint8_t* retained() override { return ram.data(); }
+  std::size_t retained_size() const override { return ram.size(); }
+  bool wake_enabled(std::uint8_t line) const { return (masked & (1u << line)) == 0; }
+  WakeInfo info;
+  std::uint32_t masked = 0;
+  std::array<std::uint8_t, 256> ram{};
 };
 
 class Link final : public ILink {
@@ -382,6 +424,10 @@ class Node {
   // MCU reset: fresh runtime and BoardIo (RAM), same store and flash; the
   // expanders are not reset (they sit on V3V3_CORE) and keep their registers.
   void boot();
+  // ESP32-H2 deep-sleep wake: also a reset into boot(), but LP RAM, the
+  // expanders and every powered card kept running. `lines`: the wake lines
+  // that fired (bit n = GPIO n); 0 = a timer wake.
+  void wake_from_deep_sleep(std::uint32_t lines);
   // Advances virtual time in 1 ms ticks, stepping the runtime when it is due
   // or a wake line changed; handles requested reboots.
   void run_for(TimeMs ms);
@@ -408,6 +454,7 @@ class Node {
   Store store;
   Flash flash;
   Link link;
+  Sleep sleep;
   BoardSupport board;
 
  private:

@@ -14,6 +14,7 @@ import {
   CommandViewSchema,
   ErrorResponseSchema,
   HealthResponseSchema,
+  IngestResponseSchema,
   JournalPageSchema,
   SetArmModeResponseSchema,
   StateResponseSchema,
@@ -178,6 +179,15 @@ export class HubClient {
   }
   command(id: string) {
     return this.call(CommandViewSchema, `/v1/commands/${encodeURIComponent(id)}`);
+  }
+  // Owner only: forget a device's source positions (journaled SourceReset)
+  // after a poisoned boot epoch or a reflash with a rotated key (ADR 0008).
+  resetDeviceSequence(deviceId: string) {
+    return this.call(
+      IngestResponseSchema,
+      `/v1/devices/${encodeURIComponent(deviceId)}/sequence/reset`,
+      { method: "POST", body: "" },
+    );
   }
 
   // Async iterator over live journal entries (SSE via fetch, so the bearer

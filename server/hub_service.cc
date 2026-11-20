@@ -1,5 +1,7 @@
 #include "server/hub_service.h"
 
+#include <algorithm>
+
 #include "codec/codec.h"
 #include "core/engine/preview.h"
 #include "firmware/bridge/hub_bridge.h"
@@ -286,6 +288,7 @@ api::StateResponse HubService::view_locked(const PropertyState& s, Timestamp now
     v->set_journal_seq(cap.journal_seq);
   }
   for (const auto& [id, rec] : s.commands.records()) *out.add_commands() = command_view(rec);
+  for (const auto& [key, rec] : s.commands.denied()) *out.add_commands() = command_view(rec);
   return out;
 }
 
@@ -341,6 +344,10 @@ Result<api::CommandResponse> HubService::request_command(const PrincipalId& who,
   if (!req.idempotency_key().empty() && !valid_command_id(req.idempotency_key())) {
     return Error{"invalid_request", "idempotency_key must be 1-128 of [A-Za-z0-9_:@.-]"};
   }
+  // The hub mints rule command ids under "cmd:"; callers cannot claim them.
+  if (req.command_id().rfind("cmd:", 0) == 0) {
+    return Error{"invalid_request", "command ids starting with 'cmd:' are reserved for rules"};
+  }
   auto target = codec::from_proto(req.target());
   if (!target) return target.error();
   auto args = codec::from_proto(req.args());
@@ -348,6 +355,10 @@ Result<api::CommandResponse> HubService::request_command(const PrincipalId& who,
 
   std::lock_guard lock(mu_);
   const Timestamp now = clock_.now();
+  if (!take_token_locked(command_buckets_, who, kCommandRatePerSecond, kCommandBurst, true, now)) {
+    ++metrics_.commands_rate_limited;
+    return Error{"rate_limited", "too many command requests; retry later"};
+  }
   Command c;
   c.id = CommandId(req.command_id());
   c.idempotency_key = req.idempotency_key().empty() ? req.command_id() : req.idempotency_key();
@@ -369,16 +380,31 @@ Result<api::CommandResponse> HubService::request_command(const PrincipalId& who,
     if (!src) return src.error();
     c.expect = ExpectedObservation{src.value(), codec::from_proto(req.expect().payload())};
   }
-  RequestResult rr = engine_->request(c);
+  // Denials are journaled for audit within a per-principal budget; beyond it
+  // they are answered and counted, so a low-privilege principal cannot grow
+  // the journal (and every state view) without bound.
+  const bool record_denial =
+      take_token_locked(denial_buckets_, who, kDenialAuditPerSecond, kDenialAuditBurst, false, now);
+  RequestResult rr = engine_->request(c, record_denial);
   after_mutation_locked();
   if (rr.conflict) {
     return Error{"conflict", "command id " + rr.id.str() + " is already in use"};
   }
   if (rr.error) return *rr.error;
-  const CommandRecord* rec = engine_->state().commands.find(rr.id);
   api::CommandResponse out;
   out.set_command_id(rr.id.str());
   out.set_duplicate(rr.duplicate);
+  if (rr.unrecorded_denial) {
+    ++metrics_.denials_unrecorded;
+    out.set_status(talos::v1::COMMAND_STATUS_DENIED);
+    out.set_reason(rr.denied_reason + " (not recorded: denial audit budget spent)");
+    return out;
+  }
+  const CommandRecord* rec = engine_->state().commands.find(who, rr.id);
+  if (rec && rec->status == CommandStatus::kDenied && !rr.duplicate) {
+    (void)take_token_locked(denial_buckets_, who, kDenialAuditPerSecond, kDenialAuditBurst, true,
+                            now);
+  }
   if (rec) {
     out.set_status(status_to_proto(rec->status));
     out.set_reason(rec->history.empty() ? "" : rec->history.back().reason);
@@ -401,12 +427,23 @@ Result<api::IngestResponse> HubService::ingest_observation(
     return Error{"forbidden", "device " + device.str() + " cannot report for " +
                                   env.value().source.device.str()};
   }
+  // Event ids are namespaced by their device, so one device's ids (and the
+  // rule command ids derived from them) can never collide with another's.
+  if (env.value().event_id.str().rfind(device.str() + ":", 0) != 0) {
+    return Error{"invalid_request", "event_id must start with '" + device.str() + ":'"};
+  }
   std::lock_guard lock(mu_);
-  IngestResult r = engine_->on_observation(env.value());
+  const Timestamp now = clock_.now();
+  // HTTP adapters use Unix-second boot epochs: cap them at hub time + skew.
+  IngestOptions opts;
+  opts.epoch_ceiling = static_cast<std::uint32_t>(
+      std::min<std::int64_t>(now.unix_ms / 1000 + kHttpEpochSkewSeconds, 0xFFFF'FFFFll));
+  IngestResult r = engine_->on_observation(env.value(), opts);
   after_mutation_locked();
   (r.status == IngestStatus::kAccepted    ? metrics_.ingest_accepted
    : r.status == IngestStatus::kDuplicate ? metrics_.ingest_duplicate
                                           : metrics_.ingest_rejected)++;
+  note_ingest_locked(device, r, now);
   // Recorded, but a later journal write (verification, rule commands)
   // failed: say so loudly instead of reporting success (M6).
   if (r.status == IngestStatus::kAccepted && r.error) {
@@ -418,6 +455,9 @@ Result<api::IngestResponse> HubService::ingest_observation(
 
 Result<api::IngestResponse> HubService::ingest_ack(const DeviceId& device,
                                                    const talos::v1::CommandAck& p) {
+  if (p.detail().size() > kMaxAckDetail) {
+    return Error{"invalid_request", "ack detail is at most 256 bytes"};
+  }
   std::lock_guard lock(mu_);
   const CommandRecord* rec = engine_->state().commands.find(CommandId(p.command_id()));
   if (!rec) return Error{"not_found", "command " + p.command_id()};
@@ -467,19 +507,57 @@ void HubService::shutdown() {
 
 namespace {
 constexpr std::size_t kAckBytes = 9, kConfigBytes = 17, kOfferBytes = 41, kChunkHeader = 7;
-std::uint32_t version_number(const std::string& v) {
-  std::uint32_t out = 0;
-  for (char ch : v) {
-    if (ch < '0' || ch > '9') return 0;
-    out = out * 10 + static_cast<std::uint32_t>(ch - '0');
-  }
-  return out;
-}
 }  // namespace
+
+void HubService::note_ingest_locked(const DeviceId& device, const IngestResult& r, Timestamp now) {
+  if (r.rule_conflicts) metrics_.rule_command_conflicts += r.rule_conflicts;
+  if (r.status == IngestStatus::kAccepted && r.superseded) {
+    ++metrics_.ingest_superseded;
+    // A report from an older boot than the one the hub holds: the device's
+    // real counters are behind its record (poisoned epoch or reflash).
+    if (r.held_position && r.entry) {
+      const auto* obs = std::get_if<ObservationRecorded>(&r.entry->event);
+      if (obs && obs->envelope.position.boot_epoch < r.held_position->boot_epoch) {
+        registry_.note_behind(device, now);
+      }
+    }
+  }
+  if (r.status == IngestStatus::kRejected && r.error &&
+      r.error->code == "source_position_out_of_range") {
+    registry_.note_out_of_range(device, now);
+  }
+}
+
+bool HubService::take_token_locked(std::map<PrincipalId, Bucket>& buckets, const PrincipalId& who,
+                                   double rate, double burst, bool consume, Timestamp now) {
+  auto [it, inserted] = buckets.try_emplace(who, Bucket{burst, now.unix_ms});
+  Bucket& b = it->second;
+  if (!inserted && now.unix_ms > b.last_ms) {
+    b.tokens =
+        std::min(burst, b.tokens + static_cast<double>(now.unix_ms - b.last_ms) / 1000.0 * rate);
+  }
+  b.last_ms = std::max(b.last_ms, now.unix_ms);
+  if (b.tokens < 1.0) return false;
+  if (consume) b.tokens -= 1.0;
+  return true;
+}
+
+bool HubService::uplink_is_fresh(const DeviceId& device,
+                                 const std::vector<fw::DeviceEvent>& events) const {
+  std::lock_guard lock(mu_);
+  for (const auto& e : events) {
+    if (auto env = fw::to_envelope(e, device, config_.engine.property.id)) {
+      if (engine_->is_new_position(device, env->position)) return true;
+    } else if (registry_.unjournaled_is_new(device, e)) {
+      return true;
+    }
+  }
+  return false;
+}
 
 std::vector<fw::Downlink> HubService::device_exchange(const DeviceId& device,
                                                       const std::vector<fw::DeviceEvent>& events,
-                                                      std::size_t budget) {
+                                                      std::size_t budget, bool fresh) {
   std::lock_guard lock(mu_);
   const Timestamp now = clock_.now();
   std::vector<fw::Downlink> out;
@@ -492,10 +570,12 @@ std::vector<fw::Downlink> HubService::device_exchange(const DeviceId& device,
     // Only fresh evidence refreshes telemetry: a replayed or duplicate frame
     // must not make a dead device look alive or move a campaign (M3).
     if (auto env = fw::to_envelope(e, device, config_.engine.property.id)) {
+      // CoAP nodes use counter epochs (firmware contract, ADR 0014): no ceiling.
       const IngestResult r = engine_->on_observation(*env);
       (r.status == IngestStatus::kAccepted    ? metrics_.ingest_accepted
        : r.status == IngestStatus::kDuplicate ? metrics_.ingest_duplicate
                                               : metrics_.ingest_rejected)++;
+      note_ingest_locked(device, r, now);
       if (r.status == IngestStatus::kAccepted) registry_.observe(device, e, now);
       if (r.error && r.status == IngestStatus::kAccepted) ++metrics_.journal_append_failures;
     } else {
@@ -506,6 +586,9 @@ std::vector<fw::Downlink> HubService::device_exchange(const DeviceId& device,
     if (fits(kAckBytes)) out.push_back(fw::Ack{e.boot_epoch, e.seq});
   }
   after_mutation_locked();
+  // A replayed or retransmitted frame gets its ACKs only: no config, no OTA
+  // offer (which would stamp last_offer and starve the real node).
+  if (!fresh) return out;
 
   const DeviceTelemetry* t = registry_.find(device);
   if (auto it = desired_config_.find(device);
@@ -527,7 +610,17 @@ std::vector<fw::Downlink> HubService::device_exchange(const DeviceId& device,
     c.state = "failed";
   } else if (ota == 3) {
     c.state = "pending_verify";
-  } else if (auto rel = firmware_->get(c.version)) {
+  } else if (auto rel = firmware_->get(c.board_id, c.board_revision, c.version)) {
+    // Re-check what start_campaign checked: the pinned release must still be
+    // the same image, and the device's declared board must still match.
+    const Device* dev = engine_->config().property.find_device(device);
+    const bool board_ok =
+        dev && dev->board && dev->board->str() == c.board_id &&
+        (c.board_revision.empty() || dev->board_revision.value_or("") == c.board_revision);
+    if (!board_ok || rel->manifest.image_sha256() != c.image_sha256) {
+      c.state = "failed";
+      return out;
+    }
     if (ota == 1) {
       c.state = "downloading";
       for (std::uint32_t off = t->ota_received; off < rel->image.size();) {
@@ -562,6 +655,20 @@ Status HubService::authorize_owner(const PrincipalId& who) const {
     return Status::Ok();
   }
   return Error{"unknown_principal", who.str()};
+}
+
+bool HubService::is_owner(const PrincipalId& who) const {
+  std::lock_guard lock(mu_);
+  return authorize_owner(who).ok();
+}
+
+Status HubService::reset_device_sequence(const PrincipalId& who, const DeviceId& device) {
+  std::lock_guard lock(mu_);
+  if (Status s = authorize_owner(who); !s) return s;
+  if (Status s = engine_->reset_source(device, who); !s) return s;
+  registry_.clear_anomaly(device);
+  after_mutation_locked();
+  return Status::Ok();
 }
 
 Result<api::DeviceConfigResponse> HubService::set_device_config(
@@ -599,7 +706,7 @@ api::HealthListResponse HubService::device_health() const {
     if (auto it = caps.find(health_ref); it != caps.end()) seen = it->second.received_at;
     *out.add_devices() =
         project_health(d.id, registry_.find(d.id), engine_->freshness_of(health_ref), seen, now,
-                       engine_->config().freshness_max_age);
+                       engine_->config().freshness_max_age, registry_.anomaly(d.id));
   }
   return out;
 }
@@ -616,8 +723,8 @@ Status HubService::import_firmware(const PrincipalId& who, const talos::v1::Firm
   std::lock_guard lock(mu_);
   if (Status s = authorize_owner(who); !s) return s;
   if (!firmware_) return Error{"not_found", "firmware store not configured"};
-  if (version_number(m.version()) == 0)
-    return Error{"invalid_release", "version must be a build number > 0"};
+  if (auto v = parse_release_version(m.version()); !v) return v.error();
+  if (m.board_id().empty()) return Error{"invalid_release", "board_id is required"};
   if (Status s = verify_release(m, image, config_.hub.firmware_signing_keys()); !s) return s;
   return firmware_->put(m, image);
 }
@@ -643,8 +750,17 @@ Result<api::CampaignResponse> HubService::start_campaign(const PrincipalId& who,
   const Device* dev = engine_->config().property.find_device(device);
   if (!dev) return Error{"not_found", req.device_id()};
   if (!firmware_) return Error{"not_found", "release " + std::to_string(req.version())};
-  auto release = firmware_->get(req.version());
-  if (!release) return Error{"not_found", "release " + std::to_string(req.version())};
+  if (!dev->board) {
+    return Error{"incompatible_release", req.device_id() + " declares no board (undeclared)"};
+  }
+  // Releases are keyed by board: look up the one built for this device.
+  auto release =
+      firmware_->find_for(dev->board->str(), dev->board_revision.value_or(""), req.version());
+  if (!release) {
+    return Error{"incompatible_release", "no release " + std::to_string(req.version()) +
+                                             " for board '" + dev->board->str() + "' revision '" +
+                                             dev->board_revision.value_or("") + "'"};
+  }
   // Invariant 7: only a compatible image is offered. The offer carries no
   // board identity, so the hub is the check.
   const auto& m = release->manifest;
@@ -658,7 +774,8 @@ Result<api::CampaignResponse> HubService::start_campaign(const PrincipalId& who,
                                              "', " + req.device_id() + " is '" +
                                              dev->board_revision.value_or("undeclared") + "'"};
   }
-  campaigns_[device] = Campaign{req.version(), "scheduled", std::nullopt};
+  campaigns_[device] = Campaign{req.version(),    m.board_id(), m.board_revision(),
+                                m.image_sha256(), "scheduled",  std::nullopt};
   api::CampaignResponse r;
   r.set_device_id(req.device_id());
   r.set_version(req.version());

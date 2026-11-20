@@ -248,6 +248,38 @@ TEST(Ledger, IdempotencyKeysAreScopedToThePrincipal) {
   EXPECT_TRUE(c.transitions.empty());
 }
 
+// Red team #2/#6/#8: a denied request never holds its id against another
+// principal, and denied records are bounded.
+TEST(Ledger, DeniedRequestsDoNotConsumeIdsAndAreBounded) {
+  CommandLedger l;
+  Command squat = lock_command("cmd:rule@1:node-07:1:3:0");
+  squat.principal = PrincipalId("metrics");
+  squat.idempotency_key = squat.id.str();
+  commit(l, l.request(squat, {false, "risk_exceeds_grant"}, kT0).transitions);
+  EXPECT_TRUE(l.records().empty());
+  ASSERT_NE(l.find(PrincipalId("metrics"), squat.id), nullptr);
+  EXPECT_EQ(l.find(PrincipalId("metrics"), squat.id)->status, CommandStatus::kDenied);
+  // The same principal asking again is a duplicate, not a new record.
+  EXPECT_TRUE(l.request(squat, {false, "risk_exceeds_grant"}, kT0).duplicate);
+
+  Command rule = squat;
+  rule.principal = PrincipalId("rule:x");
+  auto r = l.request(rule, kAllow, kT0);
+  EXPECT_FALSE(r.conflict);
+  commit(l, r.transitions);
+  EXPECT_EQ(l.find(rule.id)->status, CommandStatus::kAccepted);
+  EXPECT_EQ(l.find(PrincipalId("rule:x"), rule.id)->command.principal, PrincipalId("rule:x"));
+
+  for (std::size_t i = 0; i < CommandLedger::kMaxDenied + 50; ++i) {
+    Command c = lock_command("spam-" + std::to_string(i));
+    c.principal = PrincipalId("metrics");
+    c.idempotency_key = c.id.str();
+    commit(l, l.request(c, {false, "risk_exceeds_grant"}, kT0).transitions);
+  }
+  EXPECT_EQ(l.denied().size(), CommandLedger::kMaxDenied);
+  EXPECT_EQ(l.find(PrincipalId("metrics"), CommandId("spam-0")), nullptr);  // pruned
+}
+
 TEST(Ledger, CancelOnlyBeforeDispatch) {
   CommandLedger l;
   commit(l, l.request(lock_command(), kAllow, kT0).transitions);

@@ -46,12 +46,20 @@ class HubEngine {
 
   // A journal failure after the observation was recorded is reported in
   // `error`, and rules do not run for it.
-  IngestResult on_observation(const ObservationEnvelope& env);
+  // Only an observation that becomes the capability's current state (newest
+  // source position) verifies commands or triggers rules; a superseded one is
+  // journaled as history and flagged in the result.
+  IngestResult on_observation(const ObservationEnvelope& env, IngestOptions options = {});
   Result<std::vector<CommandTransition>> on_ack(const CommandAck& ack);
   // Closes TTLs and verification windows that have elapsed.
   Status tick();
 
   Status set_arm_mode(ArmMode mode, const PrincipalId& principal);
+
+  // Journals a SourceReset for the device and forgets its source positions,
+  // so its next report is heard again. Authorization is the caller's job
+  // (owner only: it reopens the dedup window for that device).
+  Status reset_source(const DeviceId& device, const PrincipalId& principal);
 
   // Journals a ConfigRevisionApplied and swaps property, rules and principals.
   // State is untouched: it derives from the journal, not from configuration.
@@ -66,7 +74,9 @@ class HubEngine {
   // TTL, window, expect) and denied on mismatch before policy runs; the
   // recorded command carries the hub-derived expectation. An accepted command
   // waits for hand-off: it is not dispatched here.
-  RequestResult request(const Command& command);
+  // With record_denial=false a denied request is answered but not journaled
+  // (the caller's audit budget for that principal is spent).
+  RequestResult request(const Command& command, bool record_denial = true);
 
   // Hand-off to the transport IS the dispatch (ADR 0004): accepted commands
   // are dispatched now, in request order, and returned for sending. Commands
@@ -76,13 +86,17 @@ class HubEngine {
   std::vector<Command> take_outbound(const DeviceId& device);
 
   const PropertyState& state() const { return state_; }
+  // Whether a source position from this device is unseen and in range.
+  bool is_new_position(const DeviceId& device, SourcePosition pos) const {
+    return ingestor_.is_new(device, pos);
+  }
   Freshness freshness_of(const CapabilityRef& ref) const;
 
  private:
   Status journal(DomainEvent event);
   Status journal_all(const std::vector<CommandTransition>& ts);
   enum class Origin { kRequest, kRule };
-  RequestResult submit(const Command& command, Origin origin);
+  RequestResult submit(const Command& command, Origin origin, bool record_denial = true);
   Authorization authorize(const Command& command, Origin origin, Command& normalized) const;
   std::vector<Command> hand_off(const DeviceId* device);
   const Principal* find_principal(const PrincipalId& id) const;

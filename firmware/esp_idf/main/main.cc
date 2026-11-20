@@ -83,7 +83,8 @@ extern "C" void app_main(void) {
   static SerialDatagram serial_net(console);
   static ProvisionedLink link(serial_net, store);  // CoAP over the console until Thread lands
   static Platform platform{clock, gpio, i2c, power, store, flash, link, board};
-  static NodeRuntime runtime(platform, &watchdog);
+  static esp::Sleep sleeper;  // reset cause and LP RAM: a deep-sleep wake keeps the cards running
+  static NodeRuntime runtime(platform, &watchdog, &sleeper);
 
   runtime.boot();
   // Stable, parseable lines for bench checks and HIL tests (tests/hil).
@@ -92,8 +93,13 @@ extern "C" void app_main(void) {
            static_cast<unsigned long>(runtime.boot_epoch()),
            static_cast<unsigned long>(runtime.running_version()),
            static_cast<int>(esp_reset_reason()), runtime.board_ok() ? 1 : 0);
-  ESP_LOGI(kTag, "talos persist nvs=%d epoch=%d watchdog=%d", store.ok() ? 1 : 0,
-           runtime.boot_epoch_persisted() ? 1 : 0, watchdog.ok() ? 1 : 0);
+  ESP_LOGI(kTag, "talos persist nvs=%d id_nvs=%d epoch=%d watchdog=%d", store.ok() ? 1 : 0,
+           store.permanent_ok() ? 1 : 0, runtime.boot_epoch_persisted() ? 1 : 0,
+           watchdog.ok() ? 1 : 0);
+  ESP_LOGI(kTag, "talos wake cause=%u lines=0x%08lx resumed=%d",
+           static_cast<unsigned>(sleeper.wake_info().cause),
+           static_cast<unsigned long>(sleeper.wake_info().lines),
+           runtime.resumed_from_sleep() ? 1 : 0);
   if (!runtime.boot_epoch_persisted()) {
     // Events are held until the epoch is written (retried every step).
     ESP_LOGE(kTag, "talos boot epoch not persisted: uplink held");

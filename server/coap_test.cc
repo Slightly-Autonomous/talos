@@ -361,6 +361,119 @@ TEST(CoapIngress, ForgedFloodCannotThrottleTheGenuineDevice) {
   EXPECT_EQ(journaled(*f.hub, "contact.opened"), 1u);
 }
 
+// Red team #3 (a1_replay_mute.py): replaying one sniffed frame from another
+// port must not drain the genuine device's budget.
+TEST(CoapIngress, ReplayedFrameFloodCannotThrottleTheGenuineDevice) {
+  Fixture f;
+  CoapServer limited(*f.hub, DeviceKeyMap{{"node-12", kNodeKey}}, 1, 2);
+  const auto sniffed = request("node-12", kNodeKey, 10, 1);
+  ASSERT_EQ(reply_code(limited.handle(sniffed, "10.0.0.12:5683")), coap::kChanged);
+  int limited_replies = 0;
+  for (std::uint16_t i = 0; i < 200; ++i) {
+    auto replay = sniffed;
+    replay[2] = static_cast<std::uint8_t>((1000 + i) >> 8);  // fresh message id
+    replay[3] = static_cast<std::uint8_t>(1000 + i);
+    const auto code = reply_code(limited.handle(replay, "6.6.6.6:4000"));
+    EXPECT_TRUE(code == coap::kChanged || code == coap::kTooManyRequests);
+    limited_replies += code == coap::kTooManyRequests;
+  }
+  EXPECT_GT(limited_replies, 0);  // the replayer throttles itself
+  EXPECT_GT(f.hub->metrics().coap_replayed.load(), 0u);
+  // The device's next genuine frame (its bucket holds burst 2, one spent)
+  // still gets through and is journaled.
+  EXPECT_EQ(reply_code(limited.handle(request("node-12", kNodeKey, 11, 2), "10.0.0.12:5683")),
+            coap::kChanged);
+  EXPECT_EQ(journaled(*f.hub, "contact.opened"), 2u);
+}
+
+// Red team #10 (a9_cache.py): junk from a spoofed source using the node's
+// upcoming message ids must not poison the reply the node gets.
+TEST(CoapIngress, SpoofedDatagramsCannotPoisonTheRetransmissionCache) {
+  Fixture f;
+  const std::string node = "10.0.0.12:5683";
+  for (std::uint16_t mid = 50; mid < 55; ++mid) {
+    coap::Message junk;
+    junk.type = coap::Type::kCon;
+    junk.code = coap::kPost;
+    junk.message_id = mid;
+    junk.token_len = 1;
+    junk.token[0] = 0xee;
+    std::vector<std::uint8_t> bytes(64);
+    bytes.resize(coap::build(junk, bytes.data(), bytes.size()));
+    EXPECT_EQ(reply_code(f.coap->handle(bytes, node)), coap::kNotFound);
+  }
+  const auto genuine = f.coap->handle(request("node-12", kNodeKey, 52, 1), node);
+  coap::Message m;
+  ASSERT_TRUE(coap::parse(genuine.data(), genuine.size(), m));
+  EXPECT_EQ(m.code, coap::kChanged);
+  EXPECT_EQ(m.token[0], 7);  // the node's own token, not the attacker's
+  EXPECT_EQ(journaled(*f.hub, "contact.opened"), 1u);
+}
+
+// Red team #5 (a13_fw.py): importing another board's release with the same
+// version must not change what a scheduled campaign offers, and releases are
+// never replaced.
+TEST(CoapIngress, ImportingAnotherBoardsReleaseCannotChangeAScheduledCampaign) {
+  auto kp = generate_keypair();
+  ASSERT_TRUE(kp.ok());
+  sv::HubConfig extra;
+  auto* key = extra.add_firmware_signing_keys();
+  key->set_key_id("owner-2026");
+  key->set_public_key_hex(kp.value().public_key_hex);
+  Fixture f(extra);
+  auto make = [&](const std::string& board, const std::string& version, char fill) {
+    talos::v1::FirmwareRelease m;
+    m.set_board_id(board);
+    m.set_board_revision("proto-a");
+    m.set_version(version);
+    const std::string image(fill == 'A' ? 1000 : 2000, fill);
+    EXPECT_TRUE(sign_release(m, image, kp.value().seed_hex, "owner-2026"));
+    return std::pair{m, image};
+  };
+  auto [a, image_a] = make("universal_controller_v1", "7", 'A');
+  ASSERT_TRUE(f.hub->import_firmware(PrincipalId("owner"), a, image_a));
+  api::CampaignRequest c;
+  c.set_device_id("node-12");
+  c.set_version(7);
+  ASSERT_TRUE(f.hub->start_campaign(PrincipalId("owner"), c).ok());
+  auto [b, image_b] = make("other_board_v9", "7", 'B');
+  ASSERT_TRUE(f.hub->import_firmware(PrincipalId("owner"), b, image_b));  // its own key
+  // Same board, same version again: never replaced.
+  auto [a2, image_a2] = make("universal_controller_v1", "7", 'C');
+  EXPECT_EQ(f.hub->import_firmware(PrincipalId("owner"), a2, image_a2).error().code, "conflict");
+  // A wrapping version string is refused, not read as 7.
+  auto [wrap, image_w] = make("universal_controller_v1", "4294967303", 'B');
+  EXPECT_EQ(f.hub->import_firmware(PrincipalId("owner"), wrap, image_w).error().code,
+            "invalid_release");
+
+  fw::DeviceEvent idle;
+  idle.boot_epoch = 1;
+  idle.seq = 1;
+  idle.kind = fw::EventKind::kOtaStatus;
+  idle.a = 0;  // idle, running version 1
+  idle.b = 1;
+  const auto items = f.hub->device_exchange(DeviceId("node-12"), {idle}, 1024);
+  bool offered = false;
+  for (const auto& d : items) {
+    if (const auto* o = std::get_if<fw::OtaOffer>(&d)) {
+      offered = true;
+      EXPECT_EQ(o->size, image_a.size());  // release A, not B or C
+    }
+  }
+  EXPECT_TRUE(offered);
+}
+
+TEST(FirmwareStore, VersionsParseStrictlyWithoutWrapping) {
+  EXPECT_EQ(parse_release_version("7").value(), 7u);
+  EXPECT_EQ(parse_release_version("4294967295").value(), 0xFFFF'FFFFu);
+  EXPECT_FALSE(parse_release_version("4294967296"));
+  EXPECT_FALSE(parse_release_version("4294967303"));
+  EXPECT_FALSE(parse_release_version("0"));
+  EXPECT_FALSE(parse_release_version(""));
+  EXPECT_FALSE(parse_release_version("+7"));
+  EXPECT_FALSE(parse_release_version("12345678901"));
+}
+
 // The bench path before Thread: the node's CoAP datagrams travel as "@F <base64>" console
 // lines; a host relay (tools/hil serial_bridge.py on a real board) moves them to the hub's
 // UDP port and writes the replies back as lines.

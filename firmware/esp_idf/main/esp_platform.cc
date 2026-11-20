@@ -2,12 +2,16 @@
 
 #include "board_tl_sn_001.h"
 #include "driver/gpio.h"
+#include "esp_attr.h"
 #include "esp_log.h"
 #include "esp_ota_ops.h"
 #include "esp_rom_sys.h"
+#include "esp_sleep.h"
+#include "esp_system.h"
 #include "esp_task_wdt.h"
 #include "esp_timer.h"
 #include "nvs_flash.h"
+#include "soc/soc_caps.h"
 
 namespace talos::fw::esp {
 
@@ -28,9 +32,26 @@ const char* key_name(StoreKey k) {
       return "ident";
     case StoreKey::kSlotPower:
       return "slotpwr";
+    case StoreKey::kPendingRing0:
+      return "p0";
+    case StoreKey::kPendingRingLast:
+      return "p7";
+    case StoreKey::kPendingAcks:
+      return "pack";
   }
+  // Ring slots between the two named ends: "p1".."p6".
+  const auto i = static_cast<unsigned>(k) - static_cast<unsigned>(StoreKey::kPendingRing0);
+  static const char* const kRing[] = {"p0", "p1", "p2", "p3", "p4", "p5", "p6", "p7"};
+  if (i < sizeof kRing / sizeof kRing[0]) return kRing[i];
   return "x";
 }
+
+#if defined(SOC_RTC_MEM_SUPPORTED) && SOC_RTC_MEM_SUPPORTED
+// LP RAM: survives deep sleep, not power loss. Not zeroed at boot; the runtime
+// validates it (magic + CRC) and only trusts it after a deep-sleep wake.
+constexpr std::size_t kRetainedBytes = 128;
+RTC_NOINIT_ATTR std::uint8_t g_retained[kRetainedBytes];
+#endif
 }  // namespace
 
 TimeMs Clock::now_ms() const { return static_cast<TimeMs>(esp_timer_get_time() / 1000); }
@@ -164,10 +185,19 @@ std::optional<std::uint32_t> BatteryAdc::battery_mv() {
 }
 
 Store::Store() {
+  // Permanent partition first, and never erased by firmware: on any init error
+  // its keys just fail (the runtime then holds the uplink and says so).
+  esp_err_t perr = nvs_flash_init_partition(kPermanentPartition);
+  if (perr == ESP_OK)
+    perr = nvs_open_from_partition(kPermanentPartition, "talos", NVS_READWRITE, &perm_);
+  perm_ok_ = perr == ESP_OK;
+  if (!perm_ok_) {
+    ESP_LOGE(kTag, "talos permanent nvs unavailable (%s): not erased", esp_err_to_name(perr));
+  }
   esp_err_t err = nvs_flash_init();
   if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND) {
-    // The two cases ESP-IDF documents as needing an erase. This loses the boot
-    // epoch and identity: logged so the bench and the hub's epoch check can tell.
+    // The two cases ESP-IDF documents as needing an erase. Only working data is
+    // lost (config, OTA record, unacked alarms); epoch and identity are elsewhere.
     ESP_LOGE(kTag, "talos nvs erase (%s)", esp_err_to_name(err));
     nvs_flash_erase();
     err = nvs_flash_init();
@@ -186,15 +216,84 @@ Store::Store() {
 }
 
 std::optional<std::size_t> Store::get(StoreKey key, std::uint8_t* buf, std::size_t cap) {
-  if (!ok_) return std::nullopt;
   size_t len = cap;
+  if (is_permanent(key)) {
+    if (perm_ok_ && nvs_get_blob(perm_, key_name(key), buf, &len) == ESP_OK) return len;
+    // Nodes provisioned before the split kept these in the working partition:
+    // read them once from there; the next put() moves them.
+    len = cap;
+  }
+  if (!ok_) return std::nullopt;
   if (nvs_get_blob(handle_, key_name(key), buf, &len) != ESP_OK) return std::nullopt;
   return len;
 }
 
 bool Store::put(StoreKey key, const std::uint8_t* data, std::size_t n) {
+  if (is_permanent(key)) {
+    return perm_ok_ && nvs_set_blob(perm_, key_name(key), data, n) == ESP_OK &&
+           nvs_commit(perm_) == ESP_OK;
+  }
   if (!ok_) return false;
   return nvs_set_blob(handle_, key_name(key), data, n) == ESP_OK && nvs_commit(handle_) == ESP_OK;
+}
+
+Sleep::Sleep() {
+  switch (esp_reset_reason()) {
+    case ESP_RST_DEEPSLEEP:
+      if (esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_TIMER) {
+        info_.cause = ResetCause::kDeepSleepTimer;
+      } else {
+        info_.cause = ResetCause::kDeepSleepGpio;
+#if SOC_PM_SUPPORT_EXT1_WAKEUP
+        info_.lines = static_cast<std::uint32_t>(esp_sleep_get_ext1_wakeup_status() & 0xFFFFFFFFu);
+#endif
+      }
+      break;
+    case ESP_RST_SW:
+    case ESP_RST_PANIC:
+    case ESP_RST_INT_WDT:
+    case ESP_RST_TASK_WDT:
+    case ESP_RST_WDT:
+      info_.cause = ResetCause::kSoftware;
+      break;
+    default:
+      info_.cause = ResetCause::kPowerOn;
+      break;
+  }
+}
+
+bool Sleep::set_wake_enabled(std::uint8_t line, bool enabled) {
+#if SOC_PM_SUPPORT_EXT1_WAKEUP
+  if (line >= 64) return false;
+  const std::uint64_t bit = 1ULL << line;
+  mask_ = enabled ? (mask_ | bit) : (mask_ & ~bit);
+  if (mask_ == 0) {
+    (void)esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_EXT1);  // fails if never enabled
+    return true;
+  }
+  // Active-high slot WAKE lines (EXP_INT_N is active-low and not included: HD-004).
+  return esp_sleep_enable_ext1_wakeup(mask_, ESP_EXT1_WAKEUP_ANY_HIGH) == ESP_OK;
+#else
+  (void)line;
+  (void)enabled;
+  return false;
+#endif
+}
+
+std::uint8_t* Sleep::retained() {
+#if defined(SOC_RTC_MEM_SUPPORTED) && SOC_RTC_MEM_SUPPORTED
+  return g_retained;
+#else
+  return nullptr;
+#endif
+}
+
+std::size_t Sleep::retained_size() const {
+#if defined(SOC_RTC_MEM_SUPPORTED) && SOC_RTC_MEM_SUPPORTED
+  return kRetainedBytes;
+#else
+  return 0;
+#endif
 }
 
 Watchdog::Watchdog(std::uint32_t timeout_ms) {

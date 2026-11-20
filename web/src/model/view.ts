@@ -75,6 +75,9 @@ export type ZoneActivity = "active" | "recent" | "quiet" | "unknown";
 
 // Region-level activity from motion capabilities. A PIR says "something moved
 // in this region", never where exactly, so the whole zone is shaded.
+// Every motion source counts: a zone is "quiet" only when all of its PIRs
+// (declared in the property, or reporting) are fresh and clear. Any stale or
+// never-reported PIR makes it "unknown" unless another one is active.
 export function zoneActivity(
   property: Property,
   state: StateResponse | undefined,
@@ -83,8 +86,13 @@ export function zoneActivity(
   const out = new Map<string, ZoneActivity>();
   for (const z of property.zones) out.set(z.id, "unknown");
   if (!state) return out;
+  const sources = new Map<string, ZoneActivity[]>();
+  const add = (zone: string, a: ZoneActivity) =>
+    sources.set(zone, [...(sources.get(zone) ?? []), a]);
+  const reporting = new Set<string>();
   for (const cap of state.capabilities) {
     if (cap.ref?.capabilityId !== "motion.detect") continue;
+    reporting.add(cap.ref.deviceId);
     const zone = zoneOf(property, cap.ref);
     if (!zone) continue;
     const detected = cap.value?.kind.case === "motion" && cap.value.kind.value.detected;
@@ -94,15 +102,25 @@ export function zoneActivity(
     else if (detected) a = "active";
     else if (age <= ACTIVE_WINDOW_MS) a = "recent";
     else a = "quiet";
-    out.set(zone, strongest(out.get(zone) ?? "unknown", a));
+    add(zone, a);
   }
+  // A declared PIR that never reported is a source we know nothing about.
+  for (const d of property.devices) {
+    if (!d.capabilities.includes("motion.detect") || reporting.has(d.id)) continue;
+    const zone = zoneOf(property, { deviceId: d.id, capabilityId: "motion.detect" });
+    if (zone) add(zone, "unknown");
+  }
+  for (const [zone, list] of sources) out.set(zone, combineZone(list));
   return out;
 }
 
-const rank: Record<ZoneActivity, number> = { unknown: 0, quiet: 1, recent: 2, active: 3 };
-function strongest(a: ZoneActivity, b: ZoneActivity): ZoneActivity {
-  if (a === "unknown") return b;
-  return rank[b] > rank[a] ? b : a;
+// Positive evidence wins; then any unknown source; then recent; quiet only
+// when every source is fresh and clear.
+function combineZone(list: ZoneActivity[]): ZoneActivity {
+  for (const a of ["active", "unknown", "recent"] as const) {
+    if (list.includes(a)) return a;
+  }
+  return list.length > 0 ? "quiet" : "unknown";
 }
 
 export interface PortalStatus {
@@ -252,6 +270,8 @@ export function describeEntry(e: JournalEntry): string {
     }
     case "armModeChanged":
       return `${armLabel(e.event.value.mode)} by ${e.event.value.principalId}`;
+    case "sourceReset":
+      return `sequence state of ${e.event.value.deviceId} reset by ${e.event.value.principalId}`;
     default:
       return "unknown entry";
   }

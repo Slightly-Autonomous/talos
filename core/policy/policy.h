@@ -45,10 +45,12 @@ inline constexpr RiskClass kMaxNonHumanRisk = RiskClass::kDisruptiveOutput;
 Authorization evaluate(const Principal& principal, const Command& command,
                        const PolicyContext& context);
 
-// Arming needs a grant of at least benign_output on the property. Disarming
-// is security-critical: human principals only, with a security_critical grant.
+// Raising protection (disarmed < armed_home < armed_away) needs a grant of at
+// least benign_output. Lowering it (disarming, or away -> home, which turns
+// away-only rules off) is security-critical: human principals only, with a
+// security_critical grant.
 Authorization authorize_arm_change(const Principal& principal, const PropertyId& property,
-                                   ArmMode target);
+                                   ArmMode current, ArmMode target);
 
 // Changing layout or rules can silence alarms: security-critical, humans only.
 Authorization authorize_config_change(const Principal& principal, const PropertyId& property);

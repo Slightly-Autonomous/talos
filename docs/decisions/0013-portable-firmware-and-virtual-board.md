@@ -39,3 +39,31 @@
 - **Shared SPI pins** are parked at boot: GPIO4/5 driven low, no pull; MISO pulled down. Deep sleep still needs board pull-downs (HD-027).
 - **OTA trial images** are marked valid (`esp_ota_mark_app_valid_cancel_rollback`) only after a hub ACK *and* with the board's safe state reached. A node whose charger never answers rolls the update back.
 - The portable library builds with `-fno-exceptions` on the host too (no-RTTI stays enforced by the ESP-IDF build; UBSan needs typeinfo on the host). OTA progress is persisted every 4 KiB, not every chunk.
+
+## Amendment 2026-11-20 (b): red-team hardening
+A red team of the node found 19 issues (alarm loss on a deep-sleep wake, NVS wear-out, battery drain during an outage, and more). Regression tests: `firmware/sim/redteam_test.cc` (its harness checks R1–R9, each failing on the old runtime) and `firmware/sim/supervision_test.cc`.
+- **Deep-sleep wake = reset (ESP32-H2).** New HAL `ISleep`: reset cause, the ext1 wake-line mask, per-line wake enable, and LP RAM. The runtime keeps a 72-byte CRC-checked block there (epoch, seq, AON mask, per-slot module and driver state, ring ACKs, link state). It trusts the block only after a deep-sleep wake. On a wake it:
+  - adopts the AON rails through `IPower::resume()` (`BoardIo` reads back the expander outputs and directions, and falls back to `begin()` on any mismatch);
+  - drivers `resume()` instead of `init()`, and the waking slots run first. The TMAG5273 converts and compares with the state before the sleep. The LIS2DW12 reads its latched source *before* any reset. So the event that woke the node is a P0 transition or impact. The PIR stays warm.
+  - writes no epoch, slot marker, module-present report or boot heartbeat. A software reset is still a cold boot.
+  - Sleep entry itself is still not wired (`main.cc` light-polls). A trial OTA image must not deep-sleep before it is confirmed (HD-035).
+- **NVS wear.**
+  - Unacked P0s live in an 8-slot ring of ~44-byte records (`kPendingRing0..7`). An alarm costs one write; an ACK costs none. ACKs are written back at most every 5 min or before a planned reboot, and carried in LP RAM across wakes. A lost ACK only means the hub deduplicates the alarm once more.
+  - The newest 8 alarms survive a reset, not the oldest.
+  - Test: 0 writes for 10 acknowledged heartbeats, 1 write per motion cycle. That gives about 4 entries per alarm against the old 3 × 13, and the working NVS grows from 16 to 64 KiB (`partitions.csv`): at about 100k cycles, roughly 6 years of *continuous* motion (unverified: HD-035).
+- **Identity and epoch** live in their own NVS partition, `talos_id`, which firmware never erases. Erasing the working partition no longer restarts the epoch (RT-06). Identity and epoch are never written to the erasable partition, and old nodes are read from it once.
+- **Link health.**
+  - After 8 unanswered sends and 30 s with no downlink, the link counts as failing. Then one probe goes out per interval, doubling from 10 s to 5 min, plus at most one per 30 s for a new P0. Any downlink ends it.
+  - A token bucket caps all sends (burst 60, then one per 2 s on average; P0 bypasses it).
+  - P2/P3 telemetry expires after 15 min, and only the newest heartbeat stays queued.
+  - Downlink handling is bounded to 16 items per step.
+  - The CoAP pending ring grew from 8 to 32 entries, so late ACKs for a full queue are accepted.
+- **Supervision.**
+  - A stuck wake line, card removal (PRESENT_N, or the ID EEPROM checked twice at each heartbeat), quarantine, a WAKE that never rose (TMAG/LIS latched with WAKE low: `kWakeLineFault`), and a TMAG that can't be re-armed (`kBusError`, b = `kFaultDetailUnarmed`) are sent as **P0** `kModuleFault` on critical slots.
+  - New codes are `kCardRemoved` = 14 and `kWakeLineFault` = 15. The wire kind and layout are unchanged, so an old hub decodes them. The hub must treat a P0 module fault as a trouble condition.
+  - Empty slots are rescanned at each heartbeat (hot insertion).
+  - A wake line high for 30 s is masked as a wake source and polled each second until it falls. It is reported as stuck after 10 min, unless it is a contact held open.
+- **Drivers.** A TMAG5273 that fails mid-poll retries every 50 ms, up to 10 times. It is then parked in sleep and retried every minute. At each heartbeat it is checked to still be in wake-and-sleep. PIR warm-up ends at 210 s if the output is still toggling (continuous motion), not only once it rests.
+- **OTA.** A newer offer replaces an unfinished download, and so does any offer after 6 h without progress. The slot is erased block by block, and the watchdog is fed per block and every 4 KiB of hashing.
+- **Config.** Revision 0xFFFFFFFF is rejected (a stored one is repaired at boot). Heartbeat is capped at 1 h and environment at 1 day, so `× 4` can't wrap.
+- **Not done:** gating the destructive diag commands on the USB console (RT-13, HD-016); batching several events per uplink frame; a hub-side "re-epoch" reply. Enclosure tamper, magnet tamper and wake-line hardware are HD-032 to HD-035.

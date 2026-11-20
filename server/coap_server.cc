@@ -122,9 +122,11 @@ std::vector<std::uint8_t> CoapServer::handle(const std::vector<std::uint8_t>& da
     return {};  // not CoAP we answer: drop silently
   }
   for (const auto& c : cache_) {
-    if (c.peer == peer && c.message_id == req.message_id) {
+    // Identical bytes from the same peer and message id as a request that
+    // already authenticated: a retransmission, so the same answer.
+    if (c.peer == peer && c.message_id == req.message_id && c.request == datagram) {
       ++hub_.metrics().coap_duplicate_messages;
-      return c.reply;  // retransmitted CON: same answer, no reprocessing
+      return c.reply;
     }
   }
   coap::Message rsp;
@@ -134,14 +136,15 @@ std::vector<std::uint8_t> CoapServer::handle(const std::vector<std::uint8_t>& da
   rsp.token = req.token;
   std::array<std::uint8_t, fw::wire::kMaxFrame> payload{};
 
-  auto reply = [&](std::uint8_t code, std::size_t payload_len) {
+  // Only replies to authenticated requests are cached (`authenticated`).
+  auto reply = [&](std::uint8_t code, std::size_t payload_len, bool authenticated = false) {
     rsp.code = code;
     rsp.payload = payload_len ? payload.data() : nullptr;
     rsp.payload_len = payload_len;
     std::vector<std::uint8_t> out(kReplyCap);
     out.resize(coap::build(rsp, out.data(), out.size()));
-    if (req.type == coap::Type::kCon) {
-      cache_.push_back({peer, req.message_id, out});
+    if (authenticated && req.type == coap::Type::kCon) {
+      cache_.push_back({peer, req.message_id, datagram, out});
       while (cache_.size() > kCacheSize) cache_.pop_front();
     }
     return out;
@@ -177,18 +180,44 @@ std::vector<std::uint8_t> CoapServer::handle(const std::vector<std::uint8_t>& da
     ++hub_.metrics().coap_bad_request;
     return reply(coap::kBadRequest, 0);
   }
-  if (!allow(buckets_, device)) {
+  // An HMAC proves origin, not freshness. Only a frame with a new tag and at
+  // least one unseen event spends the device's budget; a replay (or the
+  // node's own retransmission) spends the sender's replay bucket.
+  std::uint64_t tag = 0;
+  for (std::size_t i = 0; i < sizeof tag && i < request_tag.size(); ++i) {
+    tag = (tag << 8) | request_tag[i];
+  }
+  const bool fresh = !tag_seen(device, tag) && hub_.uplink_is_fresh(DeviceId(device), events);
+  if (!allow(fresh ? buckets_ : replay_buckets_, fresh ? device : peer_host)) {
     ++hub_.metrics().coap_rate_limited;
     return reply(coap::kTooManyRequests, 0);
   }
+  remember_tag(device, tag);  // only once admitted, so a refused frame can be retried
+  if (!fresh) ++hub_.metrics().coap_replayed;
   ++hub_.metrics().coap_frames_ok;
-  const auto items = hub_.device_exchange(DeviceId(device), events, kDownlinkBudget);
+  const auto items = hub_.device_exchange(DeviceId(device), events, kDownlinkBudget, fresh);
   fw::wire::DownlinkWriter w(payload.data(), payload.size());
   for (const auto& d : items) {
     if (!w.add(d)) break;
   }
   const std::size_t n = w.finish(key, request_tag);
-  return reply(coap::kChanged, n);
+  return reply(coap::kChanged, n, /*authenticated=*/true);
+}
+
+bool CoapServer::tag_seen(const std::string& device, std::uint64_t tag) const {
+  auto it = recent_tags_.find(device);
+  return it != recent_tags_.end() && it->second.tags.contains(tag);
+}
+
+void CoapServer::remember_tag(const std::string& device, std::uint64_t tag) {
+  // keys_ bounds the device set, so this map stays bounded too.
+  RecentTags& r = recent_tags_[device];
+  if (!r.tags.insert(tag).second) return;
+  r.order.push_back(tag);
+  while (r.order.size() > kRecentTags) {
+    r.tags.erase(r.order.front());
+    r.order.pop_front();
+  }
 }
 
 }  // namespace talos::server

@@ -73,15 +73,38 @@ TEST(Policy, UnknownOperationFailsClosed) {
 }
 
 TEST(Policy, ArmingAndDisarming) {
-  Principal agent{PrincipalId("agent-1"),
-                  PrincipalKind::kAgent,
-                  {{PropertyId("house-01"), RiskClass::kSecurityCritical}}};
-  EXPECT_TRUE(authorize_arm_change(agent, PropertyId("house-01"), ArmMode::kArmedAway).allowed);
-  EXPECT_EQ(authorize_arm_change(agent, PropertyId("house-01"), ArmMode::kDisarmed).reason,
+  const PropertyId house("house-01");
+  Principal agent{
+      PrincipalId("agent-1"), PrincipalKind::kAgent, {{house, RiskClass::kSecurityCritical}}};
+  EXPECT_TRUE(authorize_arm_change(agent, house, ArmMode::kDisarmed, ArmMode::kArmedAway).allowed);
+  EXPECT_EQ(authorize_arm_change(agent, house, ArmMode::kArmedAway, ArmMode::kDisarmed).reason,
             "requires_human_authorization");
-  EXPECT_TRUE(authorize_arm_change(owner(), PropertyId("house-01"), ArmMode::kDisarmed).allowed);
-  EXPECT_EQ(authorize_arm_change(owner(), PropertyId("house-02"), ArmMode::kArmedAway).reason,
-            "no_grant_for_property");
+  EXPECT_TRUE(
+      authorize_arm_change(owner(), house, ArmMode::kArmedAway, ArmMode::kDisarmed).allowed);
+  EXPECT_EQ(
+      authorize_arm_change(owner(), PropertyId("house-02"), ArmMode::kDisarmed, ArmMode::kArmedAway)
+          .reason,
+      "no_grant_for_property");
+}
+
+// Red team #7: away -> home turns away-only rules off, so it is a disarm for
+// policy purposes. Non-humans may only raise protection.
+TEST(Policy, AgentCannotLowerArmMode) {
+  const PropertyId house("house-01");
+  Principal agent{
+      PrincipalId("agent-1"), PrincipalKind::kAgent, {{house, RiskClass::kSecurityCritical}}};
+  EXPECT_EQ(authorize_arm_change(agent, house, ArmMode::kArmedAway, ArmMode::kArmedHome).reason,
+            "requires_human_authorization");
+  EXPECT_TRUE(authorize_arm_change(agent, house, ArmMode::kArmedHome, ArmMode::kArmedAway).allowed);
+  EXPECT_TRUE(authorize_arm_change(agent, house, ArmMode::kDisarmed, ArmMode::kArmedHome).allowed);
+  EXPECT_TRUE(authorize_arm_change(agent, house, ArmMode::kArmedHome, ArmMode::kArmedHome).allowed);
+  // A human needs a security-critical grant to lower it.
+  Principal helper = owner();
+  helper.grants[0].max_risk = RiskClass::kDisruptiveOutput;
+  EXPECT_EQ(authorize_arm_change(helper, house, ArmMode::kArmedAway, ArmMode::kArmedHome).reason,
+            "risk_exceeds_grant");
+  EXPECT_TRUE(
+      authorize_arm_change(owner(), house, ArmMode::kArmedAway, ArmMode::kArmedHome).allowed);
 }
 
 TEST(Policy, ConfigChangesAreHumanSecurityCritical) {

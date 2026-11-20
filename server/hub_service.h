@@ -70,9 +70,21 @@ class HubService {
   // One authenticated CoAP exchange from `device`: ingests events (domain to
   // the engine, diagnostics to the registry) and returns the downlink items
   // to piggyback: ACKs, pending config, OTA offer/chunks, within budget bytes.
+  // `fresh` is false for a frame the ingress classified as a replay or
+  // retransmission: its events are still ACKed (and deduplicated), but it
+  // gets no config or OTA downlinks and moves no campaign.
   std::vector<fw::Downlink> device_exchange(const DeviceId& device,
                                             const std::vector<fw::DeviceEvent>& events,
-                                            std::size_t budget_bytes);
+                                            std::size_t budget_bytes, bool fresh = true);
+  // Whether a verified uplink carries at least one event the hub has not
+  // seen (by (boot_epoch, seq)). Replays and retransmissions do not, so the
+  // ingress charges them to the sender instead of the device's budget.
+  bool uplink_is_fresh(const DeviceId& device, const std::vector<fw::DeviceEvent>& events) const;
+  // Owner only: clears the hub's source positions for a device (journaled
+  // SourceReset) after a poisoned epoch or a reflash with a rotated key.
+  Status reset_device_sequence(const PrincipalId& who, const DeviceId& device);
+  // Owner = a human principal with a security-critical grant.
+  bool is_owner(const PrincipalId& who) const;
   Result<talos::api::v1::DeviceConfigResponse> set_device_config(
       const PrincipalId& who, const DeviceId& device,
       const talos::api::v1::DeviceConfigRequest& req);
@@ -93,6 +105,16 @@ class HubService {
   void shutdown();
 
   static constexpr std::uint32_t kMaxPage = 500;
+  // Per-principal command request budget (red team #8): sustained rate and
+  // burst. Denials are journaled for audit only within a smaller budget;
+  // beyond it they are answered and counted, not recorded.
+  static constexpr double kCommandRatePerSecond = 5;
+  static constexpr double kCommandBurst = 20;
+  static constexpr double kDenialAuditPerSecond = 0.2;
+  static constexpr double kDenialAuditBurst = 20;
+  static constexpr std::size_t kMaxAckDetail = 256;
+  // HTTP adapters use Unix-second boot epochs; allow this much clock skew.
+  static constexpr std::uint32_t kHttpEpochSkewSeconds = 300;
 
  private:
   void after_mutation_locked();
@@ -109,14 +131,28 @@ class HubService {
   std::unique_ptr<SqliteFirmwareStore> firmware_;
   DeviceRegistry registry_;
   std::map<DeviceId, fw::ConfigUpdate> desired_config_;
+  // A campaign is pinned to the exact release (board, revision, digest)
+  // that passed the compatibility check at start (red team #5).
   struct Campaign {
     std::uint32_t version = 0;
+    std::string board_id;
+    std::string board_revision;  // the release's ("" = any revision)
+    std::string image_sha256;
     std::string state = "scheduled";
     std::optional<Timestamp> last_offer;
   };
   std::map<DeviceId, Campaign> campaigns_;
   Metrics metrics_;
   Status authorize_owner(const PrincipalId& who) const;
+  void note_ingest_locked(const DeviceId& device, const IngestResult& r, Timestamp now);
+  struct Bucket {
+    double tokens = 0;
+    std::int64_t last_ms = 0;
+  };
+  bool take_token_locked(std::map<PrincipalId, Bucket>& buckets, const PrincipalId& who,
+                         double rate, double burst, bool consume, Timestamp now);
+  std::map<PrincipalId, Bucket> command_buckets_;
+  std::map<PrincipalId, Bucket> denial_buckets_;
   bool shutting_down_ = false;
 };
 

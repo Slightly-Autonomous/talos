@@ -2,6 +2,7 @@
 // entering the hub (spec §22). Units are explicit in field names.
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -82,7 +83,12 @@ struct ObservationEnvelope {
   bool operator==(const ObservationEnvelope&) const = default;
 };
 
-// Structural validation of an envelope arriving from any adapter.
+inline constexpr std::size_t kMaxEventIdLen = 128;
+inline constexpr std::size_t kMaxEventTypeLen = 64;
+inline constexpr std::size_t kMaxLabelLen = 64;
+
+// Structural validation of an envelope arriving from any adapter: required
+// fields, and bounded lengths and character sets for device-controlled text.
 Status validate_envelope(const ObservationEnvelope& env);
 
 }  // namespace talos

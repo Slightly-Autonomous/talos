@@ -40,6 +40,15 @@ struct DeviceTelemetry {
   std::set<std::pair<std::uint32_t, std::uint32_t>> unjournaled_seen;
 };
 
+// Reports the hub had to ignore because they sit behind (or jump too far past)
+// what it holds for the device: the signature of a poisoned boot epoch or a
+// reflashed device. Health shows this instead of "healthy".
+struct SourceAnomaly {
+  std::uint32_t behind = 0;        // accepted, but older boot than the held position
+  std::uint32_t out_of_range = 0;  // refused: epoch or sequence jumped too far
+  std::optional<Timestamp> last;
+};
+
 class DeviceRegistry {
  public:
   static constexpr std::size_t kRecentPerDevice = 64;
@@ -54,18 +63,27 @@ class DeviceRegistry {
   // last_seen, battery or OTA state. Reordering inside the window is fine.
   // Returns whether it was applied.
   bool observe_unjournaled(const DeviceId& device, const fw::DeviceEvent& e, Timestamp received_at);
+  // Whether observe_unjournaled would apply this event (read-only).
+  bool unjournaled_is_new(const DeviceId& device, const fw::DeviceEvent& e) const;
+  void note_behind(const DeviceId& device, Timestamp at);
+  void note_out_of_range(const DeviceId& device, Timestamp at);
+  void clear_anomaly(const DeviceId& device) { anomalies_.erase(device); }
+  const SourceAnomaly* anomaly(const DeviceId& device) const;
   const DeviceTelemetry* find(const DeviceId& device) const;
   std::vector<talos::v1::Diagnostic> diagnostics(const DeviceId& device) const;
 
  private:
   std::map<DeviceId, DeviceTelemetry> devices_;
+  std::map<DeviceId, SourceAnomaly> anomalies_;
 };
 
 // Pure projection. `telemetry` is null for devices that only use the HTTP
 // device API; then freshness of their device.health capability decides.
+// A recent SourceAnomaly (within offline_after) reports the device FAULTED:
+// its real reports are being ignored.
 talos::v1::Health project_health(const DeviceId& device, const DeviceTelemetry* telemetry,
                                  Freshness health_freshness,
                                  std::optional<Timestamp> health_last_seen, Timestamp now,
-                                 Millis offline_after);
+                                 Millis offline_after, const SourceAnomaly* anomaly = nullptr);
 
 }  // namespace talos::server

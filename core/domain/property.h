@@ -47,9 +47,8 @@ struct Device {
   // speaker, a lock) leave all entries empty.
   std::array<std::optional<ModuleId>, kMaxSlots> slots{};
   std::optional<ZoneId> zone;  // where the device is placed
-  // Capabilities this device may report and be commanded on. Empty means
-  // "not declared" (legacy configs): nothing is checked. device.health is
-  // implied for every device.
+  // Capabilities this device may report and be commanded on. Fail closed: an
+  // empty list declares none. device.health is implied for every device.
   std::vector<CapabilityId> capabilities;
 
   bool declares(const CapabilityId& capability) const;

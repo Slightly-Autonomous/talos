@@ -38,6 +38,30 @@ cc_test(
 )
 
 cc_test(
+    name = "redteam_test",
+    size = "small",
+    srcs = ["redteam_test.cc"],
+    copts = TALOS_COPTS,
+    deps = [
+        ":sim",
+        "//common/coap",
+        "@googletest//:gtest_main",
+    ],
+)
+
+cc_test(
+    name = "supervision_test",
+    size = "small",
+    srcs = ["supervision_test.cc"],
+    copts = TALOS_COPTS,
+    deps = [
+        ":sim",
+        "//common/sha256",
+        "@googletest//:gtest_main",
+    ],
+)
+
+cc_test(
     name = "node_hub_test",
     size = "small",
     srcs = ["node_hub_test.cc"],

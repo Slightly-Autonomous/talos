@@ -1,5 +1,7 @@
 #include "firmware/portable/runtime.h"
 
+#include <algorithm>
+#include <cstddef>
 #include <cstring>
 #include <limits>
 #include <type_traits>
@@ -42,15 +44,97 @@ TimeMs quarantine_backoff_ms(std::uint8_t strikes) {
   return ms < NodeRuntime::kQuarantineRetryMaxMs ? ms : NodeRuntime::kQuarantineRetryMaxMs;
 }
 
-struct PendingBlob {
-  std::uint32_t count = 0;
-  DeviceEvent events[NodeRuntime::kMaxPendingCritical];
+// One unacknowledged P0 per ring slot (~44 B, about 4 NVS entries) instead of
+// rewriting all of them (~328 B, 13 entries) on every alarm and every ACK.
+// Each record also snapshots which slots are free (empty or acknowledged), so
+// the newest record (highest gen) or ACK record tells the whole ring's state.
+struct PendingRecord {
+  std::uint32_t gen = 0;
+  std::uint8_t free_mask = 0;
+  std::uint8_t reserved[3] = {};
+  DeviceEvent event;
 };
+struct PendingAcks {
+  std::uint32_t gen = 0;
+  std::uint8_t free_mask = 0;
+  std::uint8_t reserved[3] = {};
+};
+
+constexpr std::size_t kRing = NodeRuntime::kMaxPendingCritical;
+static_assert(static_cast<std::size_t>(StoreKey::kPendingRingLast) -
+                      static_cast<std::size_t>(StoreKey::kPendingRing0) + 1 ==
+                  kRing,
+              "one store key per ring slot");
+static_assert(kRing <= 8, "ring masks are 8 bits");
+
+StoreKey ring_key(std::size_t i) {
+  return static_cast<StoreKey>(static_cast<std::size_t>(StoreKey::kPendingRing0) + i);
+}
+
+// Runtime state kept in LP RAM across an ESP32-H2 deep sleep (which is a reset).
+// Only trusted on a deep-sleep wake, and only with the magic and CRC intact.
+constexpr std::uint32_t kRetainedMagic = 0x544C5331u;  // "TLS1"
+struct RetainedState {
+  std::uint32_t magic;
+  std::uint32_t boot_epoch;  // already persisted: a wake never writes NVS for it
+  std::uint32_t seq;         // so (epoch, seq) is never reused across the wake
+  std::uint32_t heartbeat_in_ms;
+  std::uint32_t probe_backoff_ms;
+  std::array<std::uint32_t, kRing> ring_gen;
+  std::array<std::uint16_t, kSlots> code;  // module running in each slot (0 = none)
+  std::array<std::uint8_t, kSlots> state;  // its driver's retained_state()
+  std::uint8_t aon_on;
+  std::uint8_t wake_masked;
+  std::uint8_t ring_free;
+  std::uint8_t flags;  // bit 0 link failing, bit 1 ACKs not yet in NVS
+  std::uint32_t crc;
+};
+static_assert(std::is_trivially_copyable_v<RetainedState>);
+
+std::uint32_t retained_crc(const RetainedState& rs) {
+  return crc8(reinterpret_cast<const std::uint8_t*>(&rs), offsetof(RetainedState, crc));
+}
+
+bool read_retained(ISleep* sleep, RetainedState& rs) {
+  if (!sleep || !sleep->retained() || sleep->retained_size() < sizeof rs) return false;
+  std::memcpy(&rs, sleep->retained(), sizeof rs);
+  return rs.magic == kRetainedMagic && rs.crc == retained_crc(rs) && rs.boot_epoch != 0 &&
+         rs.boot_epoch != kEpochExhausted;
+}
+
+// Faults that mean a sensor stopped watching: P0 on a critical slot.
+bool is_supervision_fault(std::int32_t a, std::uint32_t b) {
+  switch (static_cast<ModuleFault>(a)) {
+    case ModuleFault::kStuckInterrupt:
+    case ModuleFault::kPowerQuarantined:
+    case ModuleFault::kCardRemoved:
+    case ModuleFault::kWakeLineFault:
+      return true;
+    case ModuleFault::kBusError:
+      return b == kFaultDetailUnarmed;
+    default:
+      return false;
+  }
+}
+
+std::uint32_t clamp_interval(std::uint32_t v, std::uint32_t max) {
+  return std::clamp(v, NodeRuntime::kMinIntervalMs, max);
+}
 
 }  // namespace
 
+bool NodeRuntime::slot_critical(std::uint8_t slot) const {
+  if (slot >= kSlots) return false;
+  const ModuleInfo* info = find_module(slots_[slot].code);
+  return info ? info->critical : true;  // unknown (e.g. quarantined before its ID was read)
+}
+
 void NodeRuntime::emit(std::uint8_t slot, EventKind kind, Priority priority, bool flag,
                        std::int32_t a, std::uint32_t b) {
+  if (kind == EventKind::kModuleFault && priority != Priority::kP0Critical &&
+      is_supervision_fault(a, b) && slot_critical(slot)) {
+    priority = Priority::kP0Critical;  // intrusion sensing is lost: a trouble alarm
+  }
   DeviceEvent e;
   e.boot_epoch = boot_epoch_;
   e.seq = ++seq_;
@@ -61,25 +145,104 @@ void NodeRuntime::emit(std::uint8_t slot, EventKind kind, Priority priority, boo
   e.flag = flag;
   e.a = a;
   e.b = b;
+  if (kind == EventKind::kHeartbeat) {
+    // Only the newest heartbeat matters: an outage never queues a backlog of them.
+    queue_.remove_if([](const DeviceEvent& q) { return q.kind == EventKind::kHeartbeat; });
+  }
   queue_.push(e);
-  if (priority == Priority::kP0Critical) persist_pending_critical();
+  if (priority == Priority::kP0Critical) {
+    persist_critical(e);
+    p0_waiting_ = true;
+  }
 }
 
-void NodeRuntime::persist_pending_critical() {
-  PendingBlob blob;
-  queue_.for_each([&](const DeviceEvent& e) {
-    if (e.priority == Priority::kP0Critical && blob.count < kMaxPendingCritical) {
-      blob.events[blob.count++] = e;
+void NodeRuntime::persist_critical(const DeviceEvent& e) {
+  // A free slot if there is one, else the oldest record: the newest alarms survive.
+  std::size_t pick = kRing;
+  for (std::size_t i = 0; i < kRing; ++i) {
+    if ((ring_free_ & (1u << i)) && (pick == kRing || ring_gen_[i] < ring_gen_[pick])) pick = i;
+  }
+  if (pick == kRing) {
+    pick = 0;
+    for (std::size_t i = 1; i < kRing; ++i) {
+      if (ring_gen_[i] < ring_gen_[pick]) pick = i;
     }
-  });
-  save(p_.store, StoreKey::kPendingCritical, blob);
+  }
+  PendingRecord r;
+  r.gen = next_gen_++;
+  r.free_mask = static_cast<std::uint8_t>(ring_free_ & ~(1u << pick));
+  r.event = e;
+  if (!save(p_.store, ring_key(pick), r)) return;  // still queued in RAM
+  ring_gen_[pick] = r.gen;
+  ring_epoch_[pick] = e.boot_epoch;
+  ring_seq_[pick] = e.seq;
+  ring_free_ = r.free_mask;
+  acks_dirty_ = false;  // the record carried every ACK so far
 }
 
-void NodeRuntime::restore_pending_critical() {
-  PendingBlob blob;
-  if (!load(p_.store, StoreKey::kPendingCritical, blob)) return;
-  for (std::uint32_t i = 0; i < blob.count && i < kMaxPendingCritical; ++i) {
-    queue_.push(blob.events[i]);  // keeps its original (boot_epoch, seq)
+void NodeRuntime::note_ack(std::uint32_t boot_epoch, std::uint32_t seq, TimeMs now) {
+  for (std::size_t i = 0; i < kRing; ++i) {
+    const auto bit = static_cast<std::uint8_t>(1u << i);
+    if (!(ring_free_ & bit) && ring_epoch_[i] == boot_epoch && ring_seq_[i] == seq) {
+      ring_free_ = static_cast<std::uint8_t>(ring_free_ | bit);
+      if (!acks_dirty_) acks_dirty_since_ = now;
+      acks_dirty_ = true;
+    }
+  }
+}
+
+// Written back lazily (kAckFlushMs, or before a planned reboot): an ACK lost to
+// a power cut only means the hub sees that alarm again and deduplicates it.
+void NodeRuntime::flush_acks() {
+  if (!acks_dirty_) return;
+  PendingAcks a;
+  a.gen = next_gen_++;
+  a.free_mask = ring_free_;
+  if (save(p_.store, StoreKey::kPendingAcks, a)) acks_dirty_ = false;
+}
+
+void NodeRuntime::restore_pending_critical(
+    std::uint8_t retained_free,
+    const std::array<std::uint32_t, kMaxPendingCritical>* retained_gen) {
+  std::array<PendingRecord, kRing> rec{};
+  std::uint8_t have = 0;
+  std::uint32_t best = 0;
+  std::uint8_t free_mask = 0xFF;
+  for (std::size_t i = 0; i < kRing; ++i) {
+    if (!load(p_.store, ring_key(i), rec[i]) || rec[i].gen == 0) continue;
+    have = static_cast<std::uint8_t>(have | (1u << i));
+    ring_gen_[i] = rec[i].gen;
+    ring_epoch_[i] = rec[i].event.boot_epoch;
+    ring_seq_[i] = rec[i].event.seq;
+    if (rec[i].gen > best) {
+      best = rec[i].gen;
+      free_mask = rec[i].free_mask;
+    }
+  }
+  PendingAcks acks;
+  if (load(p_.store, StoreKey::kPendingAcks, acks) && acks.gen > best) {
+    best = acks.gen;
+    free_mask = acks.free_mask;
+  }
+  next_gen_ = best + 1;
+  free_mask = static_cast<std::uint8_t>(free_mask | ~have);  // never written: free
+  if (retained_gen) {
+    for (std::size_t i = 0; i < kRing; ++i) {
+      if ((retained_free & (1u << i)) && (*retained_gen)[i] == ring_gen_[i]) {
+        free_mask = static_cast<std::uint8_t>(free_mask | (1u << i));
+      }
+    }
+  }
+  ring_free_ = free_mask;
+  // Oldest first, each with its original (boot_epoch, seq): the hub deduplicates.
+  std::uint8_t todo = static_cast<std::uint8_t>(have & ~free_mask);
+  while (todo) {
+    std::size_t next = kRing;
+    for (std::size_t i = 0; i < kRing; ++i) {
+      if ((todo & (1u << i)) && (next == kRing || ring_gen_[i] < ring_gen_[next])) next = i;
+    }
+    queue_.push(rec[next].event);
+    todo = static_cast<std::uint8_t>(todo & ~(1u << next));
   }
 }
 
@@ -88,21 +251,89 @@ bool NodeRuntime::persist_boot_epoch() {
   return save(p_.store, StoreKey::kBootEpoch, boot_epoch_);
 }
 
+void NodeRuntime::save_retained() {
+  if (!sleep_ || !sleep_->retained() || sleep_->retained_size() < sizeof(RetainedState)) return;
+  RetainedState rs;
+  std::memset(&rs, 0, sizeof rs);
+  // An epoch that is not on record yet must not survive a wake (it would be
+  // used without ever being persisted): leave the block invalid instead.
+  if (epoch_persisted_ && boot_epoch_ != kEpochExhausted) {
+    const TimeMs now = p_.clock.now_ms();
+    rs.magic = kRetainedMagic;
+    rs.boot_epoch = boot_epoch_;
+    rs.seq = seq_;
+    const TimeMs hb = next_heartbeat_ > now ? next_heartbeat_ - now : 0;
+    rs.heartbeat_in_ms = static_cast<std::uint32_t>(std::min<TimeMs>(hb, kMaxHeartbeatIntervalMs));
+    rs.probe_backoff_ms = probe_backoff_ms_;
+    rs.ring_gen = ring_gen_;
+    for (std::uint8_t i = 0; i < kSlots; ++i) {
+      const SlotState& st = slots_[i];
+      if (!st.enabled) continue;
+      rs.code[i] = static_cast<std::uint16_t>(st.code);
+      rs.state[i] = std::visit(
+          [](const auto& drv) -> std::uint8_t {
+            if constexpr (requires { drv.retained_state(); }) {
+              return drv.retained_state();
+            } else {
+              return 0;
+            }
+          },
+          st.driver);
+    }
+    rs.aon_on = aon_on_;
+    rs.wake_masked = wake_masked_;
+    rs.ring_free = ring_free_;
+    rs.flags = static_cast<std::uint8_t>((outage_ ? 1u : 0u) | (acks_dirty_ ? 2u : 0u));
+    rs.crc = retained_crc(rs);
+  }
+  std::memcpy(sleep_->retained(), &rs, sizeof rs);
+}
+
 void NodeRuntime::boot() {
   feed_watchdog();
-  // Persistent boot epoch: strictly increasing, never reuse (epoch, seq) after a
-  // reset. Until it is written nothing is transmitted (step() retries).
-  std::uint32_t epoch = 0;
-  load(p_.store, StoreKey::kBootEpoch, epoch);
-  boot_epoch_ = epoch >= kEpochExhausted - 1 ? kEpochExhausted : epoch + 1;
-  epoch_persisted_ = persist_boot_epoch() || persist_boot_epoch();
+  wake_ = sleep_ ? sleep_->wake_info() : WakeInfo{};
+  RetainedState rs;
+  std::memset(&rs, 0, sizeof rs);
+  const bool warm = wake_.deep_sleep() && read_retained(sleep_, rs);
+  if (warm) {
+    // Deep-sleep wake: same epoch, sequence continues. No NVS write per wake.
+    boot_epoch_ = rs.boot_epoch;
+    seq_ = rs.seq;
+    epoch_persisted_ = true;
+  } else {
+    // Persistent boot epoch: strictly increasing, never reuse (epoch, seq) after a
+    // reset. Until it is written nothing is transmitted (step() retries).
+    std::uint32_t epoch = 0;
+    load(p_.store, StoreKey::kBootEpoch, epoch);
+    boot_epoch_ = epoch >= kEpochExhausted - 1 ? kEpochExhausted : epoch + 1;
+    epoch_persisted_ = persist_boot_epoch() || persist_boot_epoch();
+    seq_ = 0;
+  }
   next_epoch_retry_ = p_.clock.now_ms() + kEpochRetryMs;
-  seq_ = 0;
   load(p_.store, StoreKey::kConfig, config_);
+  // A record from before the bounds existed (red team RT-14) is repaired, not obeyed.
+  if (config_.revision == std::numeric_limits<std::uint32_t>::max()) config_.revision = 0;
+  config_.heartbeat_interval_ms =
+      clamp_interval(config_.heartbeat_interval_ms, kMaxHeartbeatIntervalMs);
+  config_.environment_interval_ms =
+      clamp_interval(config_.environment_interval_ms, kMaxEnvironmentIntervalMs);
 
   const BootDecision d = ota_.boot();
-  restore_pending_critical();
-  board_ok_ = p_.power.begin();  // safe outputs before anything touches a slot
+  restore_pending_critical(warm ? rs.ring_free : 0, warm ? &rs.ring_gen : nullptr);
+  const TimeMs t0 = p_.clock.now_ms();
+  if (warm && (rs.flags & 2u)) {
+    acks_dirty_ = true;
+    acks_dirty_since_ = t0;
+  }
+  // Cards keep running through a deep sleep (AON on the expanders): adopt their
+  // rails instead of cutting them, or fall back to the cold-boot safe state.
+  resumed_cards_ = warm && p_.power.resume(rs.aon_on, board_ok_);
+  if (resumed_cards_) {
+    aon_on_ = rs.aon_on;
+  } else {
+    board_ok_ = p_.power.begin();  // safe outputs before anything touches a slot
+    aon_on_ = 0;
+  }
   // A reset while a slot's AON was being switched on may mean that card pulled
   // the core rail down (no current limit on AON). It may also be a USB unplug
   // or a watchdog: one is a strike, kQuarantineStrikes in a row keep the slot
@@ -120,21 +351,49 @@ void NodeRuntime::boot() {
   }
   quarantined_ = sp.quarantined;
   strikes_ = sp.strikes;
-  const TimeMs now = p_.clock.now_ms();
   for (std::uint8_t i = 0; i < kSlots; ++i) {
-    quarantine_retry_at_[i] = now + quarantine_backoff_ms(strikes_[i]);
+    quarantine_retry_at_[i] = t0 + quarantine_backoff_ms(strikes_[i]);
+    wake_high_since_[i] = kNever;
   }
-  aon_on_ = 0;
+  wake_masked_ = resumed_cards_ ? rs.wake_masked : 0;
+  wake_stuck_reported_ = 0;
+  // Link health: a wake keeps rationing sends if the hub was unreachable.
+  last_reply_ms_ = t0;
+  last_refill_ms_ = t0;
+  tokens_ = kSendBurst;
+  outage_ = warm && (rs.flags & 1u);
+  unanswered_ = outage_ ? kLinkFailSends : 0;
+  probe_backoff_ms_ =
+      outage_ ? std::clamp(rs.probe_backoff_ms, kProbeMinMs, kProbeMaxMs) : kProbeMinMs;
+  next_probe_ms_ = t0;
   mode_ = compute_mode();
-  discover();
+  Resume r;
+  if (resumed_cards_) {
+    r.active = true;
+    r.code = rs.code;
+    r.state = rs.state;
+  }
+  discover(r);
   admit_power();
+  arm_wake_lines();
 
-  // Boot status tells the hub the running version (and any rollback).
-  (void)d;
-  emit_ota_status(Priority::kP1State);
-  emit(kNoSlot, EventKind::kHeartbeat, Priority::kP2Health, false,
-       static_cast<std::int32_t>(p_.power.battery_mv()), static_cast<std::uint32_t>(mode_));
-  next_heartbeat_ = p_.clock.now_ms() + config_.heartbeat_interval_ms;
+  const TimeMs now = p_.clock.now_ms();
+  if (warm) {
+    // The hub already has the version and the health; a timer wake is the
+    // heartbeat (or a probe) coming due, a GPIO wake keeps the schedule.
+    const TimeMs left = wake_.cause == ResetCause::kDeepSleepTimer
+                            ? 0
+                            : std::min<TimeMs>(rs.heartbeat_in_ms, config_.heartbeat_interval_ms);
+    next_heartbeat_ = now + left;
+  } else {
+    // Boot status tells the hub the running version (and any rollback).
+    (void)d;
+    emit_ota_status(Priority::kP1State);
+    emit(kNoSlot, EventKind::kHeartbeat, Priority::kP2Health, false,
+         static_cast<std::int32_t>(p_.power.battery_mv()), static_cast<std::uint32_t>(mode_));
+    next_heartbeat_ = now + config_.heartbeat_interval_ms;
+  }
+  save_retained();
 }
 
 void NodeRuntime::emit_ota_status(Priority priority) {
@@ -144,11 +403,23 @@ void NodeRuntime::emit_ota_status(Priority priority) {
   emit(kNoSlot, EventKind::kOtaStatus, priority, false, static_cast<std::int32_t>(r.state), b);
 }
 
-void NodeRuntime::discover() {
+void NodeRuntime::discover(const Resume& r) {
   const TimeMs now = p_.clock.now_ms();
-  for (std::uint8_t i = 0; i < kSlots; ++i) {
-    discover_slot(i, now);
+  std::array<bool, kSlots> done{};
+  auto run = [&](std::uint8_t i) {
+    discover_slot(i, now, r.active ? &r : nullptr);
+    done[i] = true;
     feed_watchdog();  // each slot can take tens of ms (rail settle, NVS, sensor probes)
+  };
+  // After a wake, the slots that woke the node first: their event is the alarm.
+  if (r.active) {
+    for (std::uint8_t i = 0; i < kSlots; ++i) {
+      const std::uint8_t line = p_.board.slots[i].wake_line;
+      if (line < 32 && (wake_.lines & (1u << line))) run(i);
+    }
+  }
+  for (std::uint8_t i = 0; i < kSlots; ++i) {
+    if (!done[i]) run(i);
   }
 }
 
@@ -161,9 +432,10 @@ void NodeRuntime::rescan(std::optional<std::uint8_t> slot) {
     }
   }
   admit_power();
+  arm_wake_lines();
 }
 
-void NodeRuntime::discover_slot(std::uint8_t i, TimeMs now) {
+void NodeRuntime::discover_slot(std::uint8_t i, TimeMs now, const Resume* r) {
   SlotState& st = slots_[i];
   st = SlotState{};
   const SlotWiring& w = p_.board.slots[i];
@@ -172,7 +444,7 @@ void NodeRuntime::discover_slot(std::uint8_t i, TimeMs now) {
   bool keep_powered = true;
   {
     SlotIo io(p_, i);
-    keep_powered = init_slot(i, io, now);
+    keep_powered = init_slot(i, io, now, r);
     io.deselect();  // leave the root bus free, and never unpower a selected branch
   }
   // A card that can't be used is not left drawing from AON (ADR 0013: unknown
@@ -186,7 +458,7 @@ void NodeRuntime::unpower_slot(std::uint8_t i) {
   aon_on_ = static_cast<std::uint8_t>(aon_on_ & ~(1u << i));
 }
 
-bool NodeRuntime::init_slot(std::uint8_t i, SlotIo& io, TimeMs now) {
+bool NodeRuntime::init_slot(std::uint8_t i, SlotIo& io, TimeMs now, const Resume* r) {
   SlotState& st = slots_[i];
   const SlotWiring& w = p_.board.slots[i];
   const IdRead id = read_module_id(io, p_.board.id_eeprom_address);
@@ -227,25 +499,37 @@ bool NodeRuntime::init_slot(std::uint8_t i, SlotIo& io, TimeMs now) {
     fault(ModuleFault::kMissingResource);
     return false;
   }
+  // Same card as before a deep sleep, still powered: resume, never re-init.
+  const bool resume = r && r->code[i] == static_cast<std::uint16_t>(st.code);
+  const std::uint8_t rs = resume ? r->state[i] : 0;
   bool ok = false;
   switch (st.code) {
     case ModuleCode::kPirEkmb:
-    case ModuleCode::kTlMod002Pir:
-      ok = st.driver.emplace<PirDriver>().init(io, *this, now);
+    case ModuleCode::kTlMod002Pir: {
+      auto& d = st.driver.emplace<PirDriver>();
+      ok = resume ? d.resume(io, *this, now, rs) : d.init(io, *this, now);
       break;
+    }
     case ModuleCode::kTlTest001:
       ok = st.driver.emplace<TestCardDriver>().init(io, *this, now);
       break;
-    case ModuleCode::kReedContact:
-      ok = st.driver.emplace<ContactDriver>().init(io, *this, now);
+    case ModuleCode::kReedContact: {
+      auto& d = st.driver.emplace<ContactDriver>();
+      ok = resume ? d.resume(io, *this, now, rs) : d.init(io, *this, now);
       break;
-    case ModuleCode::kTmag5273Contact:
-      ok = st.driver.emplace<Tmag5273ContactDriver>().init(io, *this, now);
+    }
+    case ModuleCode::kTmag5273Contact: {
+      auto& d = st.driver.emplace<Tmag5273ContactDriver>();
+      ok = resume ? d.resume(io, *this, now, rs) : d.init(io, *this, now);
       break;
+    }
     case ModuleCode::kLis2dw12:
-    case ModuleCode::kTlMod003Imu:
-      ok = st.driver.emplace<Lis2dw12Driver>().init(io, *this, now, config_.impact_threshold_mg);
+    case ModuleCode::kTlMod003Imu: {
+      auto& d = st.driver.emplace<Lis2dw12Driver>();
+      ok = resume ? d.resume(io, *this, now, config_.impact_threshold_mg)
+                  : d.init(io, *this, now, config_.impact_threshold_mg);
       break;
+    }
     case ModuleCode::kSht40:
     case ModuleCode::kTlMod004Env:
       ok = st.driver.emplace<Sht40Driver>().init(io, *this, now);
@@ -262,8 +546,10 @@ bool NodeRuntime::init_slot(std::uint8_t i, SlotIo& io, TimeMs now) {
     return false;
   }
   st.enabled = true;
-  emit(i, EventKind::kModulePresent, Priority::kP2Health, true, static_cast<std::int32_t>(st.code),
-       0);
+  if (!resume) {
+    emit(i, EventKind::kModulePresent, Priority::kP2Health, true,
+         static_cast<std::int32_t>(st.code), 0);
+  }
   return true;
 }
 
@@ -372,6 +658,19 @@ void NodeRuntime::admit_power() {
   }
 }
 
+// Every slot whose running module needs its wake line is a deep-sleep wake
+// source, unless the line is masked as stuck high.
+void NodeRuntime::arm_wake_lines() {
+  if (!sleep_) return;
+  for (std::uint8_t i = 0; i < kSlots; ++i) {
+    const std::uint8_t line = p_.board.slots[i].wake_line;
+    if (line == 0xFF) continue;
+    const ModuleInfo* info = find_module(slots_[i].code);
+    const bool want = slots_[i].enabled && info && info->needs_wake && !(wake_masked_ & (1u << i));
+    sleep_->set_wake_enabled(line, want);
+  }
+}
+
 PowerMode NodeRuntime::compute_mode() {
   if (p_.power.source() == PowerSource::kUsb) return PowerMode::kNormal;
   const std::uint32_t mv = p_.power.battery_mv();
@@ -382,8 +681,8 @@ PowerMode NodeRuntime::compute_mode() {
 
 void NodeRuntime::handle(const Downlink& d) {
   if (const auto* ack = std::get_if<Ack>(&d)) {
-    const bool was_critical_pending = queue_.ack(ack->boot_epoch, ack->seq);
-    if (was_critical_pending) persist_pending_critical();
+    queue_.ack(ack->boot_epoch, ack->seq);
+    note_ack(ack->boot_epoch, ack->seq, p_.clock.now_ms());  // NVS later (flush_acks)
     // Health check for a trial image: it reached the hub end to end, and the
     // board took its safe state at boot. Only then is it marked valid (here and
     // in the bootloader); otherwise the next reboot rolls it back.
@@ -391,13 +690,23 @@ void NodeRuntime::handle(const Downlink& d) {
       emit_ota_status(Priority::kP1State);
     }
   } else if (const auto* cfg = std::get_if<ConfigUpdate>(&d)) {
-    if (cfg->revision <= config_.revision) return;  // stale or duplicate
+    // Stale, duplicate, or the maximum revision (it would lock every later
+    // config out for good: red team RT-14).
+    if (cfg->revision <= config_.revision ||
+        cfg->revision == std::numeric_limits<std::uint32_t>::max()) {
+      return;
+    }
     RuntimeConfig next = config_;
     next.revision = cfg->revision;
-    if (cfg->heartbeat_interval_ms >= 10'000)
+    // Fields outside their bounds are ignored, the rest applies.
+    if (cfg->heartbeat_interval_ms >= kMinIntervalMs &&
+        cfg->heartbeat_interval_ms <= kMaxHeartbeatIntervalMs) {
       next.heartbeat_interval_ms = cfg->heartbeat_interval_ms;
-    if (cfg->environment_interval_ms >= 10'000)
+    }
+    if (cfg->environment_interval_ms >= kMinIntervalMs &&
+        cfg->environment_interval_ms <= kMaxEnvironmentIntervalMs) {
       next.environment_interval_ms = cfg->environment_interval_ms;
+    }
     if (cfg->impact_threshold_mg >= 32 && cfg->impact_threshold_mg <= 1968) {
       next.impact_threshold_mg = cfg->impact_threshold_mg;
     }
@@ -421,10 +730,157 @@ void NodeRuntime::handle(const Downlink& d) {
     const OtaState before = ota_.record().state;
     if (ota_.chunk(*chunk)) ota_progress_ = true;
     if (ota_.record().state != before) emit_ota_status(Priority::kP2Health);
-    if (ota_.reboot_wanted()) reboot_requested_ = true;
+    if (ota_.reboot_wanted()) {
+      flush_acks();
+      reboot_requested_ = true;
+    }
   } else if (std::holds_alternative<RebootRequest>(d)) {
+    flush_acks();
     reboot_requested_ = true;
   }
+}
+
+// Heartbeat checks: card still there, sensor still armed, empty slot filled.
+void NodeRuntime::supervise_slots(TimeMs now) {
+  for (std::uint8_t i = 0; i < kSlots; ++i) {
+    if (!p_.board.slots[i].present || (quarantined_ & (1u << i))) continue;
+    SlotState& st = slots_[i];
+    if (!st.enabled) {
+      // Hot insertion (or the card put back): discover it.
+      if (st.code != ModuleCode::kNone && st.fault != ModuleFault::kCardRemoved) continue;
+      const std::optional<bool> seated = p_.power.slot_present(i);
+      bool found = seated.value_or(false);
+      if (!seated) {  // the board can't tell: its AON is unswitched, ask the ID EEPROM
+        SlotIo io(p_, i);
+        found = read_module_id(io, p_.board.id_eeprom_address).status == IdRead::Status::kOk;
+        io.deselect();
+      }
+      if (found) rescan(i);
+      continue;
+    }
+    if (std::holds_alternative<std::monostate>(st.driver)) continue;
+    bool gone = p_.power.slot_present(i) == std::optional<bool>{false};
+    IdRead id;
+    if (!gone) {
+      for (int attempt = 0; attempt < 2; ++attempt) {  // one glitch is not a removal
+        SlotIo io(p_, i);
+        id = read_module_id(io, p_.board.id_eeprom_address);
+        io.deselect();
+        if (id.status != IdRead::Status::kAbsent) break;
+      }
+      gone = id.status == IdRead::Status::kAbsent ||
+             (id.status == IdRead::Status::kOk && id.code != st.code);
+    }
+    if (gone) {
+      emit(i, EventKind::kModuleFault, Priority::kP2Health, false,
+           static_cast<std::int32_t>(ModuleFault::kCardRemoved),
+           static_cast<std::uint32_t>(st.code));
+      st.enabled = false;
+      st.fault = ModuleFault::kCardRemoved;
+      st.driver = std::monostate{};
+      unpower_slot(i);
+      arm_wake_lines();
+      if (id.status == IdRead::Status::kOk) rescan(i);  // a different card: discover it
+      continue;
+    }
+    SlotIo io(p_, i);
+    std::visit(
+        [&](auto& drv) {
+          if constexpr (requires { drv.supervise(io, *this, now); }) drv.supervise(io, *this, now);
+        },
+        st.driver);
+    io.deselect();
+  }
+}
+
+// A wake line held high would re-wake the node from deep sleep forever: mask
+// it as a wake source after kWakeMaskMs and poll it slowly until it falls.
+void NodeRuntime::supervise_wake_lines(TimeMs now) {
+  for (std::uint8_t i = 0; i < kSlots; ++i) {
+    const std::uint8_t line = p_.board.slots[i].wake_line;
+    const auto bit = static_cast<std::uint8_t>(1u << i);
+    if (line == 0xFF || !slots_[i].enabled) {
+      wake_high_since_[i] = kNever;
+      continue;
+    }
+    if (!p_.gpio.read(line)) {
+      wake_high_since_[i] = kNever;
+      wake_stuck_reported_ = static_cast<std::uint8_t>(wake_stuck_reported_ & ~bit);
+      if (wake_masked_ & bit) {
+        wake_masked_ = static_cast<std::uint8_t>(wake_masked_ & ~bit);
+        if (sleep_) sleep_->set_wake_enabled(line, true);
+      }
+      continue;
+    }
+    if (wake_high_since_[i] == kNever) wake_high_since_[i] = now;
+    const TimeMs high_ms = now - wake_high_since_[i];
+    if (!(wake_masked_ & bit) && high_ms >= kWakeMaskMs) {
+      wake_masked_ = static_cast<std::uint8_t>(wake_masked_ | bit);
+      if (sleep_) sleep_->set_wake_enabled(line, false);
+      next_masked_poll_[i] = now;
+    }
+    // A contact held open is a state, not a fault; the LIS2DW12 reports its own.
+    const bool self_explained = std::holds_alternative<ContactDriver>(slots_[i].driver) ||
+                                std::holds_alternative<Lis2dw12Driver>(slots_[i].driver);
+    if (!self_explained && !(wake_stuck_reported_ & bit) && high_ms >= kWakeStuckFaultMs) {
+      wake_stuck_reported_ = static_cast<std::uint8_t>(wake_stuck_reported_ | bit);
+      emit(i, EventKind::kModuleFault, Priority::kP2Health, false,
+           static_cast<std::int32_t>(ModuleFault::kStuckInterrupt),
+           static_cast<std::uint32_t>(slots_[i].code));
+    }
+  }
+}
+
+void NodeRuntime::send_due(TimeMs now) {
+  // Nothing leaves before the epoch is persisted: the hub would drop a reused
+  // (epoch, seq) as a duplicate. Events wait in the queue meanwhile.
+  if (!epoch_persisted_) return;
+  if (now > last_refill_ms_) {
+    const TimeMs add = (now - last_refill_ms_) / kSendRefillMs;
+    if (add > 0) {
+      tokens_ = static_cast<std::uint32_t>(std::min<TimeMs>(kSendBurst, tokens_ + add));
+      last_refill_ms_ += add * kSendRefillMs;
+    }
+  }
+  if (!outage_ && unanswered_ >= kLinkFailSends && now - last_reply_ms_ >= kLinkFailMs) {
+    outage_ = true;  // the hub is gone or the air is jammed: ration the radio
+    probe_backoff_ms_ = kProbeMinMs;
+    next_probe_ms_ = now + probe_backoff_ms_;
+  }
+  int budget = kSendsPerStep;
+  if (outage_) {
+    const bool p0_probe = p0_waiting_ && now - last_probe_ms_ >= kP0ProbeMinMs;
+    if (now < next_probe_ms_ && !p0_probe) return;
+    budget = 1;  // one probe: the most important event, whatever its own backoff
+  }
+  int sent = 0;
+  for (int n = 0; n < budget; ++n) {
+    auto* s = queue_.next_due(outage_ ? kNever : now);
+    if (!s) break;
+    if (s->event.priority != Priority::kP0Critical) {
+      if (tokens_ == 0) break;
+      --tokens_;
+    }
+    p_.link.send(s->event);
+    queue_.mark_sent(*s, now);  // backoff whether or not the radio took it
+    ++unanswered_;
+    ++sent;
+  }
+  if (outage_ && sent > 0) {
+    last_probe_ms_ = now;
+    p0_waiting_ = false;
+    if (now >= next_probe_ms_) {
+      next_probe_ms_ = now + probe_backoff_ms_;
+      probe_backoff_ms_ = std::min(probe_backoff_ms_ * 2, kProbeMaxMs);
+    }
+  }
+}
+
+TimeMs NodeRuntime::send_gate_ms(TimeMs now) const {
+  if (!outage_) return tokens_ == 0 ? last_refill_ms_ + kSendRefillMs : now;
+  TimeMs gate = next_probe_ms_;
+  if (p0_waiting_ && last_probe_ms_ + kP0ProbeMinMs < gate) gate = last_probe_ms_ + kP0ProbeMinMs;
+  return gate;
 }
 
 void NodeRuntime::step() {
@@ -434,7 +890,23 @@ void NodeRuntime::step() {
     epoch_persisted_ = persist_boot_epoch();
     next_epoch_retry_ = now + kEpochRetryMs;
   }
-  while (auto d = p_.link.receive()) handle(*d);
+  // Bounded: a flood of downlinks can't hold the step (and the watchdog) forever.
+  bool replied = false;
+  int handled = 0;
+  for (; handled < kMaxDownlinksPerStep; ++handled) {
+    auto d = p_.link.receive();
+    if (!d) break;
+    handle(*d);
+    replied = true;
+    feed_watchdog();
+  }
+  downlink_more_ = handled == kMaxDownlinksPerStep;
+  if (replied) {
+    unanswered_ = 0;
+    last_reply_ms_ = now;
+    outage_ = false;
+    probe_backoff_ms_ = kProbeMinMs;
+  }
   // One progress report per batch of chunks: the hub streams the next ones
   // in its reply (device-initiated exchange, sleepy-node friendly).
   if (ota_progress_ && ota_.record().state == OtaState::kDownloading) {
@@ -442,11 +914,18 @@ void NodeRuntime::step() {
   }
   ota_progress_ = false;
 
-  const std::uint32_t env_interval =
-      config_.environment_interval_ms * (mode_ == PowerMode::kNormal ? 1u : 4u);
+  supervise_wake_lines(now);
+  const std::uint32_t env_interval = static_cast<std::uint32_t>(
+      std::min<TimeMs>(static_cast<TimeMs>(config_.environment_interval_ms) *
+                           (mode_ == PowerMode::kNormal ? 1u : 4u),
+                       std::numeric_limits<std::uint32_t>::max()));
   for (std::uint8_t i = 0; i < kSlots; ++i) {
     SlotState& st = slots_[i];
     if (!st.enabled) continue;
+    if (wake_masked_ & (1u << i)) {  // stuck high: poll it slowly, not every step
+      if (now < next_masked_poll_[i]) continue;
+      next_masked_poll_[i] = now + kMaskedPollMs;
+    }
     SlotIo io(p_, i);
     std::visit(
         [&](auto& drv) {
@@ -479,6 +958,7 @@ void NodeRuntime::step() {
            0);
       admit_power();
     }
+    supervise_slots(now);
     emit(kNoSlot, EventKind::kHeartbeat, Priority::kP2Health, false,
          static_cast<std::int32_t>(p_.power.battery_mv()), static_cast<std::uint32_t>(mode_));
     const std::uint32_t factor = mode_ == PowerMode::kNormal ? 1u : 4u;
@@ -487,25 +967,29 @@ void NodeRuntime::step() {
 
   if (quarantined_) retry_quarantined(now);
 
-  // Nothing leaves before the epoch is persisted: the hub would drop a reused
-  // (epoch, seq) as a duplicate. Events wait in the queue meanwhile.
-  for (int n = 0; epoch_persisted_ && n < kSendsPerStep; ++n) {
-    auto* s = queue_.next_due(now);
-    if (!s) break;
-    p_.link.send(s->event);
-    queue_.mark_sent(*s, now);  // backoff whether or not the radio took it
-  }
+  // Non-critical telemetry has a shelf life: after an outage only fresh data goes out.
+  queue_.remove_if([now](const DeviceEvent& e) {
+    return e.priority >= Priority::kP2Health && e.at_ms + kTelemetryTtlMs <= now;
+  });
+  if (acks_dirty_ && now - acks_dirty_since_ >= kAckFlushMs) flush_acks();
+
+  send_due(now);
   awake_ = false;
+  save_retained();
 }
 
 TimeMs NodeRuntime::next_wake_ms() const {
   const TimeMs now = p_.clock.now_ms();
+  if (downlink_more_) return now;
   TimeMs next = next_heartbeat_;
   if (!epoch_persisted_) {
     if (next_epoch_retry_ < next) next = next_epoch_retry_;
-  } else if (auto due = queue_.earliest_due(); due && *due < next) {
-    next = *due;
+  } else if (auto due = queue_.earliest_due()) {
+    const TimeMs gate = send_gate_ms(now);
+    const TimeMs t = outage_ ? gate : std::max(*due, gate);
+    if (t < next) next = t;
   }
+  if (acks_dirty_ && acks_dirty_since_ + kAckFlushMs < next) next = acks_dirty_since_ + kAckFlushMs;
   if (quarantined_) {
     for (std::uint8_t i = 0; i < kSlots; ++i) {
       if ((quarantined_ & (1u << i)) && quarantine_retry_at_[i] < next) {
@@ -513,8 +997,17 @@ TimeMs NodeRuntime::next_wake_ms() const {
       }
     }
   }
-  for (const auto& st : slots_) {
+  for (std::uint8_t i = 0; i < kSlots; ++i) {
+    const SlotState& st = slots_[i];
     if (!st.enabled) continue;
+    if (p_.board.slots[i].wake_line != 0xFF && wake_high_since_[i] != kNever &&
+        !(wake_masked_ & (1u << i)) && wake_high_since_[i] + kWakeMaskMs < next) {
+      next = wake_high_since_[i] + kWakeMaskMs;  // time to mask it
+    }
+    if (wake_masked_ & (1u << i)) {
+      if (next_masked_poll_[i] < next) next = next_masked_poll_[i];
+      continue;
+    }
     const TimeMs due = std::visit(
         [now](const auto& drv) -> TimeMs {
           if constexpr (std::is_same_v<std::decay_t<decltype(drv)>, std::monostate>) {

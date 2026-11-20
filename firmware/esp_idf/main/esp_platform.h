@@ -59,20 +59,45 @@ class BatteryAdc final : public IBatteryAdc {
   adc_cali_handle_t cali_ = nullptr;
 };
 
-// NVS. The partition is erased only when ESP-IDF says it must be
-// (ESP_ERR_NVS_NO_FREE_PAGES / ESP_ERR_NVS_NEW_VERSION_FOUND): any other init
-// error leaves it alone and every get/put fails, so the boot epoch, identity
-// and quarantine records are never wiped by a transient fault.
+// NVS on two partitions (partitions.csv). The working partition ("nvs") is
+// erased only when ESP-IDF says it must be (ESP_ERR_NVS_NO_FREE_PAGES /
+// ESP_ERR_NVS_NEW_VERSION_FOUND); any other init error leaves it alone and its
+// get/put fail. The boot epoch and identity (is_permanent()) live in
+// "talos_id", which firmware never erases: an erase of the working partition
+// can't restart the epoch below what the hub remembers (red team RT-06) or
+// unprovision the node. If "talos_id" can't be opened those keys fail loudly
+// (the uplink is held) rather than fall back to the erasable partition.
 class Store final : public IStore {
  public:
+  static constexpr const char* kPermanentPartition = "talos_id";
   Store();
   std::optional<std::size_t> get(StoreKey key, std::uint8_t* buf, std::size_t cap) override;
   bool put(StoreKey key, const std::uint8_t* data, std::size_t n) override;
   bool ok() const { return ok_; }
+  bool permanent_ok() const { return perm_ok_; }
 
  private:
   nvs_handle_t handle_ = 0;
+  nvs_handle_t perm_ = 0;
   bool ok_ = false;
+  bool perm_ok_ = false;
+};
+
+// Reset cause, ext1 wake lines and LP RAM for NodeRuntime (deep-sleep wakes are
+// resets on the ESP32-H2). Sleep entry itself is not wired yet: main.cc still
+// light-polls. The ext1 mask is kept armed so entering deep sleep needs no
+// further setup. Per-pin wake levels on the H2 are unverified (HD-004).
+class Sleep final : public ISleep {
+ public:
+  Sleep();
+  WakeInfo wake_info() override { return info_; }
+  bool set_wake_enabled(std::uint8_t line, bool enabled) override;
+  std::uint8_t* retained() override;
+  std::size_t retained_size() const override;
+
+ private:
+  WakeInfo info_;
+  std::uint64_t mask_ = 0;
 };
 
 // Task watchdog with a panic (and so a reset) on timeout, subscribed for the

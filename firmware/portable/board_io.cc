@@ -191,17 +191,62 @@ bool BoardIo::configure_expanders() {
   return ok;
 }
 
+void BoardIo::configure_charger() {
+  if (!charger_) return;
+  last_source_ = source();
+  charger_ok_ =
+      charger_->configure(last_source_ == PowerSource::kUsb ? kUsbChargeMa : kSolarChargeMa);
+}
+
 bool BoardIo::begin() {
   for (auto& r : rails_) r = {false, false};
   uart_slot_.reset();
   bool ok = configure_expanders();
-  if (charger_) {
-    last_source_ = source();
-    charger_ok_ =
-        charger_->configure(last_source_ == PowerSource::kUsb ? kUsbChargeMa : kSolarChargeMa);
-    ok &= charger_ok_;
-  }
+  configure_charger();
+  if (charger_) ok &= charger_ok_;
   return ok;
+}
+
+bool BoardIo::resume(std::uint8_t aon_on, bool& board_ok) {
+  // What the expanders must hold if only the AON rails in aon_on were on: the
+  // safe pattern plus AON_EN, RESET_N and CS_N high for those slots (set_rail).
+  std::array<std::uint16_t, 2> want{};
+  for (std::size_t i = 0; i < expanders_.size(); ++i) want[i] = safe_[i].outputs;
+  auto set = [&](const ExpanderPin& p) {
+    for (std::size_t i = 0; i < expanders_.size(); ++i) {
+      if (expanders_[i] && p.wired() && expanders_[i]->address() == p.address) {
+        want[i] = static_cast<std::uint16_t>(want[i] | (1u << p.pin));
+      }
+    }
+  };
+  for (std::uint8_t s = 0; s < kSlots; ++s) {
+    if (!(aon_on & (1u << s))) continue;
+    const auto& io = board_.slot_io[s];
+    set(io.aon_enable);
+    set(io.reset_n);
+    set(io.cs_n);
+  }
+  // Read back outputs and directions. Anything else (a SW rail, the UART mux,
+  // a chip that reset) means the state is not what we think: refuse.
+  for (std::size_t i = 0; i < expanders_.size(); ++i) {
+    if (!expanders_[i]) continue;
+    const auto outs = expanders_[i]->read_register_pair(Tca9535::kOutput0);
+    const auto cfg = expanders_[i]->read_register_pair(Tca9535::kConfig0);
+    const auto mask = safe_[i].output_mask;
+    if (!outs || !cfg || *cfg != static_cast<std::uint16_t>(~mask) ||
+        (*outs & mask) != (want[i] & mask)) {
+      return false;
+    }
+  }
+  for (std::size_t i = 0; i < expanders_.size(); ++i) {
+    if (expanders_[i]) expanders_[i]->set_shadow(want[i]);
+  }
+  expanders_ready_ = true;
+  uart_slot_.reset();
+  for (std::uint8_t s = 0; s < kSlots; ++s) rails_[s] = {(aon_on & (1u << s)) != 0, false};
+  configure_charger();
+  board_ok = !charger_ || charger_ok_;
+  return true;
 }
 
 void BoardIo::set_rail(std::uint8_t slot, Rail rail, bool on) {
@@ -217,6 +262,7 @@ void BoardIo::set_rail(std::uint8_t slot, Rail rail, bool on) {
   }
   if (rail != Rail::kAlwaysOn3v3) return;  // Rev A has no 5 V rail
   if (on) {
+    if (state[0]) return;  // already on (and its card lines already up): nothing to switch
     if (!drive(s.aon_enable, true)) return;
     state[0] = true;
     clock_.delay_ms(kAonSettleMs);  // rail up before the card's lines go high (no backfeed)

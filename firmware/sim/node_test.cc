@@ -18,6 +18,17 @@ std::vector<DeviceEvent> of_kind(const std::vector<DeviceEvent>& v, EventKind k)
   return out;
 }
 
+// Runs with the hub answering every second. A hub that stays silent for
+// minutes is a link outage, and the node then rations non-critical sends.
+std::vector<DeviceEvent> run_acked(Node& n, TimeMs ms) {
+  std::vector<DeviceEvent> out;
+  for (TimeMs t = 0; t < ms; t += 1'000) {
+    n.run_for(std::min<TimeMs>(1'000, ms - t));
+    for (const auto& e : n.drain_and_ack()) out.push_back(e);
+  }
+  return out;
+}
+
 // A PIR reports nothing until its warm-up has passed with the output at rest.
 void warm_up(Node& n) {
   n.run_for(PirDriver::kWarmMinMs + PirDriver::kQuietMs);
@@ -228,8 +239,7 @@ TEST(Pir, WarmUpThatNeverSettlesIsAFault) {
   n.insert(0, ModuleCode::kPirEkmb);
   n.boot();
   n.gpio.set(0, true);  // e.g. OUT and GND swapped: the output sits high
-  n.run_for(PirDriver::kWarmMaxMs + 1'000);
-  auto events = n.drain_and_ack();
+  auto events = run_acked(n, PirDriver::kWarmMaxMs + 1'000);
   EXPECT_TRUE(of_kind(events, EventKind::kMotion).empty());
   auto faults = of_kind(events, EventKind::kModuleFault);
   ASSERT_EQ(faults.size(), 1u);
@@ -293,8 +303,7 @@ TEST(Sht40, ReadsValuesAndReportsCrcFaults) {
   EXPECT_NEAR(env[0].a, 23'400, 10);
   EXPECT_NEAR(env[0].b, 510u, 2u);
   n.sht(3).corrupt_crc = true;
-  n.run_for(300'000);
-  auto faults = of_kind(n.drain_and_ack(), EventKind::kModuleFault);
+  auto faults = of_kind(run_acked(n, 300'000), EventKind::kModuleFault);
   ASSERT_FALSE(faults.empty());
   EXPECT_EQ(faults.back().a, static_cast<std::int32_t>(ModuleFault::kBusError));
 }
@@ -316,8 +325,7 @@ TEST(Sht40, WaitsOutTheConversionAndReportsEachFault) {
     m.run_for(Sht40Driver::kMeasureMs + 1);
     m.drain_and_ack();
     setup(m.sht(0));
-    m.run_for(300'100);
-    auto f = of_kind(m.drain_and_ack(), EventKind::kModuleFault);
+    auto f = of_kind(run_acked(m, 300'100), EventKind::kModuleFault);
     return f.empty() ? 0u : f.back().b;
   };
   EXPECT_EQ(fault_detail([](Sht40& s) { s.corrupt_t_crc = true; }), 3u);

@@ -56,8 +56,18 @@ struct ConfigRevisionApplied {
   bool operator==(const ConfigRevisionApplied&) const = default;
 };
 
-using DomainEvent =
-    std::variant<ObservationRecorded, CommandTransition, ArmModeChanged, ConfigRevisionApplied>;
+// The owner cleared what the hub remembers about a device's source positions
+// (ADR 0008 amendment): dedup windows, and the positions held for its
+// capabilities, so a device whose boot epoch or sequence was poisoned (or
+// whose key was rotated after a reflash) is heard again. Values are kept.
+struct SourceReset {
+  DeviceId device;
+  PrincipalId principal;
+  bool operator==(const SourceReset&) const = default;
+};
+
+using DomainEvent = std::variant<ObservationRecorded, CommandTransition, ArmModeChanged,
+                                 ConfigRevisionApplied, SourceReset>;
 
 struct JournalEntry {
   std::uint64_t journal_seq = 0;  // 1-based, strictly increasing

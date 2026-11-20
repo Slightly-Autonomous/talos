@@ -101,6 +101,10 @@ inline constexpr TimeMs kNever = ~TimeMs{0};
 
 // Every driver implements init(), poll() and due_ms(): the earliest time it
 // needs poll() again without an interrupt (kNever when only a wake line will do).
+// Drivers whose state matters across an ESP32-H2 deep-sleep wake (a reset with
+// the card still powered) also implement retained_state() and resume(): resume
+// reads the sensor's latched event first and reports it as a transition, and
+// never re-runs a power-up sequence. supervise() runs at every heartbeat.
 
 // --- Drivers ----------------------------------------------------------------------------
 
@@ -114,7 +118,15 @@ class PirDriver {
   static constexpr TimeMs kQuietMs = 3'000;      // output must also rest low this long
   static constexpr TimeMs kWarmMaxMs = 210'000;  // datasheet Twu max
   static constexpr TimeMs kGlitchMs = 30;
+  // Past kWarmMaxMs the output is valid by the datasheet. If it still toggles
+  // (low within this window: the EKMB masks ~1.3 s after every detection),
+  // continuous motion is what kept it from settling, so warm-up ends and the
+  // motion is reported. An output that never goes low stays a fault.
+  static constexpr TimeMs kToggleWindowMs = 10'000;
   bool init(SlotIo& io, IEventSink& sink, TimeMs now);
+  // state: 1 = warm-up was already over before the deep sleep (AON stayed on).
+  bool resume(SlotIo& io, IEventSink& sink, TimeMs now, std::uint8_t state);
+  std::uint8_t retained_state() const { return warming_ ? 0 : 1; }
   void poll(SlotIo& io, IEventSink& sink, TimeMs now);
   TimeMs due_ms(TimeMs now) const;
   bool warming() const { return warming_; }
@@ -125,6 +137,7 @@ class PirDriver {
   TimeMs powered_at_ = 0;
   TimeMs next_check_ = 0;  // absolute: due_ms() must not move with the clock
   TimeMs low_since_ = 0;
+  TimeMs seen_low_at_ = 0;  // last poll that saw the output low
   TimeMs high_since_ = kNever;
   bool warming_ = true;
   bool timeout_reported_ = false;
@@ -138,6 +151,8 @@ class ContactDriver {
  public:
   static constexpr TimeMs kDebounceMs = 20;
   bool init(SlotIo& io, IEventSink& sink, TimeMs now);
+  bool resume(SlotIo& io, IEventSink& sink, TimeMs now, std::uint8_t state);
+  std::uint8_t retained_state() const { return stable_ ? 1 : 0; }
   void poll(SlotIo& io, IEventSink& sink, TimeMs now);
   TimeMs due_ms(TimeMs now) const { return candidate_ != stable_ ? now : kNever; }
 
@@ -173,9 +188,21 @@ class Tmag5273ContactDriver {
   static constexpr std::int32_t kOpenUt = 10'000;
   static constexpr std::int32_t kCloseUt = 20'000;
   static constexpr std::int32_t kLsbPerMt = 820;  // +/-40 mT range
+  // A failed convert/re-arm (an I2C glitch) is retried: kRetryMs apart up to
+  // kMaxRetries, then the sensor is parked in sleep (5 nA, not 0.45 mA standby),
+  // reported (kBusError, b = kFaultDetailUnarmed) and retried every kSlowRetryMs.
+  static constexpr TimeMs kRetryMs = 50;
+  static constexpr int kMaxRetries = 10;
+  static constexpr TimeMs kSlowRetryMs = 60'000;
   bool init(SlotIo& io, IEventSink& sink, TimeMs now);
+  // state: 1 = the door was open before the deep sleep.
+  bool resume(SlotIo& io, IEventSink& sink, TimeMs now, std::uint8_t state);
+  std::uint8_t retained_state() const { return open_ ? 1 : 0; }
   void poll(SlotIo& io, IEventSink& sink, TimeMs now);
-  TimeMs due_ms(TimeMs) const { return kNever; }
+  // Heartbeat check: a sensor that left wake-and-sleep while WAKE stayed low
+  // latched an event the MCU never saw (WAKE stuck low or open): report it.
+  void supervise(SlotIo& io, IEventSink& sink, TimeMs now);
+  TimeMs due_ms(TimeMs) const { return retry_at_; }
   // 8-bit threshold code for +/-40 mT range: 40 mT / 128 per code, rounded up.
   static std::uint8_t threshold_code(std::int32_t ut);
   bool open() const { return open_; }
@@ -184,7 +211,14 @@ class Tmag5273ContactDriver {
   bool convert_all(SlotIo& io, std::int32_t (&ut)[3]);
   bool read_field(SlotIo& io, std::int32_t (&ut)[3]);
   bool arm(SlotIo& io, const std::int32_t (&ut)[3]);
+  // Convert, report a change, re-arm; on failure schedule a bounded retry.
+  void service(SlotIo& io, IEventSink& sink, TimeMs now);
+  void failed(SlotIo& io, IEventSink& sink, TimeMs now);
   bool open_ = true;
+  TimeMs retry_at_ = kNever;
+  int failures_ = 0;
+  bool unarmed_reported_ = false;
+  bool wake_fault_reported_ = false;
 };
 
 // LIS2DW12 (TL-MOD-003, ST DS11811). Interrupts are latched (LIR) and routed
@@ -205,7 +239,13 @@ class Lis2dw12Driver {
   static constexpr std::uint8_t kWuIa = 0x08;
   static constexpr int kStuckReads = 3;
   bool init(SlotIo& io, IEventSink& sink, TimeMs now, std::uint32_t threshold_mg);
+  // Deep-sleep wake: read the latched wake-up source before anything else
+  // (no soft reset), then check the configuration and re-init only if it is lost.
+  bool resume(SlotIo& io, IEventSink& sink, TimeMs now, std::uint32_t threshold_mg);
   void poll(SlotIo& io, IEventSink& sink, TimeMs now);
+  // Heartbeat check: a latched wake-up with WAKE low means the line is stuck
+  // low or open; report the fault and the impact.
+  void supervise(SlotIo& io, IEventSink& sink, TimeMs now);
   bool set_threshold(SlotIo& io, std::uint32_t threshold_mg);
   // A wake line held high produces no new edge, so re-check it until it is
   // either explained by an event or reported as stuck.
@@ -216,7 +256,10 @@ class Lis2dw12Driver {
 
  private:
   static constexpr TimeMs kRecheckMs = 100;
+  bool configured(SlotIo& io, std::uint32_t threshold_mg);
+  bool report_impact(SlotIo& io, IEventSink& sink);
   TimeMs recheck_at_ = 0;
+  bool wake_fault_reported_ = false;
   int stuck_reads_ = 0;
   bool stuck_reported_ = false;
 };

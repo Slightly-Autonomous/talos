@@ -207,6 +207,109 @@ TEST_F(EngineTest, PreviewMatchesWhatTheEngineDid) {
   EXPECT_EQ(engine.state().commands.records().size(), 1u);
 }
 
+// --- Red team (2026-11-20) ----------------------------------------------------------------
+
+// #1: an older, reordered report must not verify a command while the newer
+// state says the opposite.
+TEST_F(EngineTest, OutOfOrderOlderObservationNeverVerifies) {
+  engine.on_observation(observation(kLock, 6, LockState{false}, "lock.state"));
+  auto r = engine.request(lock_request(kOwner, clock.now()));
+  ASSERT_EQ(engine.take_outbound().size(), 1u);
+  clock.advance(Millis{200});
+  auto late = engine.on_observation(observation(kLock, 4, LockState{true}, "lock.state"));
+  EXPECT_EQ(late.status, IngestStatus::kAccepted);
+  EXPECT_TRUE(late.superseded);
+  EXPECT_NE(engine.state().commands.find(r.id)->status, CommandStatus::kVerified);
+  EXPECT_EQ(std::get<LockState>(engine.state().capabilities.at(kLock).value).locked, false);
+  // A newer report that does show the expected state verifies it.
+  engine.on_observation(observation(kLock, 7, LockState{true}, "lock.state"));
+  EXPECT_EQ(engine.state().commands.find(r.id)->status, CommandStatus::kVerified);
+  EXPECT_EQ(replay({}, journal), engine.state());
+}
+
+// #1: verification needs a report newer than where the target stood at dispatch.
+TEST_F(EngineTest, ReportNotNewerThanDispatchBaselineNeverVerifies) {
+  engine.on_observation(observation(kLock, 6, LockState{false}, "lock.state"));
+  auto r = engine.request(lock_request(kOwner, clock.now()));
+  ASSERT_EQ(engine.take_outbound().size(), 1u);
+  // An unseen older report (seq 5 was never delivered) that says "locked": it
+  // fills a gap but is older than the baseline, so it is not evidence.
+  engine.on_observation(observation(kLock, 5, LockState{true}, "lock.state"));
+  EXPECT_NE(engine.state().commands.find(r.id)->status, CommandStatus::kVerified);
+}
+
+// #2: a rule's command id held by another principal never drops the action.
+TEST_F(EngineTest, RuleCommandIdHeldByAnotherPrincipalStillActs) {
+  Command squat;
+  squat.id = CommandId("cmd:backyard_motion_warning@1:node-07:1:1:0");
+  squat.idempotency_key = squat.id.str();
+  squat.principal = kOwner;
+  squat.property = PropertyId("house-01");
+  squat.target = kSpeaker;
+  squat.operation = "audio.speak";
+  squat.args = AudioSpeak{"hi", 10};
+  squat.created_at = clock.now();
+  squat.expires_at = clock.now() + Millis{5'000};
+  ASSERT_EQ(engine.request(squat).transitions.size(), 2u);  // accepted under the owner
+  auto r = engine.on_observation(testing::motion("node-07", 1, 1));
+  EXPECT_EQ(r.rule_conflicts, 1u);
+  EXPECT_FALSE(r.error.has_value());
+  bool rule_command = false;
+  for (const auto& [id, rec] : engine.state().commands.records()) {
+    rule_command |= rec.command.principal == PrincipalId("rule:backyard") &&
+                    rec.status == CommandStatus::kAccepted;
+  }
+  EXPECT_TRUE(rule_command);
+}
+
+// #4: a forged huge boot epoch is refused, and an owner reset recovers a
+// device whose real reports fell behind a (bounded) poisoned position.
+TEST_F(EngineTest, SourceResetRecoversAPoisonedDevice) {
+  auto poison = testing::motion("node-07", 0xFFFF'FFFF, 1, false);
+  EXPECT_EQ(engine.on_observation(poison).error->code, "source_position_out_of_range");
+  engine.on_observation(testing::motion("node-07", 5, 1, false));
+  auto bounded = engine.on_observation(testing::motion("node-07", 60, 1, false));
+  ASSERT_EQ(bounded.status, IngestStatus::kAccepted);
+  // The real device (epoch 6) is now history only: no rule fires.
+  auto real = engine.on_observation(testing::motion("node-07", 6, 1));
+  EXPECT_TRUE(real.superseded);
+  ASSERT_TRUE(real.held_position.has_value());
+  EXPECT_EQ(real.held_position->boot_epoch, 60u);
+  EXPECT_TRUE(engine.take_outbound().empty());
+
+  ASSERT_TRUE(engine.reset_source(DeviceId("node-07"), kOwner));
+  auto heard = engine.on_observation(testing::motion("node-07", 6, 2));
+  EXPECT_FALSE(heard.superseded);
+  EXPECT_EQ(engine.take_outbound().size(), 1u);  // the rule fires again
+  EXPECT_EQ(replay({}, journal), engine.state());
+  // A restart rebuilds the same dedup state, reset included.
+  HubEngine restarted{config(), journal, clock};
+  EXPECT_EQ(restarted.on_observation(testing::motion("node-07", 6, 2)).status,
+            IngestStatus::kDuplicate);
+  EXPECT_EQ(restarted.on_observation(testing::motion("node-07", 6, 3)).status,
+            IngestStatus::kAccepted);
+}
+
+// #8: once a principal's audit budget is spent, denials are answered but not
+// journaled.
+TEST_F(EngineTest, UnrecordedDenialLeavesNoTrace) {
+  const auto before = journal.last_seq();
+  auto r = engine.request(lock_request(kAgent, clock.now()), /*record_denial=*/false);
+  EXPECT_TRUE(r.unrecorded_denial);
+  EXPECT_FALSE(r.denied_reason.empty());
+  EXPECT_EQ(journal.last_seq(), before);
+  EXPECT_EQ(engine.state().commands.find(r.id), nullptr);
+}
+
+// #7 through the engine: an agent cannot step away -> home.
+TEST_F(EngineTest, AgentCannotLowerArmMode) {
+  EXPECT_EQ(engine.set_arm_mode(ArmMode::kArmedHome, kAgent).error().message,
+            "requires_human_authorization");
+  EXPECT_EQ(engine.state().arm_mode, ArmMode::kArmedAway);
+  ASSERT_TRUE(engine.set_arm_mode(ArmMode::kArmedHome, kOwner));
+  EXPECT_TRUE(engine.set_arm_mode(ArmMode::kArmedAway, kAgent));
+}
+
 // --- Operation catalog (B1) ---------------------------------------------------------------
 
 Command request_as(PrincipalId who, std::string id, std::string operation, CapabilityRef target,
@@ -328,8 +431,10 @@ TEST_F(EngineTest, RuleNamingAHumanPrincipalIsDenied) {
   ASSERT_TRUE(engine.apply_config(2, "x", kOwner, cfg.property, cfg.rules, cfg.principals));
   engine.on_observation(testing::motion("node-07", 1, 1));
   EXPECT_TRUE(engine.take_outbound().empty());
-  ASSERT_EQ(engine.state().commands.records().size(), 1u);
-  const auto& rec = engine.state().commands.records().begin()->second;
+  // Denied requests are kept apart from the id namespace (red team #2).
+  EXPECT_TRUE(engine.state().commands.records().empty());
+  ASSERT_EQ(engine.state().commands.denied().size(), 1u);
+  const auto& rec = engine.state().commands.denied().begin()->second;
   EXPECT_EQ(rec.status, CommandStatus::kDenied);
   EXPECT_EQ(rec.history.back().reason, "rule_principal_must_be_rule_kind");
 }
