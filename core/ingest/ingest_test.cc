@@ -75,6 +75,37 @@ TEST_F(IngestTest, RejectsForeignPropertyAndUnknownDevice) {
   EXPECT_EQ(journal.last_seq(), 0u);
 }
 
+TEST_F(IngestTest, CapabilityMustBeDeclaredAndPayloadMustFitIt) {
+  for (auto& d : property.devices) {
+    if (d.id == DeviceId("node-07")) d.capabilities = {CapabilityId("motion.detect")};
+  }
+  // A PIR credential cannot report lock state, even for itself.
+  auto lock = motion("node-07", 1, 1);
+  lock.source.slot.reset();
+  lock.source.capability = CapabilityId("access.lock");
+  lock.event_type = "lock.state";
+  lock.payload = LockState{false};
+  auto r = ingestor.ingest(lock, Timestamp{0});
+  EXPECT_EQ(r.status, IngestStatus::kRejected);
+  EXPECT_EQ(r.error->code, "undeclared_capability");
+  // A declared capability with another capability's payload is refused too.
+  auto wrong = motion("node-07", 1, 2);
+  wrong.payload = LockState{false};
+  EXPECT_EQ(ingestor.ingest(wrong, Timestamp{0}).error->code, "payload_does_not_match_capability");
+  // Undeclared devices (lock-3 here) still cannot carry a mismatched payload.
+  auto spoof = motion("lock-3", 1, 1);
+  spoof.source.capability = CapabilityId("access.lock");
+  EXPECT_EQ(ingestor.ingest(spoof, Timestamp{0}).error->code, "payload_does_not_match_capability");
+  // Health is implied for every device; declared capabilities pass.
+  auto beat = motion("node-07", 1, 3);
+  beat.source.slot.reset();
+  beat.source.capability = CapabilityId("device.health");
+  beat.payload = Heartbeat{3'000};
+  EXPECT_EQ(ingestor.ingest(beat, Timestamp{0}).status, IngestStatus::kAccepted);
+  EXPECT_EQ(ingestor.ingest(motion("node-07", 1, 4), Timestamp{0}).status, IngestStatus::kAccepted);
+  EXPECT_EQ(journal.last_seq(), 2u);
+}
+
 TEST_F(IngestTest, RestoreRebuildsDedupAfterRestart) {
   ASSERT_EQ(ingestor.ingest(motion("node-07", 1, 1), Timestamp{0}).status, IngestStatus::kAccepted);
   Ingestor restarted(property, journal);

@@ -106,7 +106,7 @@ TEST_F(EngineTest, SpeakerSilenceEndsUnknownNotSuccess) {
   engine.on_observation(testing::motion("node-07", 1, 1));
   auto id = engine.take_outbound().at(0).id;
   clock.advance(Millis{3'001});
-  engine.tick();
+  ASSERT_TRUE(engine.tick());
   EXPECT_EQ(outcome_of(engine.state().commands.find(id)->status), CommandOutcome::kUnknown);
 }
 
@@ -140,6 +140,9 @@ TEST_F(EngineTest, SecurityCriticalCommandNeedsFreshTargetState) {
   again.id = CommandId("lock-2");
   again.idempotency_key = "lock-2";
   auto ok = engine.request(again);
+  // Accepted, not dispatched: hand-off to the transport is the dispatch.
+  EXPECT_EQ(engine.state().commands.find(ok.id)->status, CommandStatus::kAccepted);
+  ASSERT_EQ(engine.take_outbound().size(), 1u);
   EXPECT_EQ(engine.state().commands.find(ok.id)->status, CommandStatus::kDispatched);
 }
 
@@ -158,7 +161,7 @@ TEST_F(EngineTest, RestartRebuildsIdenticalStateAndDedup) {
   engine.on_observation(observation(kSpeaker, 1, AudioPlayback{true}, "audio.playback_started"));
   engine.on_observation(testing::contact("node-12", 1, 1, true));
   clock.advance(Millis{9'000});
-  engine.tick();
+  ASSERT_TRUE(engine.tick());
 
   HubEngine restarted(config(), journal, clock);
   EXPECT_EQ(restarted.state(), engine.state());
@@ -202,6 +205,211 @@ TEST_F(EngineTest, PreviewMatchesWhatTheEngineDid) {
   EXPECT_EQ(result.evaluated_observations, 6u);
   // Exactly the one command the engine dispatched.
   EXPECT_EQ(engine.state().commands.records().size(), 1u);
+}
+
+// --- Operation catalog (B1) ---------------------------------------------------------------
+
+Command request_as(PrincipalId who, std::string id, std::string operation, CapabilityRef target,
+                   CommandArgs args, Timestamp now) {
+  Command c;
+  c.id = CommandId(id);
+  c.idempotency_key = id;
+  c.principal = who;
+  c.property = PropertyId("house-01");
+  c.target = std::move(target);
+  c.operation = std::move(operation);
+  c.args = std::move(args);
+  c.created_at = now;
+  c.expires_at = now + Millis{5'000};
+  return c;
+}
+
+const std::string& reason_of(const HubEngine& e, const CommandId& id) {
+  return e.state().commands.find(id)->history.back().reason;
+}
+
+TEST_F(EngineTest, LowRiskOperationNameCannotCarryUnlockArgs) {
+  engine.on_observation(observation(kLock, 1, LockState{true}, "lock.state"));
+  // audio.speak is within the agent's cap, but the args would unlock the door.
+  auto r = engine.request(
+      request_as(kAgent, "sneaky", "audio.speak", kLock, SetLocked{false}, clock.now()));
+  EXPECT_EQ(engine.state().commands.find(r.id)->status, CommandStatus::kDenied);
+  EXPECT_EQ(reason_of(engine, r.id), "args_do_not_match_operation");
+  // Matching args but a lock target: still refused before policy.
+  auto t = engine.request(
+      request_as(kAgent, "sneaky-2", "audio.speak", kLock, AudioSpeak{"hi", 50}, clock.now()));
+  EXPECT_EQ(reason_of(engine, t.id), "target_does_not_match_operation");
+  auto u = engine.request(
+      request_as(kAgent, "sneaky-3", "door.open", kLock, SetLocked{false}, clock.now()));
+  EXPECT_EQ(reason_of(engine, u.id), "unsupported_operation");
+  EXPECT_TRUE(engine.take_outbound().empty());
+  EXPECT_TRUE(engine.take_outbound(kLock.device).empty());
+}
+
+// --- Hand-off is the dispatch (B2) ---------------------------------------------------------
+
+TEST_F(EngineTest, CommandNotHandedOffWithinTtlExpiresAndIsNeverSent) {
+  engine.on_observation(observation(kLock, 1, LockState{false}, "lock.state"));
+  auto r = engine.request(lock_request(kOwner, clock.now()));
+  ASSERT_EQ(engine.state().commands.find(r.id)->status, CommandStatus::kAccepted);
+  // Another device's poll does not hand it off.
+  EXPECT_TRUE(engine.take_outbound(kSpeaker.device).empty());
+  clock.advance(Millis{5'000});  // adapter offline past the TTL
+  EXPECT_TRUE(engine.take_outbound(kLock.device).empty());
+  EXPECT_EQ(engine.state().commands.find(r.id)->status, CommandStatus::kExpired);
+  EXPECT_FALSE(engine.state().commands.find(r.id)->dispatched_at.has_value());
+}
+
+TEST_F(EngineTest, DispatchTimeIsHandOffTimeAndSurvivesRestart) {
+  engine.on_observation(observation(kLock, 1, LockState{false}, "lock.state"));
+  auto r = engine.request(lock_request(kOwner, clock.now()));
+  clock.advance(Millis{1'000});
+  HubEngine restarted(config(), journal, clock);  // accepted command is still pending
+  auto out = restarted.take_outbound(kLock.device);
+  ASSERT_EQ(out.size(), 1u);
+  EXPECT_EQ(restarted.state().commands.find(r.id)->dispatched_at, clock.now());
+  EXPECT_TRUE(restarted.take_outbound(kLock.device).empty());
+}
+
+TEST_F(EngineTest, TickExpiresUnsentCommandsSoNoLaterPollDeliversThem) {
+  engine.on_observation(observation(kLock, 1, LockState{false}, "lock.state"));
+  auto r = engine.request(lock_request(kOwner, clock.now()));
+  clock.advance(Millis{60'000});
+  ASSERT_TRUE(engine.tick());
+  EXPECT_EQ(engine.state().commands.find(r.id)->status, CommandStatus::kExpired);
+  EXPECT_TRUE(engine.take_outbound().empty());
+}
+
+// --- Freshness and verification are the hub's, not the caller's (B3) ----------------------
+
+TEST_F(EngineTest, CallerExpectCannotMoveTheFreshnessCheckOffTheTarget) {
+  const CapabilityRef health{kLock.device, std::nullopt, CapabilityId("device.health")};
+  engine.on_observation(observation(health, 1, Heartbeat{3'000}, "device.heartbeat"));
+  // Lock state never reported. Pointing expect at the fresh heartbeat must not help.
+  Command c = lock_request(kOwner, clock.now());
+  c.args = SetLocked{false};
+  c.expect = ExpectedObservation{health, Heartbeat{3'000}};
+  auto r = engine.request(c);
+  EXPECT_EQ(engine.state().commands.find(r.id)->status, CommandStatus::kDenied);
+  EXPECT_EQ(reason_of(engine, r.id), "expectation_does_not_match_operation");
+  // Without the bogus expect it is the target's staleness that denies it.
+  Command plain = c;
+  plain.id = CommandId("plain");
+  plain.idempotency_key = "plain";
+  plain.expect.reset();
+  auto p = engine.request(plain);
+  EXPECT_EQ(reason_of(engine, p.id), "target_state_not_fresh");
+}
+
+TEST_F(EngineTest, OnlyTheDerivedObservationVerifiesACommand) {
+  const CapabilityRef health{kLock.device, std::nullopt, CapabilityId("device.health")};
+  engine.on_observation(observation(kLock, 1, LockState{true}, "lock.state"));
+  Command c = lock_request(kOwner, clock.now());
+  c.args = SetLocked{false};
+  c.expect.reset();  // the hub derives lock{locked:false} on the target
+  auto r = engine.request(c);
+  ASSERT_EQ(engine.take_outbound(kLock.device).size(), 1u);
+  const auto& recorded = engine.state().commands.find(r.id)->command;
+  ASSERT_TRUE(recorded.expect.has_value());
+  EXPECT_EQ(recorded.expect->source, kLock);
+  EXPECT_EQ(recorded.expect->payload, ObservationPayload{LockState{false}});
+  clock.advance(Millis{100});
+  engine.on_observation(observation(health, 2, Heartbeat{3'000}, "device.heartbeat"));
+  EXPECT_NE(engine.state().commands.find(r.id)->status, CommandStatus::kVerified);
+  engine.on_observation(observation(kLock, 3, LockState{false}, "lock.state"));
+  EXPECT_EQ(engine.state().commands.find(r.id)->status, CommandStatus::kVerified);
+}
+
+// --- Rule principals (M1) -------------------------------------------------------------------
+
+TEST_F(EngineTest, RuleNamingAHumanPrincipalIsDenied) {
+  auto cfg = config();
+  cfg.rules[0].principal = kOwner;  // a rule must never act as the owner
+  ASSERT_TRUE(engine.apply_config(2, "x", kOwner, cfg.property, cfg.rules, cfg.principals));
+  engine.on_observation(testing::motion("node-07", 1, 1));
+  EXPECT_TRUE(engine.take_outbound().empty());
+  ASSERT_EQ(engine.state().commands.records().size(), 1u);
+  const auto& rec = engine.state().commands.records().begin()->second;
+  EXPECT_EQ(rec.status, CommandStatus::kDenied);
+  EXPECT_EQ(rec.history.back().reason, "rule_principal_must_be_rule_kind");
+}
+
+// --- Request bounds and targets (m1, m11) --------------------------------------------------
+
+TEST_F(EngineTest, TtlWindowAndTargetAreBounded) {
+  engine.on_observation(observation(kLock, 1, LockState{false}, "lock.state"));
+  Command long_ttl = lock_request(kOwner, clock.now());
+  long_ttl.expires_at = clock.now() + Millis{60'000};  // > 30 s for security-critical
+  EXPECT_EQ(reason_of(engine, engine.request(long_ttl).id), "ttl_out_of_bounds");
+
+  Command long_window =
+      request_as(kOwner, "w", "audio.speak", kSpeaker, AudioSpeak{"x", 50}, clock.now());
+  long_window.verification_window = Millis{3'600'000};
+  EXPECT_EQ(reason_of(engine, engine.request(long_window).id), "verification_window_out_of_bounds");
+
+  const CapabilityRef ghost{DeviceId("ghost"), std::nullopt, CapabilityId("audio.speak")};
+  auto g = engine.request(
+      request_as(kOwner, "g", "audio.speak", ghost, AudioSpeak{"x", 50}, clock.now()));
+  EXPECT_EQ(reason_of(engine, g.id), "unknown_target_device");
+}
+
+TEST(EngineCapabilities, UndeclaredTargetCapabilityIsDenied) {
+  auto cfg = config();
+  for (auto& d : cfg.property.devices) {
+    if (d.id == DeviceId("patio_speaker")) d.capabilities = {CapabilityId("notify")};
+  }
+  InMemoryJournal journal;
+  VirtualClock clock{Timestamp{1'000}};
+  HubEngine engine{cfg, journal, clock};
+  auto r = engine.request(
+      request_as(kOwner, "s", "audio.speak", kSpeaker, AudioSpeak{"x", 50}, clock.now()));
+  EXPECT_EQ(reason_of(engine, r.id), "undeclared_capability");
+}
+
+// --- Journal failures propagate (M6) -------------------------------------------------------
+
+class FlakyJournal final : public IJournal {
+ public:
+  Result<JournalEntry> append(Timestamp t, DomainEvent e) override {
+    if (fail) return Error{"storage_error", "disk full"};
+    return inner.append(t, std::move(e));
+  }
+  std::vector<JournalEntry> read(std::uint64_t after, std::size_t limit) const override {
+    return inner.read(after, limit);
+  }
+  std::uint64_t last_seq() const override { return inner.last_seq(); }
+  bool fail = false;
+  InMemoryJournal inner;
+};
+
+TEST(EngineJournal, AppendFailuresPropagateAndNothingIsHandedOff) {
+  FlakyJournal journal;
+  VirtualClock clock{Timestamp{1'000}};
+  HubEngine engine{config(), journal, clock};
+  ASSERT_TRUE(engine.set_arm_mode(ArmMode::kArmedAway, kOwner));
+  engine.on_observation(observation(kLock, 1, LockState{false}, "lock.state"));
+
+  journal.fail = true;
+  auto r = engine.request(lock_request(kOwner, clock.now()));  // used to dereference null
+  ASSERT_TRUE(r.error.has_value());
+  EXPECT_EQ(r.error->code, "storage_error");
+  EXPECT_EQ(engine.state().commands.find(r.id), nullptr);
+  EXPECT_FALSE(engine.set_arm_mode(ArmMode::kArmedHome, kOwner));
+  EXPECT_EQ(engine.state().arm_mode, ArmMode::kArmedAway);
+  auto cfg = config();
+  EXPECT_FALSE(engine.apply_config(2, "x", kOwner, cfg.property, {}, cfg.principals));
+  EXPECT_EQ(engine.config().rules.size(), 1u);  // unchanged
+
+  journal.fail = false;
+  Command ok = lock_request(kOwner, clock.now());
+  ok.id = CommandId("ok");
+  ok.idempotency_key = "ok";
+  ASSERT_FALSE(engine.request(ok).error.has_value());
+  journal.fail = true;
+  EXPECT_TRUE(engine.take_outbound().empty());  // dispatch could not be journaled
+  EXPECT_EQ(engine.state().commands.find(ok.id)->status, CommandStatus::kAccepted);
+  clock.advance(Millis{10'000});
+  EXPECT_FALSE(engine.tick());
 }
 
 }  // namespace

@@ -458,6 +458,15 @@ TEST(Discovery, MuxIsLeftDeselectedAfterEverySlotAccess) {
 
 Node rev_a() { return Node(tl_sn_001_board()); }
 
+// SlotPowerBlob in runtime.cc: powering, quarantined mask, strikes per slot.
+using SlotPowerRecord = std::array<std::uint8_t, 2 + kSlots>;
+
+SlotPowerRecord slot_power_record(Node& n) {
+  SlotPowerRecord rec{};
+  EXPECT_EQ(n.store.get(StoreKey::kSlotPower, rec.data(), rec.size()), rec.size());
+  return rec;
+}
+
 TEST(BoardIo, BootLeavesEveryOutputSafeAndNeverPulsesARail) {
   Node n = rev_a();
   n.boot();
@@ -498,18 +507,78 @@ TEST(SlotPower, SeatedSlotsArePoweredEmptyOnesStayOff) {
   EXPECT_TRUE(n.rev_a().cs_n(0));  // lines deasserted once AON is up
   EXPECT_EQ(n.runtime().quarantined_slots(), 0);
   // The attempt marker is cleared after each slot came up.
-  std::uint8_t rec[2] = {0, 0};
-  ASSERT_TRUE(n.store.get(StoreKey::kSlotPower, rec, sizeof rec).has_value());
-  EXPECT_EQ(rec[0], NodeRuntime::kNotPowering);
+  EXPECT_EQ(slot_power_record(n)[0], NodeRuntime::kNotPowering);
+}
+
+TEST(SlotPower, OneResetWhilePoweringIsAStrikeNotAQuarantine) {
+  Node n = rev_a();
+  n.insert(1, ModuleCode::kSht40);
+  // A USB unplug or watchdog reset landed inside slot 1's power-on window once.
+  const SlotPowerRecord rec = {1, 0, 0, 0, 0, 0};
+  ASSERT_TRUE(n.store.put(StoreKey::kSlotPower, rec.data(), rec.size()));
+  n.boot();
+  EXPECT_EQ(n.runtime().quarantined_slots(), 0);
+  EXPECT_TRUE(n.runtime().slot(1).enabled);  // retried at once, and it came up
+  EXPECT_EQ(n.runtime().power_strikes(1), 0);
+  EXPECT_EQ(slot_power_record(n), (SlotPowerRecord{NodeRuntime::kNotPowering, 0, 0, 0, 0, 0}));
+}
+
+TEST(SlotPower, QuarantineIsRetriedWithBackoffAndHealsAFalsePositive) {
+  Node n = rev_a();
+  n.insert(1, ModuleCode::kSht40);
+  // Third reset in a row while powering slot 1: quarantined, retry after 2 h, not 1 h.
+  const SlotPowerRecord rec = {1, 0b0010, 0, 2, 0, 0};
+  ASSERT_TRUE(n.store.put(StoreKey::kSlotPower, rec.data(), rec.size()));
+  n.boot();
+  EXPECT_EQ(n.runtime().quarantined_slots(), 0b0010);
+  EXPECT_EQ(n.runtime().power_strikes(1), 3);
+  n.run_for(NodeRuntime::kQuarantineRetryMs + 1000);
+  EXPECT_FALSE(n.rev_a().aon_on(1));
+  EXPECT_EQ(n.runtime().quarantined_slots(), 0b0010);
+  n.run_for(NodeRuntime::kQuarantineRetryMs);
+  // Retried without anyone at the USB console; the card powered up fine.
+  EXPECT_EQ(n.runtime().quarantined_slots(), 0);
+  EXPECT_TRUE(n.rev_a().aon_on(1));
+  EXPECT_TRUE(n.runtime().slot(1).enabled);
+  EXPECT_EQ(slot_power_record(n), (SlotPowerRecord{NodeRuntime::kNotPowering, 0, 0, 0, 0, 0}));
+  n.boot();
+  EXPECT_TRUE(n.runtime().slot(1).enabled);
+}
+
+TEST(SlotPower, CardsThatCannotBeUsedAreNotLeftOnAon) {
+  Node n = rev_a();
+  n.insert(0, ModuleCode::kTlMod004Env);
+  n.id(0).blank();
+  n.insert(1, static_cast<ModuleCode>(0x7A7A));  // not in the registry
+  n.insert(2, ModuleCode::kTlMod004Env);
+  n.i2c.detach(2, Sht40Driver::kAddr);  // ID fine, sensor dead: init fails
+  n.insert(3, ModuleCode::kTlMod004Env);
+  n.i2c.detach(3, 0x50);  // seated, ID dead: stays up so the bench can scan the card
+  n.boot();
+  EXPECT_EQ(n.runtime().slot(0).fault, ModuleFault::kIdBlank);
+  EXPECT_EQ(n.runtime().slot(1).fault, ModuleFault::kUnknownModule);
+  EXPECT_EQ(n.runtime().slot(2).fault, ModuleFault::kInitFailed);
+  EXPECT_EQ(n.runtime().slot(3).fault, ModuleFault::kNoIdEeprom);
+  for (std::uint8_t s = 0; s < 3; ++s) {
+    EXPECT_FALSE(n.rev_a().aon_on(s)) << int(s);
+    EXPECT_FALSE(n.rev_a().cs_n(s)) << int(s);
+    EXPECT_FALSE(n.board_io().rail_on(s, Rail::kAlwaysOn3v3)) << int(s);
+  }
+  EXPECT_TRUE(n.rev_a().aon_on(3));
+  EXPECT_EQ(n.i2c.mask(), 0);                      // deselected before the rails went off
+  n.i2c.attach(2, Sht40Driver::kAddr, &n.sht(2));  // reseated: a rescan powers it again
+  n.runtime().rescan(2);
+  EXPECT_TRUE(n.rev_a().aon_on(2));
+  EXPECT_TRUE(n.runtime().slot(2).enabled);
 }
 
 TEST(SlotPower, ResetWhilePoweringASlotQuarantinesItInsteadOfBootLooping) {
   Node n = rev_a();
   n.insert(1, ModuleCode::kSht40);
   n.insert(3, ModuleCode::kSht40);
-  // What a reset in the middle of switching slot 1's AON on leaves behind.
-  const std::uint8_t rec[2] = {1, 0};
-  ASSERT_TRUE(n.store.put(StoreKey::kSlotPower, rec, sizeof rec));
+  // What a second reset in a row in the middle of switching slot 1's AON on leaves behind.
+  const SlotPowerRecord rec = {1, 0, 0, 1, 0, 0};
+  ASSERT_TRUE(n.store.put(StoreKey::kSlotPower, rec.data(), rec.size()));
   n.boot();
   EXPECT_FALSE(n.rev_a().aon_on(1));
   EXPECT_EQ(n.runtime().slot(1).fault, ModuleFault::kPowerQuarantined);
@@ -577,6 +646,78 @@ TEST(SlotPower, AdmissionBudgetsFitTheRegulator) {
   constexpr std::uint32_t kRegulatorMw = 400 * 3300 / 1000, kMcuTxMw = 123 * 3300 / 1000 + 100;
   for (std::uint32_t budget : {b.usb_sustained_mw, b.solar_sustained_mw, b.battery_sustained_mw}) {
     EXPECT_LE(budget, kRegulatorMw - kMcuTxMw);
+  }
+}
+
+TEST(BoardIo, WarmResetWithAFailedBeginNeverSwitchesEveryRailOn) {
+  Node n = rev_a();
+  n.insert(0, ModuleCode::kTlMod004Env);
+  n.boot();
+  ASSERT_TRUE(n.rev_a().aon_on(0));
+  // MCU warm reset: the expanders keep their pins as outputs, and the root bus
+  // glitches while begin() runs.
+  n.rev_a().exp_a.nack = true;
+  n.boot();
+  EXPECT_FALSE(n.runtime().board_ok());
+  EXPECT_FALSE(n.board_io().expanders_ready());
+  n.rev_a().exp_a.nack = false;
+  n.rev_a().exp_a.ever_driven_high = 0;
+  n.board_io().set_rail(1, Rail::kAlwaysOn3v3, true);
+  // Only slot 1's AON came on: no other enable, and no card line went high early.
+  EXPECT_TRUE(n.board_io().expanders_ready());  // configured on the retry
+  EXPECT_TRUE(n.rev_a().aon_on(1));
+  for (const std::uint8_t s : {std::uint8_t{0}, std::uint8_t{2}, std::uint8_t{3}}) {
+    EXPECT_FALSE(n.rev_a().aon_on(s)) << int(s);
+    EXPECT_FALSE(n.rev_a().reset_n(s)) << int(s);
+  }
+  for (std::uint8_t s = 0; s < 4; ++s) EXPECT_FALSE(n.rev_a().sw_on(s)) << int(s);
+  EXPECT_EQ(n.rev_a().exp_a.ever_driven_high & ~0x2220, 0);  // AON_EN1, RESET_N1, CS_N1 only
+}
+
+TEST(BoardIo, RailsAndUartAreRefusedUntilTheExpandersTookTheirSafeState) {
+  Node n = rev_a();
+  n.insert(0, ModuleCode::kTlTest001);
+  n.rev_a().exp_b.nack = true;  // EXP_B (UART mux, presence) never configured
+  n.boot();
+  EXPECT_FALSE(n.board_io().expanders_ready());
+  n.board_io().set_rail(0, Rail::kAlwaysOn3v3, true);
+  EXPECT_FALSE(n.rev_a().aon_on(0));
+  EXPECT_FALSE(n.board_io().rail_on(0, Rail::kAlwaysOn3v3));
+  EXPECT_FALSE(n.board_io().select_uart(0));
+  n.rev_a().exp_b.nack = false;  // bus recovered: the next request configures and proceeds
+  n.board_io().set_rail(0, Rail::kAlwaysOn3v3, true);
+  EXPECT_TRUE(n.board_io().expanders_ready());
+  EXPECT_TRUE(n.rev_a().aon_on(0));
+  EXPECT_TRUE(n.rev_a().exp_b.level(10));  // UART mux parked by the configuration
+}
+
+TEST(BoardIo, CardLinesWaitForTheAonRail) {
+  Node n = rev_a();
+  // TPS22917 tON with C_CT = 1 nF is ~3.8 ms typ; model a slow part at 2x.
+  n.rev_a().aon_rise_ms = 8;
+  for (std::uint8_t s = 0; s < 4; ++s) n.insert(s, ModuleCode::kTlMod004Env);
+  n.boot();
+  for (std::uint8_t s = 0; s < 4; ++s) {
+    EXPECT_TRUE(n.runtime().slot(s).enabled) << int(s);
+    EXPECT_TRUE(n.rev_a().cs_n(s)) << int(s);
+    EXPECT_FALSE(n.rev_a().backfed[s]) << "RESET_N/CS_N high before AON was up, slot " << int(s);
+  }
+  n.board_io().set_rail(2, Rail::kAlwaysOn3v3, false);
+  n.board_io().set_rail(2, Rail::kAlwaysOn3v3, true);
+  EXPECT_FALSE(n.rev_a().backfed[2]);
+  EXPECT_GE(BoardIo::kAonSettleMs, 8u);
+}
+
+TEST(BoardIo, SharedSpiLinesAreDeclaredForParking) {
+  // esp::Gpio parks these at boot (SCK/MOSI low, MISO pulled down). They must
+  // match the pin ledger (IO4/IO5/IO0) and never collide with another use.
+  const BoardSupport b = tl_sn_001_board();
+  EXPECT_EQ(b.spi_sck_line, 4);
+  EXPECT_EQ(b.spi_mosi_line, 5);
+  EXPECT_EQ(b.spi_miso_line, 0);
+  for (const auto line : {b.spi_sck_line, b.spi_mosi_line, b.spi_miso_line}) {
+    EXPECT_NE(line, b.mux_reset_line);
+    for (const auto& s : b.slots) EXPECT_NE(line, s.wake_line);
   }
 }
 
@@ -749,6 +890,69 @@ TEST(Delivery, QueuePressureDropsLowPriorityBeforeCritical) {
   EXPECT_EQ(kept, (std::vector<std::uint32_t>{2, 4, 5, 6}));
 }
 
+TEST(Delivery, LowerPriorityNeverEvictsHigher) {
+  auto ev = [](std::uint32_t seq, Priority p) {
+    DeviceEvent e;
+    e.seq = seq;
+    e.priority = p;
+    return e;
+  };
+  auto kept = [](const auto& q) {
+    std::vector<std::uint32_t> v;
+    q.for_each([&](const DeviceEvent& e) { v.push_back(e.seq); });
+    std::sort(v.begin(), v.end());
+    return v;
+  };
+  EventQueue<4> q;
+  for (std::uint32_t i = 1; i <= 4; ++i) q.push(ev(i, Priority::kP0Critical));
+  EXPECT_FALSE(q.push(ev(5, Priority::kP2Health)));  // a heartbeat never evicts an alarm
+  EXPECT_EQ(q.dropped(), 1u);
+  EXPECT_EQ(q.dropped_p0(), 0u);
+  EXPECT_EQ(kept(q), (std::vector<std::uint32_t>{1, 2, 3, 4}));
+
+  EventQueue<2> r;
+  r.push(ev(1, Priority::kP1State));
+  r.push(ev(2, Priority::kP0Critical));
+  EXPECT_FALSE(r.push(ev(3, Priority::kP2Health)));  // nor a contact state change
+  EXPECT_EQ(kept(r), (std::vector<std::uint32_t>{1, 2}));
+  EXPECT_TRUE(r.push(ev(4, Priority::kP1State)));  // same priority: the oldest makes room
+  EXPECT_EQ(kept(r), (std::vector<std::uint32_t>{2, 4}));
+  EXPECT_EQ(r.dropped(), 2u);
+}
+
+TEST(Persistence, EpochThatCannotBePersistedHoldsTheUplinkAndNeverRepeats) {
+  Node n(default_board());
+  n.boot();
+  const auto e1 = n.runtime().boot_epoch();
+  n.run_for(5);
+  n.drain_and_ack();
+  n.store.fail_puts = 1000;  // NVS full or unwritable across the next reset
+  n.boot();
+  EXPECT_FALSE(n.runtime().boot_epoch_persisted());
+  n.run_for(3000);
+  EXPECT_TRUE(n.link.uplink.empty());  // (e1 + 1, seq) is not on record: hold it
+  n.store.fail_puts = 0;
+  n.run_for(NodeRuntime::kEpochRetryMs + 10);
+  EXPECT_TRUE(n.runtime().boot_epoch_persisted());
+  const auto held = n.drain_and_ack();
+  ASSERT_FALSE(held.empty());
+  EXPECT_EQ(held.front().boot_epoch, e1 + 1);
+  EXPECT_EQ(held.front().seq, 1u);
+  n.boot();
+  EXPECT_EQ(n.runtime().boot_epoch(), e1 + 2);  // strictly increasing
+}
+
+TEST(Persistence, ExhaustedEpochFailsLoudlyInsteadOfWrapping) {
+  Node n(default_board());
+  const std::uint32_t last = 0xFFFFFFFEu;
+  ASSERT_TRUE(
+      n.store.put(StoreKey::kBootEpoch, reinterpret_cast<const std::uint8_t*>(&last), sizeof last));
+  n.boot();
+  EXPECT_FALSE(n.runtime().boot_epoch_persisted());
+  n.run_for(3000);
+  EXPECT_TRUE(n.link.uplink.empty());
+}
+
 TEST(Persistence, BootEpochIncrementsAndSequenceRestarts) {
   Node n(default_board());
   n.boot();
@@ -901,18 +1105,91 @@ TEST(Ota, RejectsBadDigestDowngradeOversizeAndLowBattery) {
 TEST(Ota, ResumesAfterResetMidDownloadAndRejectsOutOfOrderChunks) {
   Node n(default_board());
   n.boot();
-  auto img = image(2048, 9);
+  auto img = image(3 * Ota::kSaveEveryBytes, 9);
   n.link.downlink.push_back(offer_for(img, 2));
   n.run_for(2);
-  send_chunks(n, img, 0, 1024);
-  n.boot();  // reset mid-download
+  const std::uint32_t cut = Ota::kSaveEveryBytes + 1024;
+  send_chunks(n, img, 0, cut);
+  n.boot();  // reset mid-download: resumes from the last saved offset
   EXPECT_EQ(n.runtime().ota().state, OtaState::kDownloading);
-  EXPECT_EQ(n.runtime().ota().received, 1024u);
-  send_chunks(n, img, 1280, 1408);  // gap: ignored
-  EXPECT_EQ(n.runtime().ota().received, 1024u);
-  send_chunks(n, img, 1024, 2048);
+  EXPECT_EQ(n.runtime().ota().received, Ota::kSaveEveryBytes);
+  send_chunks(n, img, cut, cut + 128);  // gap: ignored
+  EXPECT_EQ(n.runtime().ota().received, Ota::kSaveEveryBytes);
+  send_chunks(n, img, Ota::kSaveEveryBytes, static_cast<std::uint32_t>(img.size()));
   n.run_for(5);
   EXPECT_EQ(n.runtime().ota().state, OtaState::kPendingVerify);
+  EXPECT_EQ(n.runtime().running_version(), 2u);  // the digest held over the rewritten range
+}
+
+TEST(Ota, DownloadProgressIsPersistedSparingly) {
+  Node n(default_board());
+  n.boot();
+  n.run_for(5);
+  n.drain_and_ack();
+  auto img = image(4 * Ota::kSaveEveryBytes, 5);
+  n.link.downlink.push_back(offer_for(img, 2));
+  n.run_for(2);
+  const auto before = n.store.puts;
+  send_chunks(n, img, 0, 4 * Ota::kSaveEveryBytes - kOtaChunkMax);
+  // 127 chunks: one OTA record per 4 KiB instead of one per chunk.
+  EXPECT_LE(n.store.puts - before, 4u);
+}
+
+TEST(Ota, TrialImageIsMarkedValidOnlyAfterTheHealthCheck) {
+  auto trial = [](Node& n) {
+    n.boot();
+    auto img = image(1000, 4);
+    n.link.downlink.push_back(offer_for(img, 2));
+    n.run_for(2);
+    send_chunks(n, img, 0, 1000);
+    n.run_for(5);
+    ASSERT_EQ(n.runtime().ota().state, OtaState::kPendingVerify);
+  };
+  Node ok(tl_sn_001_board());
+  trial(ok);
+  ok.run_for(20);
+  EXPECT_EQ(ok.flash.valid_marks, 0u);  // booted is not healthy yet
+  ok.drain_and_ack();
+  ok.run_for(5);
+  EXPECT_EQ(ok.runtime().ota().state, OtaState::kIdle);
+  EXPECT_EQ(ok.flash.valid_marks, 1u);
+
+  Node no_bootloader(tl_sn_001_board());
+  trial(no_bootloader);
+  no_bootloader.flash.fail_mark_valid = true;  // bootloader can't be told: stay pending
+  no_bootloader.drain_and_ack();
+  no_bootloader.run_for(5);
+  EXPECT_EQ(no_bootloader.runtime().ota().state, OtaState::kPendingVerify);
+}
+
+TEST(Ota, BoardNotInItsSafeStateNeverConfirmsATrialImage) {
+  Node n(tl_sn_001_board());
+  n.boot();
+  n.rev_a().charger.nack = true;  // the trial image will boot with a board fault
+  auto img = image(1000, 6);
+  n.link.downlink.push_back(offer_for(img, 2));
+  n.run_for(2);
+  send_chunks(n, img, 0, 1000);
+  n.run_for(5);
+  ASSERT_EQ(n.runtime().ota().state, OtaState::kPendingVerify);
+  ASSERT_FALSE(n.runtime().board_ok());
+  n.drain_and_ack();  // reaching the hub alone is not enough
+  n.run_for(5);
+  EXPECT_EQ(n.runtime().ota().state, OtaState::kPendingVerify);  // the next reboot rolls back
+  EXPECT_EQ(n.flash.valid_marks, 0u);
+}
+
+TEST(Watchdog, RuntimeFeedsTheTaskWatchdogEveryStep) {
+  Node n(tl_sn_001_board());
+  n.insert(0, ModuleCode::kTlMod004Env);
+  n.esp_polling = true;  // the ESP loop: a step at least every 20 ms
+  n.boot();
+  const auto after_boot = n.watchdog.feeds;
+  EXPECT_GE(after_boot, 4u);  // fed between slot power-ups too
+  n.run_for(120'000);
+  EXPECT_EQ(n.watchdog.bites, 0u);
+  EXPECT_EQ(n.reboots(), 0u);
+  EXPECT_GE(n.watchdog.feeds - after_boot, 120'000u / 20u);
 }
 
 // Reset injection at every persisted OTA transition: a power cut that loses

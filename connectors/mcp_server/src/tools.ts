@@ -134,10 +134,8 @@ export async function requestSpeaker(
       },
       ttlMs: 5000,
       verificationWindowMs: 5000,
-      expect: {
-        source: target,
-        payload: { kind: { case: "audioPlayback", value: { playing: true } } },
-      },
+      // No `expect`: the hub derives what counts as verified from the
+      // operation and args. A caller-chosen expectation is not trusted.
     }),
   );
   return asData({ command_id: r.commandId, status: r.status, reason: r.reason });

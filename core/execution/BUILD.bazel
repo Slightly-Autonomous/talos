@@ -6,10 +6,12 @@ cc_library(
     srcs = [
         "command.cc",
         "ledger.cc",
+        "operations.cc",
     ],
     hdrs = [
         "command.h",
         "ledger.h",
+        "operations.h",
     ],
     copts = TALOS_COPTS,
     visibility = ["//visibility:public"],
@@ -25,6 +27,17 @@ cc_test(
     name = "ledger_test",
     size = "small",
     srcs = ["ledger_test.cc"],
+    copts = TALOS_COPTS,
+    deps = [
+        ":execution",
+        "@googletest//:gtest_main",
+    ],
+)
+
+cc_test(
+    name = "operations_test",
+    size = "small",
+    srcs = ["operations_test.cc"],
     copts = TALOS_COPTS,
     deps = [
         ":execution",

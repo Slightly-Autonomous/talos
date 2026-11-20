@@ -44,33 +44,47 @@ class HubEngine {
   HubEngine(const HubEngine&) = delete;
   HubEngine& operator=(const HubEngine&) = delete;
 
+  // A journal failure after the observation was recorded is reported in
+  // `error`, and rules do not run for it.
   IngestResult on_observation(const ObservationEnvelope& env);
   Result<std::vector<CommandTransition>> on_ack(const CommandAck& ack);
   // Closes TTLs and verification windows that have elapsed.
-  void tick();
+  Status tick();
 
   Status set_arm_mode(ArmMode mode, const PrincipalId& principal);
 
   // Journals a ConfigRevisionApplied and swaps property, rules and principals.
   // State is untouched: it derives from the journal, not from configuration.
-  // Authorization is the caller's job (authorize_config_change).
+  // Authorization is the caller's job (authorize_config_change). Nothing
+  // changes if the journal append fails.
   Status apply_config(std::uint32_t revision, const std::string& sha256,
                       const PrincipalId& principal, Property property, std::vector<Rule> rules,
                       std::vector<Principal> principals);
   const EngineConfig& config() const { return config_; }
   // A user/agent command request; principal is taken from the command.
+  // The command is checked against the operation catalog (args, target,
+  // TTL, window, expect) and denied on mismatch before policy runs; the
+  // recorded command carries the hub-derived expectation. An accepted command
+  // waits for hand-off: it is not dispatched here.
   RequestResult request(const Command& command);
 
-  // Commands dispatched since the last call, for the transport to send.
+  // Hand-off to the transport IS the dispatch (ADR 0004): accepted commands
+  // are dispatched now, in request order, and returned for sending. Commands
+  // whose TTL has elapsed become `expired` and are never returned.
   std::vector<Command> take_outbound();
+  // Same, for commands targeting one device (a polling adapter).
+  std::vector<Command> take_outbound(const DeviceId& device);
 
   const PropertyState& state() const { return state_; }
   Freshness freshness_of(const CapabilityRef& ref) const;
 
  private:
-  void journal(DomainEvent event);
-  void journal_all(const std::vector<CommandTransition>& ts);
-  RequestResult submit(const Command& command, const Principal* principal);
+  Status journal(DomainEvent event);
+  Status journal_all(const std::vector<CommandTransition>& ts);
+  enum class Origin { kRequest, kRule };
+  RequestResult submit(const Command& command, Origin origin);
+  Authorization authorize(const Command& command, Origin origin, Command& normalized) const;
+  std::vector<Command> hand_off(const DeviceId* device);
   const Principal* find_principal(const PrincipalId& id) const;
 
   EngineConfig config_;
@@ -78,7 +92,8 @@ class HubEngine {
   const IClock& clock_;
   Ingestor ingestor_;
   PropertyState state_;
-  std::vector<Command> outbound_;
+  // Accepted commands awaiting hand-off, in request order.
+  std::vector<CommandId> pending_;
 };
 
 }  // namespace talos

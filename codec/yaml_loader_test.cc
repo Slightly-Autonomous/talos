@@ -48,6 +48,29 @@ TEST(YamlLoader, SampleFourSlotNodeValidatesAgainstPowerSource) {
                   .has(ManifestIssueCode::kSustainedPowerExceeded));
 }
 
+TEST(YamlLoader, SampleDevicesDeclareOnlyWhatTheirModulesProvide) {
+  auto property = load_property(kDir + "properties/sample_backyard.yaml").value();
+  auto catalog = load_catalog();
+  auto reed = load_module_manifest(kDir + "modules/reed_contact_v1.yaml").value();
+  catalog.emplace(reed.id, reed);
+  const Device* node = property.find_device(DeviceId("node-07"));
+  ASSERT_NE(node, nullptr);
+  EXPECT_EQ(node->board_revision, std::optional<std::string>("proto-a"));
+  for (const auto* d : {node, property.find_device(DeviceId("node-12"))}) {
+    ASSERT_FALSE(d->capabilities.empty());
+    for (const auto& cap : d->capabilities) {
+      bool provided = false;
+      for (const auto& slot : d->slots) {
+        if (!slot || !catalog.contains(*slot)) continue;
+        for (const auto& c : catalog.at(*slot).capabilities) provided |= c == cap;
+      }
+      EXPECT_TRUE(provided) << d->id.str() << " declares " << cap.str();
+    }
+  }
+  EXPECT_EQ(property.find_device(DeviceId("lock-3"))->capabilities,
+            std::vector<CapabilityId>{CapabilityId("access.lock")});
+}
+
 TEST(YamlLoader, UnknownKeysAndBadTypesAreErrors) {
   talos::v1::ModuleManifest m;
   EXPECT_EQ(parse_yaml("id: x\nmystery_field: 3\n", m).error().code, "schema_mismatch");

@@ -18,6 +18,14 @@ const Device* Property::find_device(const DeviceId& did) const {
   return nullptr;
 }
 
+bool Device::declares(const CapabilityId& capability) const {
+  if (capabilities.empty() || capability.str() == "device.health") return true;
+  for (const auto& c : capabilities) {
+    if (c == capability) return true;
+  }
+  return false;
+}
+
 std::optional<ZoneId> Property::zone_of(const CapabilityRef& ref) const {
   for (const auto& asset : assets) {
     for (const auto& att : asset.attached) {
@@ -76,6 +84,11 @@ Status validate_property(const Property& p) {
       }
       if (att.slot && *att.slot >= kMaxSlots) {
         return err("invalid_slot", "asset " + a.id.str() + " references slot out of range");
+      }
+      if (const Device* d = p.find_device(att.device); d && !d->declares(att.capability)) {
+        return err("undeclared_capability", "asset " + a.id.str() + " attaches " +
+                                                att.capability.str() + ", which " +
+                                                att.device.str() + " does not declare");
       }
     }
   }

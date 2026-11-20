@@ -1,8 +1,10 @@
 // Bounded outbound queue with priorities, in-flight tracking and retry
 // backoff (spec §35 "bounded queues"). Fixed capacity, no heap.
 //
-// Loss policy when full: drop the oldest event of the LOWEST priority present;
-// a P0 is only dropped when the whole queue is P0 (counted in dropped_p0).
+// Loss policy when full: the oldest event of the LOWEST priority present makes
+// room, but never for an event of lower priority than itself: then the new
+// event is dropped instead. Either way the drop is counted. A P0 is only
+// dropped when the whole queue is P0 (counted in dropped_p0).
 #pragma once
 
 #include <array>
@@ -29,7 +31,8 @@ class EventQueue {
   static constexpr std::uint32_t kInitialBackoffMs = 500;
   static constexpr std::uint32_t kMaxBackoffMs = 8000;
 
-  void push(const DeviceEvent& e) {
+  // False if the event was dropped (the queue is full of higher priorities).
+  bool push(const DeviceEvent& e) {
     Slot* free = nullptr;
     for (auto& s : slots_) {
       if (!s.used) {
@@ -37,8 +40,14 @@ class EventQueue {
         break;
       }
     }
-    if (!free) free = evict();
+    if (!free) {
+      free = victim();
+      ++dropped_;
+      if (e.priority > free->event.priority) return false;  // lower priority than all queued
+      if (free->event.priority == Priority::kP0Critical) ++dropped_p0_;
+    }
     *free = Slot{e, true, false, 0, kInitialBackoffMs, next_order_++};
+    return true;
   }
 
   // Next event due for (re)transmission: highest priority, then oldest.
@@ -98,17 +107,16 @@ class EventQueue {
   std::uint32_t dropped_p0() const { return dropped_p0_; }
 
  private:
-  Slot* evict() {
-    Slot* victim = &slots_[0];
+  // Oldest slot of the lowest priority present (only called when every slot is used).
+  Slot* victim() {
+    Slot* v = &slots_[0];
     for (auto& s : slots_) {
-      if (s.event.priority > victim->event.priority ||
-          (s.event.priority == victim->event.priority && s.order < victim->order)) {
-        victim = &s;
+      if (s.event.priority > v->event.priority ||
+          (s.event.priority == v->event.priority && s.order < v->order)) {
+        v = &s;
       }
     }
-    ++dropped_;
-    if (victim->event.priority == Priority::kP0Critical) ++dropped_p0_;
-    return victim;
+    return v;
   }
 
   std::array<Slot, N> slots_{};

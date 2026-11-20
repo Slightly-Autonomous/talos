@@ -14,6 +14,7 @@ namespace talos::server {
 
 namespace {
 constexpr std::size_t kCacheSize = 256;
+constexpr std::size_t kMaxBuckets = 4096;
 constexpr std::size_t kReplyCap = 1152;
 // Leave room for the CoAP header, token and payload marker.
 constexpr std::size_t kDownlinkBudget = fw::wire::kMaxFrame - 2 - fw::wire::kTagLen;
@@ -96,9 +97,11 @@ void CoapServer::loop() {
   }
 }
 
-bool CoapServer::allow(const std::string& device) {
+bool CoapServer::allow(std::map<std::string, Bucket>& buckets, const std::string& key) {
   const auto now = std::chrono::steady_clock::now();
-  auto [it, inserted] = buckets_.try_emplace(device, Bucket{burst_, now});
+  // Bound the unauthenticated map: spoofed peers must not grow it forever.
+  if (buckets.size() >= kMaxBuckets && !buckets.contains(key)) buckets.clear();
+  auto [it, inserted] = buckets.try_emplace(key, Bucket{burst_, now});
   Bucket& b = it->second;
   if (!inserted) {
     const double dt = std::chrono::duration<double>(now - b.last).count();
@@ -150,27 +153,33 @@ std::vector<std::uint8_t> CoapServer::handle(const std::vector<std::uint8_t>& da
     return reply(coap::kNotFound, 0);
   }
   const std::string device(req.segment(1));
-  auto key_it = keys_.find(device);
-  if (key_it == keys_.end()) {
+  // Authenticate first (M2): the device id in the Uri-Path is unauthenticated,
+  // so charging its bucket before the HMAC check would let anyone mute a node.
+  // Frames that fail authentication spend a separate per-peer bucket instead.
+  const std::string peer_host = peer.substr(0, peer.rfind(':'));
+  auto unauthorized = [&] {
+    if (!allow(failure_buckets_, peer_host)) {
+      ++hub_.metrics().coap_rate_limited;
+      return reply(coap::kTooManyRequests, 0);
+    }
     ++hub_.metrics().coap_auth_failed;
     return reply(coap::kUnauthorized, 0);
-  }
-  if (!allow(device)) {
-    ++hub_.metrics().coap_rate_limited;
-    return reply(coap::kTooManyRequests, 0);
-  }
+  };
+  auto key_it = keys_.find(device);
+  if (key_it == keys_.end()) return unauthorized();
   const fw::wire::Key key{key_it->second.data(), key_it->second.size()};
   std::vector<fw::DeviceEvent> events;
   fw::wire::Tag request_tag{};
   const auto err = fw::wire::decode_uplink(req.payload, req.payload_len, key, &request_tag,
                                            [&](const fw::DeviceEvent& e) { events.push_back(e); });
-  if (err == fw::wire::DecodeError::kBadTag) {
-    ++hub_.metrics().coap_auth_failed;
-    return reply(coap::kUnauthorized, 0);
-  }
+  if (err == fw::wire::DecodeError::kBadTag) return unauthorized();
   if (err != fw::wire::DecodeError::kNone) {
     ++hub_.metrics().coap_bad_request;
     return reply(coap::kBadRequest, 0);
+  }
+  if (!allow(buckets_, device)) {
+    ++hub_.metrics().coap_rate_limited;
+    return reply(coap::kTooManyRequests, 0);
   }
   ++hub_.metrics().coap_frames_ok;
   const auto items = hub_.device_exchange(DeviceId(device), events, kDownlinkBudget);

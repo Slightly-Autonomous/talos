@@ -36,6 +36,7 @@ cc_library(
         "//common/coap",
         "//common/sha256",
         "//core/engine",
+        "//core/execution",
         "//firmware/bridge:hub_bridge",
         "//firmware/portable",
         "//server/persistence",

@@ -28,13 +28,16 @@ bool awaiting_evidence(CommandStatus s) {
 
 RequestResult CommandLedger::request(const Command& command, const Authorization& auth,
                                      Timestamp now) const {
-  if (auto it = by_idempotency_key_.find(command.idempotency_key);
+  if (auto it = by_idempotency_key_.find({command.principal, command.idempotency_key});
       !command.idempotency_key.empty() && it != by_idempotency_key_.end()) {
-    return {it->second, true, {}};
+    return {it->second, true, false, {}, {}};
   }
-  if (records_.contains(command.id)) return {command.id, true, {}};
+  if (auto it = records_.find(command.id); it != records_.end()) {
+    if (it->second.command.principal != command.principal) return {command.id, false, true, {}, {}};
+    return {command.id, true, false, {}, {}};
+  }
 
-  RequestResult r{command.id, false, {}};
+  RequestResult r{command.id, false, false, {}, {}};
   CommandTransition created = make(command.id, CommandStatus::kRequested, now, "requested");
   created.created = command;
   r.transitions.push_back(std::move(created));
@@ -103,6 +106,8 @@ std::vector<CommandTransition> CommandLedger::on_observation(const ObservationEn
   std::vector<CommandTransition> out;
   for (const auto& [id, rec] : records_) {
     if (!awaiting_evidence(rec.status) || !rec.command.expect || !rec.dispatched_at) continue;
+    // Ack-only commands never become verified, whatever they carry (ADR 0004).
+    if (rec.command.verification == VerificationMode::kAckOnly) continue;
     const auto& expect = *rec.command.expect;
     if (expect.source != obs.source || expect.payload != obs.payload) continue;
     if (received_at < *rec.dispatched_at) continue;  // predates the command
@@ -150,7 +155,8 @@ void CommandLedger::apply(const CommandTransition& t) {
     rec.status = CommandStatus::kRequested;
     rec.history.push_back(t);
     if (!rec.command.idempotency_key.empty()) {
-      by_idempotency_key_.emplace(rec.command.idempotency_key, t.command);
+      by_idempotency_key_.emplace(std::pair{rec.command.principal, rec.command.idempotency_key},
+                                  t.command);
     }
     records_.emplace(t.command, std::move(rec));
     return;

@@ -35,6 +35,7 @@ class Authenticator {
   std::map<std::string, Identity> by_hash_;
   std::string jwt_secret_;
   std::string audience_;
+  std::string issuer_;
   std::map<std::string, std::string> supabase_users_;  // sub -> principal id
   const IClock* clock_;
 };

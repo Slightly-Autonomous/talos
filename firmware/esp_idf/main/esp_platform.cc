@@ -2,13 +2,18 @@
 
 #include "board_tl_sn_001.h"
 #include "driver/gpio.h"
+#include "esp_log.h"
+#include "esp_ota_ops.h"
 #include "esp_rom_sys.h"
+#include "esp_task_wdt.h"
 #include "esp_timer.h"
 #include "nvs_flash.h"
 
 namespace talos::fw::esp {
 
 namespace {
+constexpr const char* kTag = "talos";
+
 const char* key_name(StoreKey k) {
   switch (k) {
     case StoreKey::kBootEpoch:
@@ -52,6 +57,28 @@ Gpio::Gpio(const BoardSupport& b) {
     io.mode = GPIO_MODE_OUTPUT;
     gpio_config(&io);
     output_ = b.mux_reset_line;
+  }
+  // Shared SPI (sn-mcu-slots M3): SCK and MOSI driven low with no pull, MISO an
+  // input with the internal pull-down so it never floats. GPIO0-5 are digital
+  // pads that do not keep this in deep sleep (H2 datasheet §2.2): the board
+  // needs its own pull-downs for that, and sleep entry must re-park these first.
+  for (const std::uint8_t line : {b.spi_sck_line, b.spi_mosi_line}) {
+    if (line == 0xFF) continue;
+    gpio_set_level(static_cast<gpio_num_t>(line), 0);  // level first: no high glitch
+    gpio_config_t io{};
+    io.pin_bit_mask = 1ULL << line;
+    io.mode = GPIO_MODE_OUTPUT;
+    io.pull_up_en = GPIO_PULLUP_DISABLE;
+    io.pull_down_en = GPIO_PULLDOWN_DISABLE;
+    gpio_config(&io);
+  }
+  if (b.spi_miso_line != 0xFF) {
+    gpio_config_t io{};
+    io.pin_bit_mask = 1ULL << b.spi_miso_line;
+    io.mode = GPIO_MODE_INPUT;
+    io.pull_up_en = GPIO_PULLUP_DISABLE;
+    io.pull_down_en = GPIO_PULLDOWN_ENABLE;
+    gpio_config(&io);
   }
 }
 
@@ -137,21 +164,64 @@ std::optional<std::uint32_t> BatteryAdc::battery_mv() {
 }
 
 Store::Store() {
-  if (nvs_flash_init() != ESP_OK) {
+  esp_err_t err = nvs_flash_init();
+  if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+    // The two cases ESP-IDF documents as needing an erase. This loses the boot
+    // epoch and identity: logged so the bench and the hub's epoch check can tell.
+    ESP_LOGE(kTag, "talos nvs erase (%s)", esp_err_to_name(err));
     nvs_flash_erase();
-    nvs_flash_init();
+    err = nvs_flash_init();
   }
-  nvs_open("talos", NVS_READWRITE, &handle_);
+  if (err != ESP_OK) {
+    ESP_LOGE(kTag, "talos nvs init failed (%s)", esp_err_to_name(err));
+    return;
+  }
+  err = nvs_open("talos", NVS_READWRITE, &handle_);
+  if (err != ESP_OK) {
+    ESP_LOGE(kTag, "talos nvs open failed (%s)", esp_err_to_name(err));
+    handle_ = 0;
+    return;
+  }
+  ok_ = true;
 }
 
 std::optional<std::size_t> Store::get(StoreKey key, std::uint8_t* buf, std::size_t cap) {
+  if (!ok_) return std::nullopt;
   size_t len = cap;
   if (nvs_get_blob(handle_, key_name(key), buf, &len) != ESP_OK) return std::nullopt;
   return len;
 }
 
 bool Store::put(StoreKey key, const std::uint8_t* data, std::size_t n) {
+  if (!ok_) return false;
   return nvs_set_blob(handle_, key_name(key), data, n) == ESP_OK && nvs_commit(handle_) == ESP_OK;
+}
+
+Watchdog::Watchdog(std::uint32_t timeout_ms) {
+  esp_task_wdt_config_t cfg{};
+  cfg.timeout_ms = timeout_ms;
+  cfg.idle_core_mask = 1u;   // single-core H2: keep watching IDLE on core 0 as well
+  cfg.trigger_panic = true;  // panic -> reset (CONFIG_ESP_SYSTEM_PANIC_PRINT_REBOOT)
+  // The startup code normally has the TWDT running already (CONFIG_ESP_TASK_WDT_INIT).
+  esp_err_t err = esp_task_wdt_reconfigure(&cfg);
+  if (err == ESP_ERR_INVALID_STATE) err = esp_task_wdt_init(&cfg);
+  if (err == ESP_OK) err = esp_task_wdt_add(nullptr);  // this task (app_main)
+  ok_ = err == ESP_OK;
+  if (!ok_) ESP_LOGE(kTag, "talos watchdog unavailable (%s)", esp_err_to_name(err));
+}
+
+void Watchdog::feed() {
+  if (ok_) esp_task_wdt_reset();
+}
+
+bool Flash::mark_running_valid() {
+  esp_ota_img_states_t state = ESP_OTA_IMG_UNDEFINED;
+  const esp_partition_t* running = esp_ota_get_running_partition();
+  if (!running || esp_ota_get_state_partition(running, &state) != ESP_OK) {
+    return true;  // factory image or no otadata: nothing for the bootloader to roll back
+  }
+  if (state != ESP_OTA_IMG_PENDING_VERIFY) return true;
+  return esp_ota_mark_app_valid_cancel_rollback() == ESP_OK;
 }
 
 }  // namespace talos::fw::esp

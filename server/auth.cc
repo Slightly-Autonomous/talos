@@ -37,6 +37,7 @@ Authenticator::Authenticator(const talos::server::v1::HubConfig& hub, std::strin
     jwt_secret_ = std::move(jwt_secret);
     audience_ =
         hub.supabase_auth().audience().empty() ? "authenticated" : hub.supabase_auth().audience();
+    issuer_ = hub.supabase_auth().issuer();
     for (const auto& u : hub.supabase_auth().users())
       supabase_users_[u.user_id()] = u.principal_id();
   }
@@ -55,11 +56,15 @@ std::optional<Identity> Authenticator::authenticate(std::string_view header) con
       header.substr(0, kBearerPrefix.size()) == kBearerPrefix) {
     const auto token = header.substr(kBearerPrefix.size());
     if (std::count(token.begin(), token.end(), '.') == 2) {
-      auto claims = verify_hs256(token, jwt_secret_, audience_, clock_->now().unix_ms / 1000);
-      if (!claims) return std::nullopt;
-      auto it = supabase_users_.find(claims->subject);
-      if (it == supabase_users_.end()) return std::nullopt;  // signed in, but not a member
-      return Identity{Identity::Kind::kPrincipal, it->second};
+      // A token that verifies as a JWT is decided by its claims alone. One
+      // that does not falls through to the local hashes, so a local token
+      // that happens to contain two dots still works.
+      if (auto claims =
+              verify_hs256(token, jwt_secret_, audience_, clock_->now().unix_ms / 1000, issuer_)) {
+        auto it = supabase_users_.find(claims->subject);
+        if (it == supabase_users_.end()) return std::nullopt;  // signed in, but not a member
+        return Identity{Identity::Kind::kPrincipal, it->second};
+      }
     }
   }
   constexpr std::string_view kBearer = "Bearer ";

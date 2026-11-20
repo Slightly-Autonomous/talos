@@ -61,6 +61,10 @@ class Ota {
   bool chunk(const OtaChunk& chunk);
   // The new image proved healthy (e.g. it reached the hub): make it active.
   bool confirm();
+  // Download progress is persisted at most every kSaveEveryBytes (NVS wear: a
+  // record per 128 B chunk is ~12k writes per 1.5 MB image). A reset resumes
+  // from the last saved offset; rewriting the same bytes to NOR flash is harmless.
+  static constexpr std::uint32_t kSaveEveryBytes = 4096;
 
   const OtaRecord& record() const { return rec_; }
   bool reboot_wanted() const { return rec_.state == OtaState::kReadyToBoot; }
@@ -73,6 +77,7 @@ class Ota {
   Platform& p_;
   OtaRecord rec_;
   std::uint32_t running_version_ = 1;
+  std::uint32_t saved_received_ = 0;  // rec_.received as last persisted
 };
 
 }  // namespace talos::fw

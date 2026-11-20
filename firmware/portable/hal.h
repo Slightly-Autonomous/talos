@@ -91,6 +91,10 @@ class IStore {
 class IFlash {
  public:
   virtual ~IFlash() = default;
+  // The running image passed its health check: cancel the bootloader's
+  // rollback (ESP-IDF esp_ota_mark_app_valid_cancel_rollback). Boards without
+  // bootloader rollback have nothing to do.
+  virtual bool mark_running_valid() { return true; }
   virtual std::uint32_t slot_capacity() const = 0;
   virtual bool erase(std::uint8_t slot) = 0;
   virtual bool write(std::uint8_t slot, std::uint32_t offset, const std::uint8_t* data,
@@ -105,6 +109,15 @@ class ILink {
   // True when handed to the radio; delivery is confirmed only by an Ack.
   virtual bool send(const DeviceEvent& event) = 0;
   virtual std::optional<Downlink> receive() = 0;
+};
+
+// Application watchdog (the ESP-IDF task watchdog, with a reset): if feed()
+// stops for longer than its timeout, the chip resets. The runtime feeds it
+// from every step and between slow boot stages.
+class IWatchdog {
+ public:
+  virtual ~IWatchdog() = default;
+  virtual void feed() = 0;
 };
 
 // Unreliable datagrams to/from the hub (UDP over Thread/IPv6 on the node;
@@ -148,6 +161,9 @@ struct BoardSupport {
   // GPIO driving the mux's RESET_N (active low), 0xFF = none: frees a root bus
   // that a card holds stuck through a selected branch.
   std::uint8_t mux_reset_line = 0xFF;
+  // Shared SPI bused to every slot, 0xFF = none. Nothing drives SPI yet: the
+  // platform parks SCK/MOSI low and holds MISO with a pull-down at boot.
+  std::uint8_t spi_sck_line = 0xFF, spi_mosi_line = 0xFF, spi_miso_line = 0xFF;
   // Expander-driven plumbing (TL-SN-001). Unwired pins leave the feature off.
   std::array<SlotIoPins, kSlots> slot_io{};
   ExpanderPin present_probe;  // drives the PRESENT_N pull-ups while probing

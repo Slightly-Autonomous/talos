@@ -11,7 +11,9 @@
   - **Each downlink tag also covers the request's tag**, binding every reply to the request it answers so old downlinks can't be replayed.
 - **CoAP (RFC 7252 subset)** in `common/coap`: header, token, delta-encoded options, Uri-Path and payload. Blockwise, observe and DTLS are out of scope.
 - **Hub ingress** (`server/coap_server`):
-  - `POST /d/<device>/e` → device key lookup → per-device token-bucket rate limit (4.29) → HMAC-verified frame → `HubService::device_exchange` → piggybacked `2.04` reply with authenticated downlink.
+  - `POST /d/<device>/e` → device key lookup → HMAC-verified frame → per-device token-bucket rate limit (4.29) → `HubService::device_exchange` → piggybacked `2.04` reply with authenticated downlink. The Uri-Path device id is unauthenticated, so only verified frames spend a device's bucket. Unknown devices and bad tags spend a per-peer bucket and then get 4.29.
+  - Telemetry (last seen, battery, OTA and config state) changes only for fresh evidence: journaled kinds only when ingest accepts them, and other kinds only once per `(boot_epoch, seq)` within a bounded window. Replayed frames refresh nothing. An uplink counter remains future work.
+  - Campaigns are refused when the release's `board_id` or `board_revision` does not match the device's declared board, because the OTA offer itself carries no board identity.
   - Unknown devices and bad tags get `4.01`, and nothing is ingested.
   - A retransmitted CON (same peer and message id) gets the cached reply instead of being processed twice. Events are also deduplicated by `(boot_epoch, seq)` in the engine.
   - Every authenticated event is ACKed, even ones ingest rejected, so a bad frame is never retried forever.

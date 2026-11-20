@@ -3,6 +3,8 @@
 #include <google/protobuf/struct.pb.h>
 #include <google/protobuf/util/json_util.h>
 
+#include <cmath>
+
 #include "common/sha256/sha256.h"
 
 namespace talos::server {
@@ -25,6 +27,15 @@ std::optional<double> number(const google::protobuf::Struct& s, const char* key)
 std::string str(const google::protobuf::Struct& s, const char* key) {
   auto it = s.fields().find(key);
   return it != s.fields().end() && it->second.has_string_value() ? it->second.string_value() : "";
+}
+
+// Seconds-since-epoch claims as integers. Non-finite or absurd values (NaN,
+// 1e300) are rejected rather than cast, which would be undefined behaviour.
+std::optional<std::int64_t> seconds(const google::protobuf::Struct& s, const char* key) {
+  const auto v = number(s, key);
+  constexpr double kMaxSeconds = 1e12;  // ~31,700 years; far inside int64
+  if (!v || !std::isfinite(*v) || *v < 0 || *v > kMaxSeconds) return std::nullopt;
+  return static_cast<std::int64_t>(*v);
 }
 }  // namespace
 
@@ -75,7 +86,8 @@ std::optional<std::string> base64url_decode(std::string_view in) {
 }
 
 std::optional<JwtClaims> verify_hs256(std::string_view token, std::string_view secret,
-                                      std::string_view audience, std::int64_t now_s) {
+                                      std::string_view audience, std::int64_t now_s,
+                                      std::string_view issuer) {
   if (secret.empty()) return std::nullopt;
   const auto d1 = token.find('.');
   const auto d2 = d1 == std::string_view::npos ? d1 : token.find('.', d1 + 1);
@@ -99,11 +111,13 @@ std::optional<JwtClaims> verify_hs256(std::string_view token, std::string_view s
   }
   auto payload = parse_json(*payload_json);
   if (!payload) return std::nullopt;
-  const auto exp = number(*payload, "exp");
-  if (!exp || static_cast<std::int64_t>(*exp) <= now_s) return std::nullopt;
-  if (auto nbf = number(*payload, "nbf"); nbf && static_cast<std::int64_t>(*nbf) > now_s) {
-    return std::nullopt;
+  const auto exp = seconds(*payload, "exp");
+  if (!exp || *exp <= now_s) return std::nullopt;
+  if (payload->fields().contains("nbf")) {
+    const auto nbf = seconds(*payload, "nbf");
+    if (!nbf || *nbf > now_s) return std::nullopt;
   }
+  if (!issuer.empty() && str(*payload, "iss") != issuer) return std::nullopt;
   bool aud_ok = false;
   if (auto it = payload->fields().find("aud"); it != payload->fields().end()) {
     if (it->second.has_string_value()) aud_ok = it->second.string_value() == audience;
@@ -113,7 +127,7 @@ std::optional<JwtClaims> verify_hs256(std::string_view token, std::string_view s
   }
   const std::string sub = str(*payload, "sub");
   if (!aud_ok || sub.empty()) return std::nullopt;
-  return JwtClaims{sub, static_cast<std::int64_t>(*exp)};
+  return JwtClaims{sub, *exp};
 }
 
 }  // namespace talos::server

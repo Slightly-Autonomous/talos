@@ -120,7 +120,8 @@ describe("Talos MCP server", () => {
     });
     expect(sent).toHaveLength(1);
     expect(sent[0]!.operation).toBe("audio.speak");
-    expect(sent[0]!.expect?.payload?.kind.case).toBe("audioPlayback");
+    // The hub derives the expected observation; the connector never sends one.
+    expect(sent[0]!.expect).toBeUndefined();
   });
 
   test("preview is dry-run and says a human must save", async () => {

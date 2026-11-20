@@ -28,3 +28,14 @@
 - No physical timing: interrupt latency, sleep current, flash wear, brownout behavior and RF are HIL work (L4).
 - The ESP-IDF build is **compile-verified only**. Nothing has run on silicon.
 - Diagnostics events (module presence and faults, power mode, OTA status) are acknowledged but not yet ingested by the hub; that's the observability plane in Phase 6.
+
+## Amendment 2026-11-20: failure-mode hardening (firmware review)
+- **Safe expander state before anything turns on.** `BoardIo` starts its expander shadow at the board's safe pattern (every rail, RESET_N and CS_N off, UART mux parked). A rail or the UART mux can be turned on only after the expanders are configured, and configuration is retried on the next request. Off is always allowed. A failed `begin()` after a warm reset can no longer switch every slot on at once.
+- **Queue loss policy:** a new event never evicts a higher-priority one. If it is lower priority than everything queued, the new event is dropped and counted. (A heartbeat used to be able to push out a P0 alarm.)
+- **AON settle:** with the fitted 1 nF CT (TPS22917 turn-on ≈ 3.8 ms), card lines go high `kAonSettleMs` = 10 ms after AON is enabled. The virtual board models the rail rise and flags backfeed.
+- **Task watchdog:** `IWatchdog` in the HAL. The ESP port subscribes the main task (5 s, panic then reset), and the runtime feeds it every step and between slot power-ups.
+- **Slot quarantine:** two consecutive resets during a slot's power-on window (one could be a power cut) quarantine it. It is retried after 1 h of uptime, doubling per strike up to 24 h, and a successful power-up clears it. A remote clear needs a new downlink item and is not done; `ConfigUpdate` has no spare field.
+- **Boot epoch:** the save is checked and retried, nothing is transmitted until it is persisted, and an exhausted epoch fails loudly. NVS is erased only on `NO_FREE_PAGES` or `NEW_VERSION_FOUND`.
+- **Shared SPI pins** are parked at boot: GPIO4/5 driven low, no pull; MISO pulled down. Deep sleep still needs board pull-downs (HD-027).
+- **OTA trial images** are marked valid (`esp_ota_mark_app_valid_cancel_rollback`) only after a hub ACK *and* with the board's safe state reached. A node whose charger never answers rolls the update back.
+- The portable library builds with `-fno-exceptions -fno-rtti` on the host too. OTA progress is persisted every 4 KiB, not every chunk.

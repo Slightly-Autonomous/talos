@@ -41,6 +41,7 @@ const std::string kAgentToken = "agent-secret";
 const std::string kNodeToken = "node-07-secret";
 const std::string kSpeakerToken = "speaker-secret";
 const std::string kNode12Token = "node-12-secret";
+const std::string kLockToken = "lock-3-secret";
 
 sv::HubConfig hub_config(const std::string& sqlite_path) {
   sv::HubConfig h;
@@ -89,6 +90,7 @@ rules:
   add_device("node-07", kNodeToken);
   add_device("node-12", kNode12Token);
   add_device("patio_speaker", kSpeakerToken);
+  add_device("lock-3", kLockToken);
   return h;
 }
 
@@ -136,6 +138,62 @@ TEST(Config, RejectsBadCredentials) {
   auto d = hub_config(temp_db());
   d.mutable_devices(0)->set_device_id("ghost");
   EXPECT_EQ(build_config(d, ".").error().code, "invalid_config");
+}
+
+TEST(Config, RulePrincipalsAreAlwaysRulesNeverConfiguredIdentities) {
+  // A rule naming the owner would run with the owner's security-critical grant.
+  auto c = hub_config(temp_db());
+  c.mutable_rules(0)->set_principal_id("owner");
+  auto r = build_config(c, ".");
+  ASSERT_FALSE(r.ok());
+  EXPECT_EQ(r.error().code, "invalid_config");
+  // Distinct rule ids get one capped kRule principal each.
+  auto ok = build_config(hub_config(temp_db()), ".");
+  ASSERT_TRUE(ok.ok());
+  for (const auto& p : ok.value().engine.principals) {
+    if (p.id == PrincipalId("rule:backyard")) {
+      EXPECT_EQ(p.kind, PrincipalKind::kRule);
+      EXPECT_EQ(p.grants.at(0).max_risk, RiskClass::kDisruptiveOutput);
+    }
+  }
+}
+
+TEST(Config, TokenHashesAreUniqueAcrossPrincipalsAndDevices) {
+  auto c = hub_config(temp_db());
+  c.mutable_devices(0)->set_token_sha256(sha256_hex(kOwnerToken));
+  EXPECT_EQ(build_config(c, ".").error().code, "invalid_config");
+}
+
+TEST(Config, RuleActionsMustMatchTheOperationCatalog) {
+  auto c = hub_config(temp_db());
+  // Speak operation, unlock args: refused when the config loads.
+  auto* args = c.mutable_rules(0)->mutable_actions(0)->mutable_args();
+  args->mutable_set_locked()->set_locked(false);
+  EXPECT_EQ(build_config(c, ".").error().code, "invalid_config");
+  auto e = hub_config(temp_db());
+  e.mutable_rules(0)->mutable_actions(0)->mutable_expect()->mutable_payload()->mutable_lock();
+  EXPECT_EQ(build_config(e, ".").error().code, "invalid_config");
+}
+
+TEST(Config, DevModeRefusesNetworkHostsForHttpAndCoap) {
+  auto c = hub_config(temp_db());
+  c.set_dev_mode(true);
+  EXPECT_TRUE(check_dev_mode_hosts(c, "127.0.0.1", false));
+  EXPECT_FALSE(check_dev_mode_hosts(c, "0.0.0.0", false));
+  c.mutable_coap()->set_enabled(true);
+  c.mutable_coap()->set_listen_host("0.0.0.0");  // HTTP on loopback, CoAP exposed
+  EXPECT_FALSE(check_dev_mode_hosts(c, "127.0.0.1", false));
+  EXPECT_TRUE(check_dev_mode_hosts(c, "127.0.0.1", true));  // explicit override
+  c.set_dev_mode(false);
+  EXPECT_TRUE(check_dev_mode_hosts(c, "0.0.0.0", false));
+}
+
+TEST(HttpStatus, HubFailuresAreServerErrors) {
+  EXPECT_EQ(http_status_for(Error{"storage_error", ""}), 500);
+  EXPECT_EQ(http_status_for(Error{"corrupt_journal", ""}), 500);
+  EXPECT_EQ(http_status_for(Error{"invalid_request", ""}), 400);
+  EXPECT_EQ(http_status_for(Error{"stale_revision", ""}), 409);
+  EXPECT_EQ(http_status_for(Error{"denied", ""}), 403);
 }
 
 TEST(Auth, MapsTokensToIdentities) {
@@ -201,14 +259,15 @@ auto motion(std::uint64_t seq) {
 
 class Hub {
  public:
-  Hub(const std::string& db, AtomicClock& clock) {
+  Hub(const std::string& db, AtomicClock& clock,
+      int max_event_streams = HttpServer::kMaxEventStreams) {
     auto cfg = build_config(hub_config(db), ".");
     EXPECT_TRUE(cfg.ok()) << (cfg.ok() ? "" : cfg.error().message);
     auth_ = std::make_unique<Authenticator>(cfg.value().hub);
     service_ = std::make_unique<HubService>(cfg.value(), SqliteJournal::open(db).value(), clock,
                                             SqliteConfigStore::open(db).value());
-    http_ = std::make_unique<HttpServer>(*service_, *auth_,
-                                         std::vector<std::string>{"http://localhost:5173"});
+    http_ = std::make_unique<HttpServer>(
+        *service_, *auth_, std::vector<std::string>{"http://localhost:5173"}, max_event_streams);
     port_ = http_->bind("127.0.0.1", 0).value();
     thread_ = std::thread([this] { http_->listen(); });
     http_->wait_until_ready();
@@ -322,6 +381,10 @@ TEST_F(HttpE2E, SilenceEndsUnknownViaTick) {
   auto c = hub.client();
   post(c, "/v1/arm", kOwnerToken, R"({"mode":"ARM_MODE_ARMED_AWAY"})");
   post(c, "/v1/devices/observations", kNodeToken, json(motion(1)));
+  // The speaker adapter takes the command (the dispatch), then stays silent.
+  ASSERT_EQ(parse<api::PendingCommands>(c.Get("/v1/devices/commands", bearer(kSpeakerToken))->body)
+                .commands_size(),
+            1);
   clock.advance(3'001);
   hub.service().tick();
   auto state = parse<api::StateResponse>(c.Get("/v1/state", bearer(kOwnerToken))->body);
@@ -537,6 +600,249 @@ TEST_F(HttpE2E, RulePreviewDryRunsAgainstHistory) {
       commands_before);
 }
 
+// --- Command safety over the real API (review B1, B2, B3, m1, m2) -------------------------
+
+auto lock_state(std::uint64_t seq, bool locked) {
+  return envelope("lock-3", std::nullopt, "access.lock", "lock.state", seq,
+                  locked ? R"({"lock":{"locked":true}})" : R"({"lock":{"locked":false}})");
+}
+
+int lock_queue_size(httplib::Client& c) {
+  return parse<api::PendingCommands>(c.Get("/v1/devices/commands", bearer(kLockToken))->body)
+      .commands_size();
+}
+
+api::CommandResponse command_response(const httplib::Result& r) {
+  EXPECT_EQ(r->status, 202) << r->body;
+  return parse<api::CommandResponse>(r->body);
+}
+
+TEST_F(HttpE2E, AgentCannotSmuggleUnlockArgsUnderALowRiskOperation) {
+  Hub hub(db, clock);
+  auto c = hub.client();
+  ASSERT_EQ(post(c, "/v1/devices/observations", kLockToken, json(lock_state(1, true)))->status,
+            200);
+  auto r = command_response(post(c, "/v1/commands", kAgentToken, R"({
+    "commandId": "smuggle", "operation": "audio.speak",
+    "target": {"deviceId": "lock-3", "capabilityId": "access.lock"},
+    "args": {"setLocked": {"locked": false}}})"));
+  EXPECT_EQ(r.status(), talos::v1::COMMAND_STATUS_DENIED);
+  EXPECT_EQ(r.reason(), "args_do_not_match_operation");
+  EXPECT_EQ(lock_queue_size(c), 0);
+}
+
+TEST_F(HttpE2E, ExpiredCommandIsNeverHandedToTheDevice) {
+  Hub hub(db, clock);
+  auto c = hub.client();
+  post(c, "/v1/devices/observations", kLockToken, json(lock_state(1, true)));
+  auto r = command_response(post(c, "/v1/commands", kOwnerToken, R"({
+    "commandId": "late1", "operation": "access.set_locked", "ttlMs": 100,
+    "verificationWindowMs": 200,
+    "target": {"deviceId": "lock-3", "capabilityId": "access.lock"},
+    "args": {"setLocked": {"locked": false}}})"));
+  EXPECT_EQ(r.status(), talos::v1::COMMAND_STATUS_ACCEPTED);  // waits for hand-off
+  clock.advance(2'000);                                       // the lock adapter was offline
+  hub.service().tick();
+  EXPECT_EQ(lock_queue_size(c), 0);
+  auto view = parse<api::CommandView>(c.Get("/v1/commands/late1", bearer(kOwnerToken))->body);
+  EXPECT_EQ(view.status(), talos::v1::COMMAND_STATUS_EXPIRED);
+  // Even without a tick in between, a poll after the TTL hands nothing over.
+  post(c, "/v1/devices/observations", kLockToken, json(lock_state(2, true)));
+  auto r2 = command_response(post(c, "/v1/commands", kOwnerToken, R"({
+    "commandId": "late2", "operation": "access.set_locked", "ttlMs": 100,
+    "target": {"deviceId": "lock-3", "capabilityId": "access.lock"},
+    "args": {"setLocked": {"locked": false}}})"));
+  ASSERT_EQ(r2.status(), talos::v1::COMMAND_STATUS_ACCEPTED);
+  clock.advance(200);
+  EXPECT_EQ(lock_queue_size(c), 0);
+  view = parse<api::CommandView>(c.Get("/v1/commands/late2", bearer(kOwnerToken))->body);
+  EXPECT_EQ(view.status(), talos::v1::COMMAND_STATUS_EXPIRED);
+}
+
+TEST_F(HttpE2E, CallerCannotChooseWhatIsFreshOrWhatVerifies) {
+  Hub hub(db, clock);
+  auto c = hub.client();
+  auto beat = envelope("lock-3", std::nullopt, "device.health", "device.heartbeat", 1,
+                       R"({"heartbeat":{"batteryMv":3000}})");
+  ASSERT_EQ(post(c, "/v1/devices/observations", kLockToken, json(beat))->status, 200);
+  // Lock state was never reported. Pointing expect at the heartbeat used to
+  // pass the freshness gate and let the next heartbeat "verify" the unlock.
+  auto r = command_response(post(c, "/v1/commands", kOwnerToken, R"({
+    "commandId": "bypass", "operation": "access.set_locked",
+    "target": {"deviceId": "lock-3", "capabilityId": "access.lock"},
+    "args": {"setLocked": {"locked": false}},
+    "expect": {"source": {"deviceId": "lock-3", "capabilityId": "device.health"},
+               "payload": {"heartbeat": {"batteryMv": 3000}}}})"));
+  EXPECT_EQ(r.status(), talos::v1::COMMAND_STATUS_DENIED);
+  EXPECT_EQ(r.reason(), "expectation_does_not_match_operation");
+  EXPECT_EQ(lock_queue_size(c), 0);
+
+  // An honest unlock without expect gets the derived expectation; only lock
+  // state, not a heartbeat, verifies it.
+  post(c, "/v1/devices/observations", kLockToken, json(lock_state(2, true)));
+  auto ok = command_response(post(c, "/v1/commands", kOwnerToken, R"({
+    "commandId": "honest", "operation": "access.set_locked",
+    "target": {"deviceId": "lock-3", "capabilityId": "access.lock"},
+    "args": {"setLocked": {"locked": false}}})"));
+  ASSERT_EQ(ok.status(), talos::v1::COMMAND_STATUS_ACCEPTED);
+  ASSERT_EQ(lock_queue_size(c), 1);
+  auto beat2 = envelope("lock-3", std::nullopt, "device.health", "device.heartbeat", 3,
+                        R"({"heartbeat":{"batteryMv":3000}})");
+  post(c, "/v1/devices/observations", kLockToken, json(beat2));
+  auto view = parse<api::CommandView>(c.Get("/v1/commands/honest", bearer(kOwnerToken))->body);
+  EXPECT_EQ(view.status(), talos::v1::COMMAND_STATUS_DISPATCHED);
+  EXPECT_EQ(view.command().expect().source().capability_id(), "access.lock");
+  post(c, "/v1/devices/observations", kLockToken, json(lock_state(4, false)));
+  view = parse<api::CommandView>(c.Get("/v1/commands/honest", bearer(kOwnerToken))->body);
+  EXPECT_EQ(view.status(), talos::v1::COMMAND_STATUS_VERIFIED);
+}
+
+TEST_F(HttpE2E, RequestFieldsAreBounded) {
+  Hub hub(db, clock);
+  auto c = hub.client();
+  post(c, "/v1/devices/observations", kLockToken, json(lock_state(1, true)));
+  auto ttl = command_response(post(c, "/v1/commands", kOwnerToken, R"({
+    "commandId": "long", "operation": "access.set_locked", "ttlMs": 4000000000,
+    "target": {"deviceId": "lock-3", "capabilityId": "access.lock"},
+    "args": {"setLocked": {"locked": true}}})"));
+  EXPECT_EQ(ttl.reason(), "ttl_out_of_bounds");
+  auto ghost = command_response(post(c, "/v1/commands", kOwnerToken, R"({
+    "commandId": "ghost", "operation": "audio.speak",
+    "target": {"deviceId": "ghost", "capabilityId": "audio.speak"},
+    "args": {"audioSpeak": {"text": "hi"}}})"));
+  EXPECT_EQ(ghost.reason(), "unknown_target_device");
+  auto bad_id = post(c, "/v1/commands", kOwnerToken, R"({
+    "commandId": "has spaces/and slashes", "operation": "audio.speak",
+    "target": {"deviceId": "patio_speaker", "capabilityId": "audio.speak"},
+    "args": {"audioSpeak": {"text": "hi"}}})");
+  EXPECT_EQ(bad_id->status, 400);
+  EXPECT_EQ(post(c, "/v1/commands", kOwnerToken,
+                 R"({"commandId": ")" + std::string(200, 'a') + R"(", "operation": "notify"})")
+                ->status,
+            400);
+}
+
+TEST_F(HttpE2E, IdempotencyKeysAndCommandIdsBelongToOnePrincipal) {
+  Hub hub(db, clock);
+  auto c = hub.client();
+  const std::string speak = R"("operation": "audio.speak",
+    "target": {"deviceId": "patio_speaker", "capabilityId": "audio.speak"},
+    "args": {"audioSpeak": {"text": "hi"}})";
+  auto owner =
+      command_response(post(c, "/v1/commands", kOwnerToken,
+                            R"({"commandId": "x4", "idempotencyKey": "k", )" + speak + "}"));
+  EXPECT_FALSE(owner.duplicate());
+  // The agent's key "k" is its own: a new command, not the owner's.
+  auto agent =
+      command_response(post(c, "/v1/commands", kAgentToken,
+                            R"({"commandId": "a1", "idempotencyKey": "k", )" + speak + "}"));
+  EXPECT_FALSE(agent.duplicate());
+  EXPECT_EQ(agent.command_id(), "a1");
+  // Reusing the owner's command id is a conflict that reveals nothing.
+  auto steal = post(c, "/v1/commands", kAgentToken, R"({"commandId": "x4", )" + speak + "}");
+  EXPECT_EQ(steal->status, 409);
+  // The owner retrying gets its own command back.
+  auto retry =
+      command_response(post(c, "/v1/commands", kOwnerToken,
+                            R"({"commandId": "x5", "idempotencyKey": "k", )" + speak + "}"));
+  EXPECT_TRUE(retry.duplicate());
+  EXPECT_EQ(retry.command_id(), "x4");
+}
+
+TEST_F(HttpE2E, RulePrincipalCollidingWithAPersonIsRejectedOnPut) {
+  Hub hub(db, clock);
+  auto c = hub.client();
+  sv::ConfigDocument doc = get_config(c).document();
+  doc.mutable_rules(0)->set_principal_id("owner");
+  auto r = put_config(c, kOwnerToken, 1, doc);
+  EXPECT_EQ(r->status, 400);
+  EXPECT_EQ(parse<api::ErrorResponse>(r->body).code(), "invalid_config");
+  EXPECT_EQ(get_config(c).revision(), 1u);
+}
+
+TEST_F(HttpE2E, DevicesAddedByAConfigEditAppearInHealthAndAcceptConfig) {
+  Hub hub(db, clock);
+  auto c = hub.client();
+  sv::ConfigDocument doc = get_config(c).document();
+  auto* d = doc.mutable_property()->add_devices();
+  d->set_id("node-99");
+  d->set_property_id("house-01");
+  ASSERT_EQ(put_config(c, kOwnerToken, 1, doc)->status, 200);
+  auto health =
+      parse<api::HealthListResponse>(c.Get("/v1/health/devices", bearer(kOwnerToken))->body);
+  bool listed = false;
+  for (const auto& h : health.devices()) listed |= h.device_id() == "node-99";
+  EXPECT_TRUE(listed);
+  EXPECT_EQ(post(c, "/v1/devices/node-99/config", kOwnerToken, R"({"heartbeatIntervalMs": 60000})")
+                ->status,
+            200);
+}
+
+TEST_F(HttpE2E, ReplayedHeartbeatDoesNotKeepADeadDeviceAlive) {
+  Hub hub(db, clock);
+  fw::DeviceEvent beat;
+  beat.boot_epoch = 1;
+  beat.seq = 1;
+  beat.kind = fw::EventKind::kHeartbeat;
+  beat.a = 3'000;
+  (void)hub.service().device_exchange(DeviceId("node-12"), {beat}, 512);
+  const auto first_seen = clock.now().unix_ms;
+  clock.advance(20 * 60 * 1000);  // silent well past the offline threshold
+  (void)hub.service().device_exchange(DeviceId("node-12"), {beat}, 512);  // captured frame
+  fw::DeviceEvent ota;
+  ota.boot_epoch = 1;
+  ota.seq = 2;
+  ota.kind = fw::EventKind::kOtaStatus;
+  ota.a = 0;
+  ota.b = 7;
+  (void)hub.service().device_exchange(DeviceId("node-12"), {ota}, 512);
+  clock.advance(20 * 60 * 1000);
+  (void)hub.service().device_exchange(DeviceId("node-12"), {ota}, 512);  // replayed OTA status
+  const auto health = hub.service().device_health();
+  for (const auto& h : health.devices()) {
+    if (h.device_id() != "node-12") continue;
+    EXPECT_EQ(h.status(), talos::v1::HEALTH_STATUS_OFFLINE);
+    EXPECT_EQ(h.last_seen_unix_ms(), first_seen + 20 * 60 * 1000);  // the genuine OTA report
+  }
+}
+
+TEST_F(HttpE2E, LiveEventStreamsAreCapped) {
+  constexpr int kCap = 2;
+  Hub hub(db, clock, kCap);
+  std::atomic<bool> stop{false};
+  std::vector<std::thread> streams;
+  std::atomic<int> open{0};
+  for (int i = 0; i < kCap; ++i) {
+    streams.emplace_back([&] {
+      auto c = hub.client();
+      c.set_read_timeout(30, 0);
+      bool counted = false;
+      c.Get(
+          "/v1/events", bearer(kOwnerToken),
+          [&](const httplib::Response&) {
+            if (!counted) ++open;
+            counted = true;
+            return true;
+          },
+          [&](const char*, std::size_t) { return !stop.load(); });
+    });
+  }
+  for (int i = 0; i < 1000 && open.load() < kCap; ++i) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+  }
+  ASSERT_EQ(open.load(), kCap);
+  auto c = hub.client();
+  auto extra = c.Get("/v1/events", bearer(kOwnerToken));
+  ASSERT_TRUE(extra);
+  EXPECT_EQ(extra->status, 503);
+  // Ordinary requests still get a worker.
+  EXPECT_EQ(c.Get("/v1/state", bearer(kOwnerToken))->status, 200);
+  stop = true;
+  // Wake the streams so their receivers see `stop`.
+  post(c, "/v1/arm", kOwnerToken, R"({"mode":"ARM_MODE_ARMED_HOME"})");
+  for (auto& t : streams) t.join();
+}
+
 // --- Supabase JWT auth (ADR 0015) ---------------------------------------------------------
 
 std::string make_jwt(const std::string& header, const std::string& payload,
@@ -588,6 +894,34 @@ TEST(SupabaseAuth, AcceptsMappedValidTokensOnly) {
   EXPECT_FALSE(a.authenticate("Bearer " + none));
   // Local tokens keep working in Supabase mode.
   EXPECT_EQ(a.authenticate("Bearer " + kOwnerToken)->id, "owner");
+}
+
+TEST(SupabaseAuth, OutOfRangeTimeClaimsIssuerAndDottedLocalTokens) {
+  auto h = hub_config(temp_db());
+  h.set_auth(sv::AUTH_MODE_SUPABASE);
+  h.mutable_supabase_auth()->set_jwt_secret_env("SUPABASE_JWT_SECRET");
+  h.mutable_supabase_auth()->set_issuer("https://example.supabase.co/auth/v1");
+  auto* u = h.mutable_supabase_auth()->add_users();
+  u->set_user_id("6f1c-uuid");
+  u->set_principal_id("owner");
+  // A local token that happens to have two dots.
+  h.mutable_principals(1)->set_token_sha256(sha256_hex("agent.token.v1"));
+  AtomicClock clock(1'800'000'000'000);
+  const std::string secret = "super-secret-jwt-key";
+  Authenticator a(h, secret, &clock);
+  const std::string hs = R"({"alg":"HS256","typ":"JWT"})";
+  auto token = [&](const std::string& exp, const std::string& iss) {
+    return "Bearer " + make_jwt(hs,
+                                R"({"sub":"6f1c-uuid","aud":"authenticated","exp":)" + exp +
+                                    R"(,"iss":")" + iss + R"("})",
+                                secret);
+  };
+  const std::string iss = "https://example.supabase.co/auth/v1";
+  EXPECT_TRUE(a.authenticate(token("1800000600", iss)));
+  EXPECT_FALSE(a.authenticate(token("1800000600", "https://evil.example/auth/v1")));
+  EXPECT_FALSE(a.authenticate(token("1e300", iss)));  // would overflow int64 when cast
+  EXPECT_FALSE(a.authenticate(token("-1e300", iss)));
+  EXPECT_EQ(a.authenticate("Bearer agent.token.v1")->id, "agent-1");
 }
 
 }  // namespace

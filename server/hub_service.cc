@@ -67,6 +67,18 @@ api::CommandView command_view(const CommandRecord& rec) {
   return v;
 }
 
+// Same character set the GET /v1/commands/{id} route accepts.
+bool valid_command_id(const std::string& id) {
+  if (id.empty() || id.size() > 128) return false;
+  for (char ch : id) {
+    const bool ok = (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') ||
+                    (ch >= '0' && ch <= '9') || ch == '_' || ch == ':' || ch == '@' || ch == '.' ||
+                    ch == '-';
+    if (!ok) return false;
+  }
+  return true;
+}
+
 api::IngestResponse ingest_response(const IngestResult& r) {
   api::IngestResponse out;
   switch (r.status) {
@@ -113,7 +125,15 @@ HubService::HubService(LoadedConfig config, std::unique_ptr<IJournal> journal, c
       if (parsed) {
         ec.property = parsed.value().property;
         ec.rules = parsed.value().rules;
-        ec.principals = with_rule_principals(config_.base_principals, ec.rules, ec.property.id);
+        // A stored revision that no longer validates (e.g. a rule principal
+        // that collides with a configured one) keeps the bootstrap principals
+        // and rules out of the engine rather than running it as a person.
+        auto principals = with_rule_principals(config_.base_principals, ec.rules, ec.property.id);
+        if (principals) {
+          ec.principals = std::move(principals).value();
+        } else {
+          ec.rules.clear();
+        }
       }
     }
   }
@@ -145,11 +165,20 @@ api::ConfigResponse config_response(const ConfigRevision& r) {
 }  // namespace
 
 Result<api::ConfigResponse> HubService::config(std::optional<Timestamp> at) const {
-  std::lock_guard lock(mu_);
-  if (!store_ || !current_) return Error{"not_found", "no versioned configuration"};
-  if (!at) return config_response(*current_);
-  const auto rev = talos::state_at(*journal_, *at).config_revision;
+  std::vector<JournalEntry> entries;
+  {
+    std::lock_guard lock(mu_);
+    if (!store_ || !current_) return Error{"not_found", "no versioned configuration"};
+    if (!at) return config_response(*current_);
+    entries = read_all(*journal_);  // copy under the lock, replay outside it (M8)
+  }
+  std::uint32_t rev = 0;
+  for (const auto& e : entries) {
+    if (e.received_at > *at) break;
+    if (const auto* c = std::get_if<ConfigRevisionApplied>(&e.event)) rev = c->revision;
+  }
   if (rev == 0) return Error{"not_found", "no configuration revision in force at that time"};
+  std::lock_guard lock(mu_);
   auto r = store_->get(rev);
   if (!r) return Error{"not_found", "revision " + std::to_string(rev)};
   return config_response(*r);
@@ -173,12 +202,14 @@ Result<api::ConfigResponse> HubService::put_config(const PrincipalId& who,
   }
   auto parsed = parse_document(req.document(), config_.engine.property.id);
   if (!parsed) return parsed.error();
-  auto stored = store_->append(req.document(), who.str(), clock_.now());
-  if (!stored) return stored.error();
   auto principals = with_rule_principals(config_.base_principals, parsed.value().rules,
                                          parsed.value().property.id);
-  if (Status s = engine_->apply_config(stored.value().revision, stored.value().sha256, who,
-                                       parsed.value().property, parsed.value().rules, principals);
+  if (!principals) return principals.error();
+  auto stored = store_->append(req.document(), who.str(), clock_.now());
+  if (!stored) return stored.error();
+  if (Status s =
+          engine_->apply_config(stored.value().revision, stored.value().sha256, who,
+                                parsed.value().property, parsed.value().rules, principals.value());
       !s) {
     return s.error();
   }
@@ -191,14 +222,24 @@ Result<api::RulePreviewResponse> HubService::preview_rule(
     const api::RulePreviewRequest& req) const {
   auto rule = codec::from_proto(req.rule());
   if (!rule) return rule.error();
-  std::lock_guard lock(mu_);
   if (rule.value().property != config_.engine.property.id) {
     return Error{"invalid_request", "rule targets another property"};
   }
-  const auto& ec = engine_->config();
-  const Timestamp to{req.to_unix_ms() > 0 ? req.to_unix_ms() : clock_.now().unix_ms};
-  auto result = talos::preview_rule(rule.value(), ec.property, read_all(*journal_),
-                                    Timestamp{req.from_unix_ms()}, to, ec.local_minute_of_day);
+  // Copy what the preview needs under the lock; evaluate outside it so a long
+  // history never stalls ingest or tick (M8).
+  Property property;
+  std::function<std::uint16_t(Timestamp)> local_minute;
+  std::vector<JournalEntry> entries;
+  Timestamp to;
+  {
+    std::lock_guard lock(mu_);
+    property = engine_->config().property;
+    local_minute = engine_->config().local_minute_of_day;
+    entries = read_all(*journal_);
+    to = Timestamp{req.to_unix_ms() > 0 ? req.to_unix_ms() : clock_.now().unix_ms};
+  }
+  auto result = talos::preview_rule(rule.value(), property, entries, Timestamp{req.from_unix_ms()},
+                                    to, local_minute);
   api::RulePreviewResponse out;
   out.set_evaluated_observations(result.evaluated_observations);
   for (const auto& m : result.matches) {
@@ -254,8 +295,18 @@ api::StateResponse HubService::state() const {
 }
 
 api::StateResponse HubService::state_at(Timestamp t) const {
-  std::lock_guard lock(mu_);
-  return view_locked(talos::state_at(*journal_, t), t);
+  std::vector<JournalEntry> entries;
+  {
+    std::lock_guard lock(mu_);
+    entries = read_all(*journal_);  // copy under the lock, reduce outside it (M8)
+  }
+  PropertyState s;
+  for (const auto& e : entries) {
+    if (e.received_at > t) break;
+    s = reduce(std::move(s), e);
+  }
+  // view_locked reads only immutable bootstrap config, so no lock is needed.
+  return view_locked(s, t);
 }
 
 api::JournalPage HubService::journal_page(std::uint64_t after, std::uint32_t limit) const {
@@ -270,10 +321,7 @@ api::JournalPage HubService::journal_page(std::uint64_t after, std::uint32_t lim
   return page;
 }
 
-void HubService::after_mutation_locked() {
-  for (auto& cmd : engine_->take_outbound()) outbound_[cmd.target.device].push_back(std::move(cmd));
-  cv_.notify_all();
-}
+void HubService::after_mutation_locked() { cv_.notify_all(); }
 
 Result<api::SetArmModeResponse> HubService::set_arm_mode(const PrincipalId& who, ArmMode mode) {
   std::lock_guard lock(mu_);
@@ -287,7 +335,12 @@ Result<api::SetArmModeResponse> HubService::set_arm_mode(const PrincipalId& who,
 
 Result<api::CommandResponse> HubService::request_command(const PrincipalId& who,
                                                          const api::CommandRequest& req) {
-  if (req.command_id().empty()) return Error{"invalid_request", "command_id is required"};
+  if (!valid_command_id(req.command_id())) {
+    return Error{"invalid_request", "command_id must be 1-128 of [A-Za-z0-9_:@.-]"};
+  }
+  if (!req.idempotency_key().empty() && !valid_command_id(req.idempotency_key())) {
+    return Error{"invalid_request", "idempotency_key must be 1-128 of [A-Za-z0-9_:@.-]"};
+  }
   auto target = codec::from_proto(req.target());
   if (!target) return target.error();
   auto args = codec::from_proto(req.args());
@@ -307,16 +360,21 @@ Result<api::CommandResponse> HubService::request_command(const PrincipalId& who,
   c.expires_at = now + Millis{req.ttl_ms() > 0 ? req.ttl_ms() : 5'000};
   c.verification_window =
       Millis{req.verification_window_ms() > 0 ? req.verification_window_ms() : 5'000};
+  // The hub derives what verifies the command from the operation catalog
+  // (core/execution/operations.h). A caller's `expect` is accepted only when
+  // it equals the derived one; anything else is denied in core.
+  c.verification = VerificationMode::kObservedState;
   if (req.has_expect()) {
     auto src = codec::from_proto(req.expect().source());
     if (!src) return src.error();
     c.expect = ExpectedObservation{src.value(), codec::from_proto(req.expect().payload())};
-    c.verification = VerificationMode::kObservedState;
-  } else {
-    c.verification = VerificationMode::kAckOnly;
   }
   RequestResult rr = engine_->request(c);
   after_mutation_locked();
+  if (rr.conflict) {
+    return Error{"conflict", "command id " + rr.id.str() + " is already in use"};
+  }
+  if (rr.error) return *rr.error;
   const CommandRecord* rec = engine_->state().commands.find(rr.id);
   api::CommandResponse out;
   out.set_command_id(rr.id.str());
@@ -349,6 +407,12 @@ Result<api::IngestResponse> HubService::ingest_observation(
   (r.status == IngestStatus::kAccepted    ? metrics_.ingest_accepted
    : r.status == IngestStatus::kDuplicate ? metrics_.ingest_duplicate
                                           : metrics_.ingest_rejected)++;
+  // Recorded, but a later journal write (verification, rule commands)
+  // failed: say so loudly instead of reporting success (M6).
+  if (r.status == IngestStatus::kAccepted && r.error) {
+    ++metrics_.journal_append_failures;
+    return *r.error;
+  }
   return ingest_response(r);
 }
 
@@ -371,17 +435,17 @@ Result<api::IngestResponse> HubService::ingest_ack(const DeviceId& device,
 api::PendingCommands HubService::take_commands(const DeviceId& device) {
   std::lock_guard lock(mu_);
   api::PendingCommands out;
-  auto it = outbound_.find(device);
-  if (it == outbound_.end()) return out;
-  for (const auto& c : it->second) *out.add_commands() = codec::to_proto(c);
-  it->second.clear();
+  // Hand-off is the dispatch: only commands still accepted and inside their
+  // TTL are dispatched and returned; expired ones are never sent (ADR 0004).
+  for (const auto& c : engine_->take_outbound(device)) *out.add_commands() = codec::to_proto(c);
+  after_mutation_locked();
   return out;
 }
 
 void HubService::tick() {
   std::lock_guard lock(mu_);
   const auto before = journal_->last_seq();
-  engine_->tick();
+  if (Status s = engine_->tick(); !s) ++metrics_.journal_append_failures;
   if (journal_->last_seq() != before) after_mutation_locked();
 }
 
@@ -425,12 +489,17 @@ std::vector<fw::Downlink> HubService::device_exchange(const DeviceId& device,
     return true;
   };
   for (const auto& e : events) {
-    registry_.observe(device, e, now);
+    // Only fresh evidence refreshes telemetry: a replayed or duplicate frame
+    // must not make a dead device look alive or move a campaign (M3).
     if (auto env = fw::to_envelope(e, device, config_.engine.property.id)) {
       const IngestResult r = engine_->on_observation(*env);
       (r.status == IngestStatus::kAccepted    ? metrics_.ingest_accepted
        : r.status == IngestStatus::kDuplicate ? metrics_.ingest_duplicate
                                               : metrics_.ingest_rejected)++;
+      if (r.status == IngestStatus::kAccepted) registry_.observe(device, e, now);
+      if (r.error && r.status == IngestStatus::kAccepted) ++metrics_.journal_append_failures;
+    } else {
+      registry_.observe_unjournaled(device, e, now);
     }
     // ACK every authenticated event, even ones ingest rejected: a frame that
     // can never be accepted must not be retried forever.
@@ -499,7 +568,7 @@ Result<api::DeviceConfigResponse> HubService::set_device_config(
     const PrincipalId& who, const DeviceId& device, const api::DeviceConfigRequest& req) {
   std::lock_guard lock(mu_);
   if (Status s = authorize_owner(who); !s) return s.error();  // can weaken detection
-  if (!config_.engine.property.find_device(device)) return Error{"not_found", device.str()};
+  if (!engine_->config().property.find_device(device)) return Error{"not_found", device.str()};
   fw::ConfigUpdate u;
   // Revision = hub seconds: monotonic across hub restarts.
   u.revision = static_cast<std::uint32_t>(clock_.now().unix_ms / 1000);
@@ -523,7 +592,7 @@ api::HealthListResponse HubService::device_health() const {
   std::lock_guard lock(mu_);
   api::HealthListResponse out;
   const Timestamp now = clock_.now();
-  for (const auto& d : config_.engine.property.devices) {
+  for (const auto& d : engine_->config().property.devices) {
     const CapabilityRef health_ref{d.id, std::nullopt, CapabilityId("device.health")};
     const auto& caps = engine_->state().capabilities;
     std::optional<Timestamp> seen;
@@ -571,9 +640,23 @@ Result<api::CampaignResponse> HubService::start_campaign(const PrincipalId& who,
   std::lock_guard lock(mu_);
   if (Status s = authorize_owner(who); !s) return s.error();
   const DeviceId device(req.device_id());
-  if (!config_.engine.property.find_device(device)) return Error{"not_found", req.device_id()};
-  if (!firmware_ || !firmware_->get(req.version())) {
-    return Error{"not_found", "release " + std::to_string(req.version())};
+  const Device* dev = engine_->config().property.find_device(device);
+  if (!dev) return Error{"not_found", req.device_id()};
+  if (!firmware_) return Error{"not_found", "release " + std::to_string(req.version())};
+  auto release = firmware_->get(req.version());
+  if (!release) return Error{"not_found", "release " + std::to_string(req.version())};
+  // Invariant 7: only a compatible image is offered. The offer carries no
+  // board identity, so the hub is the check.
+  const auto& m = release->manifest;
+  if (!dev->board || dev->board->str() != m.board_id()) {
+    return Error{"incompatible_release", "release is for board '" + m.board_id() + "', " +
+                                             req.device_id() + " is '" +
+                                             (dev->board ? dev->board->str() : "undeclared") + "'"};
+  }
+  if (!m.board_revision().empty() && dev->board_revision != m.board_revision()) {
+    return Error{"incompatible_release", "release is for board revision '" + m.board_revision() +
+                                             "', " + req.device_id() + " is '" +
+                                             dev->board_revision.value_or("undeclared") + "'"};
   }
   campaigns_[device] = Campaign{req.version(), "scheduled", std::nullopt};
   api::CampaignResponse r;

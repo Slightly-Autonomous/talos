@@ -242,6 +242,38 @@ TEST(CoapIngress, SignedOtaCampaignUpdatesTheNodeEndToEnd) {
   EXPECT_GT(f.hub->metrics().ota_chunks_sent.load(), 0u);
 }
 
+TEST(CoapIngress, CampaignRefusedForAnotherBoardOrRevision) {
+  auto kp = generate_keypair();
+  ASSERT_TRUE(kp.ok());
+  sv::HubConfig extra;
+  auto* key = extra.add_firmware_signing_keys();
+  key->set_key_id("owner-2026");
+  key->set_public_key_hex(kp.value().public_key_hex);
+  Fixture f(extra);
+  const std::string image(512, 'x');
+  auto import = [&](const std::string& version, const std::string& board, const std::string& rev) {
+    talos::v1::FirmwareRelease m;
+    m.set_board_id(board);
+    m.set_board_revision(rev);
+    m.set_version(version);
+    EXPECT_TRUE(sign_release(m, image, kp.value().seed_hex, "owner-2026"));
+    EXPECT_TRUE(f.hub->import_firmware(PrincipalId("owner"), m, image));
+  };
+  import("3", "vision_node_v1", "proto-a");
+  import("4", "universal_controller_v1", "proto-b");
+  import("5", "universal_controller_v1", "proto-a");
+  auto start = [&](const std::string& device, std::uint32_t version) {
+    api::CampaignRequest c;
+    c.set_device_id(device);
+    c.set_version(version);
+    return f.hub->start_campaign(PrincipalId("owner"), c);
+  };
+  EXPECT_EQ(start("node-12", 3).error().code, "incompatible_release");  // other board
+  EXPECT_EQ(start("node-12", 4).error().code, "incompatible_release");  // other revision
+  EXPECT_EQ(start("lock-3", 5).error().code, "incompatible_release");   // board undeclared
+  EXPECT_TRUE(start("node-12", 5).ok());
+}
+
 // --- Protocol edge cases (handle() directly) -----------------------------------------------
 
 std::vector<std::uint8_t> request(const std::string& device, const std::vector<std::uint8_t>& key,
@@ -308,6 +340,25 @@ TEST(CoapIngress, ForgedUnknownBadPathDuplicateAndRateLimited) {
   EXPECT_EQ(reply_code(limited.handle(request("node-12", kNodeKey, 21, 3), "x")), coap::kChanged);
   EXPECT_EQ(reply_code(limited.handle(request("node-12", kNodeKey, 22, 4), "x")),
             coap::kTooManyRequests);
+}
+
+TEST(CoapIngress, ForgedFloodCannotThrottleTheGenuineDevice) {
+  Fixture f;
+  CoapServer limited(*f.hub, DeviceKeyMap{{"node-12", kNodeKey}}, 1, 2);
+  const std::vector<std::uint8_t> wrong(16, 0xAA);
+  // An attacker floods frames for node-12 with a bad tag from another peer.
+  for (std::uint16_t i = 0; i < 50; ++i) {
+    const auto code =
+        reply_code(limited.handle(request("node-12", wrong, 100 + i, 1), "6.6.6.6:1"));
+    EXPECT_TRUE(code == coap::kUnauthorized || code == coap::kTooManyRequests);
+  }
+  // The attacker's own bucket is empty: it now gets 4.29, not 4.01 forever.
+  EXPECT_EQ(reply_code(limited.handle(request("node-12", wrong, 200, 1), "6.6.6.6:1")),
+            coap::kTooManyRequests);
+  // The genuine node still gets through.
+  EXPECT_EQ(reply_code(limited.handle(request("node-12", kNodeKey, 300, 1), "10.0.0.12:5683")),
+            coap::kChanged);
+  EXPECT_EQ(journaled(*f.hub, "contact.opened"), 1u);
 }
 
 // The bench path before Thread: the node's CoAP datagrams travel as "@F <base64>" console

@@ -109,6 +109,19 @@ void DeviceRegistry::observe(const DeviceId& device, const fw::DeviceEvent& e, T
   while (t.recent.size() > kRecentPerDevice) t.recent.pop_front();
 }
 
+bool DeviceRegistry::observe_unjournaled(const DeviceId& device, const fw::DeviceEvent& e,
+                                         Timestamp at) {
+  const std::pair<std::uint32_t, std::uint32_t> pos{e.boot_epoch, e.seq};
+  DeviceTelemetry& t = devices_[device];
+  auto& seen = t.unjournaled_seen;
+  if (seen.contains(pos)) return false;
+  if (seen.size() >= kSeenPerDevice && pos < *seen.begin()) return false;
+  seen.insert(pos);
+  while (seen.size() > kSeenPerDevice) seen.erase(seen.begin());
+  observe(device, e, at);
+  return true;
+}
+
 const DeviceTelemetry* DeviceRegistry::find(const DeviceId& device) const {
   auto it = devices_.find(device);
   return it == devices_.end() ? nullptr : &it->second;

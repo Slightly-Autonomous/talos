@@ -38,15 +38,15 @@ requirements:
     severity: critical
     status: implemented
   - id: REQ-007
-    statement: Expired commands are never dispatched; late evidence is recorded faithfully
-    subsystem: core.execution
-    test: //core/execution:ledger_test
+    statement: Expired commands are never dispatched; dispatch is the adapter hand-off, so a command whose TTL passes while queued is never delivered; late evidence is recorded faithfully
+    subsystem: core.execution, core.engine, server
+    test: //core/execution:ledger_test, //core/engine:engine_test (CommandNotHandedOffWithinTtlExpiresAndIsNeverSent), //server:server_test (HttpE2E.ExpiredCommandIsNeverHandedToTheDevice)
     severity: critical
     status: implemented
   - id: REQ-008
-    statement: Only verified commands are reported as successful
+    statement: Only verified commands are reported as successful; the verifying observation is derived on the hub from the operation, never chosen by the caller; ack-only commands never verify
     subsystem: core.execution, web
-    test: //core/execution:ledger_test, web/src/contracts.test.ts
+    test: //core/execution:ledger_test, //core/execution:operations_test, //server:server_test (HttpE2E.CallerCannotChooseWhatIsFreshOrWhatVerifies), web/src/contracts.test.ts
     severity: critical
     status: implemented
   - id: REQ-009
@@ -62,9 +62,9 @@ requirements:
     severity: critical
     status: verified_sim
   - id: REQ-011
-    statement: Security-critical commands are denied when target state is stale; agents cannot unlock or disarm
+    statement: Security-critical commands are denied when target state is stale; agents cannot unlock or disarm, including by sending unlock args under a low-risk operation
     subsystem: core.policy, core.engine
-    test: //simulation/runner:scenario_test (stale_lock_state_blocks_command, agent_cannot_unlock_or_disarm)
+    test: //simulation/runner:scenario_test (stale_lock_state_blocks_command, agent_cannot_unlock_or_disarm), //server:server_test (HttpE2E.AgentCannotSmuggleUnlockArgsUnderALowRiskOperation)
     severity: critical
     status: verified_sim
   - id: REQ-012
@@ -134,15 +134,15 @@ requirements:
     severity: critical
     status: verified_sim
   - id: REQ-023
-    statement: Only Ed25519-signed releases from configured owner keys are offered; campaigns update nodes end to end with rollback safety
+    statement: Only Ed25519-signed releases from configured owner keys are offered, and only to devices whose board and revision match the release; campaigns update nodes end to end with rollback safety
     subsystem: server, firmware.ota
-    test: //server:coap_test (SignedOtaCampaignUpdatesTheNodeEndToEnd)
+    test: //server:coap_test (SignedOtaCampaignUpdatesTheNodeEndToEnd, CampaignRefusedForAnotherBoardOrRevision)
     severity: critical
     status: verified_sim
   - id: REQ-024
-    statement: Device health is projected from telemetry; never-reporting or silent devices are offline, never healthy
+    statement: Device health is projected from telemetry; never-reporting or silent devices are offline, never healthy; replayed or duplicate uplinks refresh nothing
     subsystem: server.device_registry
-    test: //server:coap_test (DebouncedDoorReachesTheJournalOnce...)
+    test: //server:coap_test (DebouncedDoorReachesTheJournalOnce...), //server:server_test (HttpE2E.ReplayedHeartbeatDoesNotKeepADeadDeviceAlive)
     severity: high
     status: verified_sim
   - id: REQ-025
@@ -175,3 +175,15 @@ requirements:
     test: //simulation/runner:backend_parity_test
     severity: high
     status: verified_sim
+  - id: REQ-030
+    statement: Each command operation fixes its args variant, target capability, risk, TTL bound and verifying observation in one core catalog; mismatched commands are denied before policy; rules act only as capped rule principals
+    subsystem: core.execution, core.engine, server.config
+    test: //core/execution:operations_test, //core/engine:engine_test, //server:server_test (Config.RulePrincipalsAreAlwaysRulesNeverConfiguredIdentities)
+    severity: critical
+    status: implemented
+  - id: REQ-031
+    statement: Device ingress is authenticated before it is rate limited; forged traffic for a device id cannot throttle that device, and observations are accepted only for capabilities the device declares, with a payload that fits the capability
+    subsystem: server.coap, core.ingest
+    test: //server:coap_test (ForgedFloodCannotThrottleTheGenuineDevice), //core/ingest:ingest_test (CapabilityMustBeDeclaredAndPayloadMustFitIt)
+    severity: high
+    status: implemented

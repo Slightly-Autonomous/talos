@@ -38,17 +38,26 @@ void send_error(httplib::Response& res, int status, const std::string& code,
   send(res, status, e);
 }
 
-int status_for(const Error& e) {
+}  // namespace
+
+int http_status_for(const Error& e) {
   if (e.code == "forbidden" || e.code == "denied") return 403;
   if (e.code == "not_found") return 404;
   if (e.code == "unknown_principal") return 403;
-  if (e.code == "conflict") return 409;
-  if (e.code == "invalid_release") return 400;
+  if (e.code == "conflict" || e.code == "stale_revision") return 409;
+  // Hub-side failures are not the caller's fault: never report them as 400.
+  if (e.code == "storage_error" || e.code == "corrupt_journal" || e.code == "encode_error" ||
+      e.code == "crypto_unavailable" || e.code == "schema_too_new" ||
+      e.code == "invalid_journal_entry" || e.code == "internal") {
+    return 500;
+  }
   return 400;
 }
 
+namespace {
+
 void send_error(httplib::Response& res, const Error& e) {
-  send_error(res, status_for(e), e.code, e.message);
+  send_error(res, http_status_for(e), e.code, e.message);
 }
 
 bool parse_body(const httplib::Request& req, httplib::Response& res,
@@ -79,10 +88,11 @@ std::uint64_t query_u64(const httplib::Request& req, const char* key, std::uint6
 }  // namespace
 
 HttpServer::HttpServer(HubService& hub, const Authenticator& auth,
-                       std::vector<std::string> cors_origins)
+                       std::vector<std::string> cors_origins, int max_event_streams)
     : hub_(hub),
       auth_(auth),
       cors_origins_(std::move(cors_origins)),
+      max_event_streams_(max_event_streams),
       server_(std::make_unique<httplib::Server>()) {
   server_->set_payload_max_length(kMaxFirmwareBodyBytes);
   routes();
@@ -180,12 +190,21 @@ void HttpServer::routes() {
 
   // Live journal stream. Clients must send the bearer header (use fetch
   // streaming, not EventSource): tokens never go in URLs.
+  // Each stream holds a worker thread, so streams are capped well below the
+  // pool size: device ingest and commands must always find a free worker.
   s.Get("/v1/events",
         principal([this](const PrincipalId&, const httplib::Request& req, httplib::Response& res) {
+          if (active_streams_->fetch_add(1) >= max_event_streams_) {
+            active_streams_->fetch_sub(1);
+            res.set_header("Retry-After", "5");
+            return send_error(res, 503, "too_many_streams", "too many live event streams");
+          }
           auto cursor = std::make_shared<std::uint64_t>(query_u64(req, "after", 0));
           res.set_header("Cache-Control", "no-cache");
+          auto streams = active_streams_;
           res.set_chunked_content_provider(
-              "text/event-stream", [this, cursor](std::size_t, httplib::DataSink& sink) {
+              "text/event-stream",
+              [this, cursor](std::size_t, httplib::DataSink& sink) {
                 auto entries = hub_.wait_for_entries(*cursor, std::chrono::seconds(15), 100);
                 if (entries.empty()) {
                   const std::string ping = ": keepalive\n\n";
@@ -199,7 +218,8 @@ void HttpServer::routes() {
                   *cursor = e.journal_seq;
                 }
                 return true;
-              });
+              },
+              [streams](bool) { streams->fetch_sub(1); });
         }));
 
   s.Get("/v1/config",

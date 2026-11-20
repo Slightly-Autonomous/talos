@@ -7,7 +7,11 @@
 namespace talos::fw {
 
 bool Ota::save() {
-  return p_.store.put(StoreKey::kOta, reinterpret_cast<const std::uint8_t*>(&rec_), sizeof rec_);
+  if (!p_.store.put(StoreKey::kOta, reinterpret_cast<const std::uint8_t*>(&rec_), sizeof rec_)) {
+    return false;
+  }
+  saved_received_ = rec_.received;
+  return true;
 }
 
 BootDecision Ota::boot() {
@@ -17,6 +21,7 @@ BootDecision Ota::boot() {
       n && *n == sizeof stored) {
     rec_ = stored;
   }
+  saved_received_ = rec_.received;
   BootDecision d{rec_.active_slot, rec_.active_version, false};
   switch (rec_.state) {
     case OtaState::kReadyToBoot:
@@ -83,12 +88,17 @@ bool Ota::chunk(const OtaChunk& c) {
   rec_.received += c.length;
   if (rec_.received == rec_.size) {
     rec_.state = verify_digest() ? OtaState::kReadyToBoot : OtaState::kFailed;
+    return save();
   }
-  return save();
+  if (rec_.received - saved_received_ >= kSaveEveryBytes) return save();
+  return true;
 }
 
 bool Ota::confirm() {
   if (rec_.state != OtaState::kPendingVerify) return false;
+  // Bootloader first: if it can't be told, stay pending (retried on the next
+  // health check) rather than record an image the bootloader will roll back.
+  if (!p_.flash.mark_running_valid()) return false;
   rec_.state = OtaState::kIdle;
   rec_.active_slot = rec_.target_slot;
   rec_.active_version = rec_.target_version;

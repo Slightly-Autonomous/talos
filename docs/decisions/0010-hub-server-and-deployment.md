@@ -33,8 +33,8 @@
 
 ## Deferred / known limits
 - The Postgres storage driver needs libpq. The interface and conformance suite are ready for it.
-- Supabase JWT auth and the relay role belong to the remote-access phase.
+- The relay role belongs to the remote-access phase. Supabase JWT auth is implemented (ADR 0015).
 - There is no per-principal *read* scoping yet: any authenticated principal can read state and journal. Read scopes arrive with multi-user support (spec §28 story 9).
-- Commands dispatched while no adapter polls stay queued in memory and are lost on restart. The ledger still ends them as `unknown_result`, so nothing is misreported. A durable adapter queue arrives with real device adapters (Phase 6).
-- There is no rate limiting yet beyond a 64 KB body cap.
+- Accepted commands wait in the engine until the target's adapter polls. The poll is the dispatch (ADR 0004). A command whose TTL passes first becomes `expired` and is never delivered. Pending commands survive a restart because they are rebuilt from the journal.
+- There is no per-principal HTTP rate limiting yet beyond a 64 KB body cap. Live `/v1/events` streams are capped at 16 concurrent (503 beyond that), so streams cannot starve device ingest of HTTP workers. Full-journal replays (`/v1/state_at`, `/v1/config?at=`, `/v1/rules/preview`) copy entries under the hub mutex and reduce outside it, but are still O(history). Snapshots are future work.
 - Time zones use a fixed UTC offset (no DST).

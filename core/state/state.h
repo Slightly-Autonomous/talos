@@ -56,7 +56,8 @@ PropertyState state_at(const IJournal& journal, Timestamp t);
 enum class Freshness : std::uint8_t {
   kUnknown,  // never reported: not "clear", not "healthy"
   kFresh,
-  kStale,  // last report older than max_age
+  kStale,  // last report older than max_age, or received "in the future"
+           // after a hub clock step back (age unknown, so fail closed)
 };
 
 Freshness freshness(const PropertyState& state, const CapabilityRef& ref, Timestamp now,

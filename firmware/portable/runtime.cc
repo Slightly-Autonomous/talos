@@ -1,6 +1,7 @@
 #include "firmware/portable/runtime.h"
 
 #include <cstring>
+#include <limits>
 #include <type_traits>
 
 namespace talos::fw {
@@ -26,7 +27,20 @@ bool save(IStore& store, StoreKey key, const T& v) {
 struct SlotPowerBlob {
   std::uint8_t powering = NodeRuntime::kNotPowering;  // slot whose AON was being switched on
   std::uint8_t quarantined = 0;                       // bit n: slot n stays unpowered
+  std::array<std::uint8_t, kSlots> strikes{};         // consecutive resets while powering slot n
 };
+
+// The last epoch is never handed out: reaching it means the counter is used up.
+constexpr std::uint32_t kEpochExhausted = std::numeric_limits<std::uint32_t>::max();
+
+TimeMs quarantine_backoff_ms(std::uint8_t strikes) {
+  const unsigned extra = strikes > NodeRuntime::kQuarantineStrikes
+                             ? static_cast<unsigned>(strikes - NodeRuntime::kQuarantineStrikes)
+                             : 0u;
+  TimeMs ms = NodeRuntime::kQuarantineRetryMs;
+  for (unsigned i = 0; i < extra && ms < NodeRuntime::kQuarantineRetryMaxMs; ++i) ms *= 2;
+  return ms < NodeRuntime::kQuarantineRetryMaxMs ? ms : NodeRuntime::kQuarantineRetryMaxMs;
+}
 
 struct PendingBlob {
   std::uint32_t count = 0;
@@ -69,28 +83,47 @@ void NodeRuntime::restore_pending_critical() {
   }
 }
 
+bool NodeRuntime::persist_boot_epoch() {
+  if (boot_epoch_ == kEpochExhausted) return false;  // fail loudly: never send again
+  return save(p_.store, StoreKey::kBootEpoch, boot_epoch_);
+}
+
 void NodeRuntime::boot() {
-  // Persistent boot epoch: never reuse (epoch, seq) after a reset.
+  feed_watchdog();
+  // Persistent boot epoch: strictly increasing, never reuse (epoch, seq) after a
+  // reset. Until it is written nothing is transmitted (step() retries).
   std::uint32_t epoch = 0;
   load(p_.store, StoreKey::kBootEpoch, epoch);
-  boot_epoch_ = epoch + 1;
-  save(p_.store, StoreKey::kBootEpoch, boot_epoch_);
+  boot_epoch_ = epoch >= kEpochExhausted - 1 ? kEpochExhausted : epoch + 1;
+  epoch_persisted_ = persist_boot_epoch() || persist_boot_epoch();
+  next_epoch_retry_ = p_.clock.now_ms() + kEpochRetryMs;
   seq_ = 0;
   load(p_.store, StoreKey::kConfig, config_);
 
   const BootDecision d = ota_.boot();
   restore_pending_critical();
   board_ok_ = p_.power.begin();  // safe outputs before anything touches a slot
-  // A reset while a slot's AON was being switched on means that card pulled the
-  // core rail down (no current limit on AON): keep it off instead of boot-looping.
+  // A reset while a slot's AON was being switched on may mean that card pulled
+  // the core rail down (no current limit on AON). It may also be a USB unplug
+  // or a watchdog: one is a strike, kQuarantineStrikes in a row keep the slot
+  // off instead of boot-looping, and the quarantine is retried with backoff.
   SlotPowerBlob sp;
   load(p_.store, StoreKey::kSlotPower, sp);
   if (sp.powering < kSlots) {
-    sp.quarantined = static_cast<std::uint8_t>(sp.quarantined | (1u << sp.powering));
+    auto& n = sp.strikes[sp.powering];
+    if (n < 0xFF) ++n;
+    if (n >= kQuarantineStrikes) {
+      sp.quarantined = static_cast<std::uint8_t>(sp.quarantined | (1u << sp.powering));
+    }
     sp.powering = kNotPowering;
     save(p_.store, StoreKey::kSlotPower, sp);
   }
   quarantined_ = sp.quarantined;
+  strikes_ = sp.strikes;
+  const TimeMs now = p_.clock.now_ms();
+  for (std::uint8_t i = 0; i < kSlots; ++i) {
+    quarantine_retry_at_[i] = now + quarantine_backoff_ms(strikes_[i]);
+  }
   aon_on_ = 0;
   mode_ = compute_mode();
   discover();
@@ -113,13 +146,19 @@ void NodeRuntime::emit_ota_status(Priority priority) {
 
 void NodeRuntime::discover() {
   const TimeMs now = p_.clock.now_ms();
-  for (std::uint8_t i = 0; i < kSlots; ++i) discover_slot(i, now);
+  for (std::uint8_t i = 0; i < kSlots; ++i) {
+    discover_slot(i, now);
+    feed_watchdog();  // each slot can take tens of ms (rail settle, NVS, sensor probes)
+  }
 }
 
 void NodeRuntime::rescan(std::optional<std::uint8_t> slot) {
   const TimeMs now = p_.clock.now_ms();
   for (std::uint8_t i = 0; i < kSlots; ++i) {
-    if (!slot || *slot == i) discover_slot(i, now);
+    if (!slot || *slot == i) {
+      discover_slot(i, now);
+      feed_watchdog();
+    }
   }
   admit_power();
 }
@@ -130,11 +169,26 @@ void NodeRuntime::discover_slot(std::uint8_t i, TimeMs now) {
   const SlotWiring& w = p_.board.slots[i];
   if (!w.present) return;
   if (!power_slot(i)) return;
-  SlotIo io(p_, i);
-  struct Deselect {  // leave the root bus free whatever happens below
-    SlotIo& io;
-    ~Deselect() { io.deselect(); }
-  } deselect{io};
+  bool keep_powered = true;
+  {
+    SlotIo io(p_, i);
+    keep_powered = init_slot(i, io, now);
+    io.deselect();  // leave the root bus free, and never unpower a selected branch
+  }
+  // A card that can't be used is not left drawing from AON (ADR 0013: unknown
+  // codes are never powered). Rescan powers it again.
+  if (!keep_powered) unpower_slot(i);
+}
+
+void NodeRuntime::unpower_slot(std::uint8_t i) {
+  if (!p_.board.slot_io[i].aon_enable.wired()) return;
+  p_.power.set_rail(i, Rail::kAlwaysOn3v3, false);
+  aon_on_ = static_cast<std::uint8_t>(aon_on_ & ~(1u << i));
+}
+
+bool NodeRuntime::init_slot(std::uint8_t i, SlotIo& io, TimeMs now) {
+  SlotState& st = slots_[i];
+  const SlotWiring& w = p_.board.slots[i];
   const IdRead id = read_module_id(io, p_.board.id_eeprom_address);
   st.code = id.code;
   auto fault = [&](ModuleFault f) {
@@ -146,28 +200,32 @@ void NodeRuntime::discover_slot(std::uint8_t i, TimeMs now) {
   switch (id.status) {
     case IdRead::Status::kAbsent:
       // A seated card whose ID does not answer is a fault, not an empty slot.
-      if (seated.value_or(false)) fault(ModuleFault::kNoIdEeprom);
-      return;
+      // It stays on AON so the bench can still scan the card's other devices.
+      if (seated.value_or(false)) {
+        fault(ModuleFault::kNoIdEeprom);
+        return true;
+      }
+      return false;
     case IdRead::Status::kMuxFault:
-      fault(ModuleFault::kMuxFault);
-      return;
+      fault(ModuleFault::kMuxFault);  // the mux, not the card: leave the card alone
+      return true;
     case IdRead::Status::kBlank:
-      fault(ModuleFault::kIdBlank);  // never powered past AON
-      return;
+      fault(ModuleFault::kIdBlank);  // AON goes off again
+      return false;
     case IdRead::Status::kCorrupt:
       fault(ModuleFault::kIdCorrupt);
-      return;
+      return false;
     case IdRead::Status::kOk:
       break;
   }
   const ModuleInfo* info = find_module(st.code);
   if (!info) {
-    fault(ModuleFault::kUnknownModule);  // unknown module: never powered
-    return;
+    fault(ModuleFault::kUnknownModule);  // unknown module: never left powered
+    return false;
   }
   if ((info->needs_wake && w.wake_line == 0xFF) || (info->needs_5v && !w.has_5v)) {
     fault(ModuleFault::kMissingResource);
-    return;
+    return false;
   }
   bool ok = false;
   switch (st.code) {
@@ -201,11 +259,32 @@ void NodeRuntime::discover_slot(std::uint8_t i, TimeMs now) {
   if (!ok) {
     st.driver = std::monostate{};
     fault(ModuleFault::kInitFailed);
-    return;
+    return false;
   }
   st.enabled = true;
   emit(i, EventKind::kModulePresent, Priority::kP2Health, true, static_cast<std::int32_t>(st.code),
        0);
+  return true;
+}
+
+void NodeRuntime::save_slot_power(std::uint8_t powering) {
+  SlotPowerBlob sp;
+  sp.powering = powering;
+  sp.quarantined = quarantined_;
+  sp.strikes = strikes_;
+  save(p_.store, StoreKey::kSlotPower, sp);
+}
+
+void NodeRuntime::retry_quarantined(TimeMs now) {
+  for (std::uint8_t i = 0; i < kSlots; ++i) {
+    const auto bit = static_cast<std::uint8_t>(1u << i);
+    if (!(quarantined_ & bit) || now < quarantine_retry_at_[i]) continue;
+    // Released in RAM only: power_slot() persists the attempt marker, so if the
+    // card really shorts AON the next boot counts another strike and backs off further.
+    quarantined_ = static_cast<std::uint8_t>(quarantined_ & ~bit);
+    rescan(i);
+    quarantine_retry_at_[i] = now + quarantine_backoff_ms(strikes_[i]);
+  }
 }
 
 bool NodeRuntime::power_slot(std::uint8_t i) {
@@ -231,21 +310,22 @@ bool NodeRuntime::power_slot(std::uint8_t i) {
     return true;
   }
   // Record the attempt first: if this card shorts AON the node resets right here,
-  // and the next boot finds the marker and quarantines the slot.
-  SlotPowerBlob sp{i, quarantined_};
-  save(p_.store, StoreKey::kSlotPower, sp);
+  // and the next boot finds the marker and counts a strike against the slot.
+  save_slot_power(i);
   p_.power.set_rail(i, Rail::kAlwaysOn3v3, true);
   p_.clock.delay_ms(kSlotPowerSettleMs);
-  sp.powering = kNotPowering;
-  save(p_.store, StoreKey::kSlotPower, sp);
+  strikes_[i] = 0;  // it came up: the earlier resets were not this card
+  save_slot_power(kNotPowering);
   aon_on_ = static_cast<std::uint8_t>(aon_on_ | bit);
   return true;
 }
 
 void NodeRuntime::clear_quarantine(std::uint8_t slot) {
-  if (slot >= kSlots || !(quarantined_ & (1u << slot))) return;
+  if (slot >= kSlots) return;
+  if (!(quarantined_ & (1u << slot)) && strikes_[slot] == 0) return;
   quarantined_ = static_cast<std::uint8_t>(quarantined_ & ~(1u << slot));
-  save(p_.store, StoreKey::kSlotPower, SlotPowerBlob{kNotPowering, quarantined_});
+  strikes_[slot] = 0;
+  save_slot_power(kNotPowering);
 }
 
 std::uint32_t NodeRuntime::sustained_budget_mw() {
@@ -304,8 +384,10 @@ void NodeRuntime::handle(const Downlink& d) {
   if (const auto* ack = std::get_if<Ack>(&d)) {
     const bool was_critical_pending = queue_.ack(ack->boot_epoch, ack->seq);
     if (was_critical_pending) persist_pending_critical();
-    // Reaching the hub proves the trial image works end to end.
-    if (ota_.record().state == OtaState::kPendingVerify && ota_.confirm()) {
+    // Health check for a trial image: it reached the hub end to end, and the
+    // board took its safe state at boot. Only then is it marked valid (here and
+    // in the bootloader); otherwise the next reboot rolls it back.
+    if (ota_.record().state == OtaState::kPendingVerify && board_ok_ && ota_.confirm()) {
       emit_ota_status(Priority::kP1State);
     }
   } else if (const auto* cfg = std::get_if<ConfigUpdate>(&d)) {
@@ -346,7 +428,12 @@ void NodeRuntime::handle(const Downlink& d) {
 }
 
 void NodeRuntime::step() {
+  feed_watchdog();
   const TimeMs now = p_.clock.now_ms();
+  if (!epoch_persisted_ && now >= next_epoch_retry_) {
+    epoch_persisted_ = persist_boot_epoch();
+    next_epoch_retry_ = now + kEpochRetryMs;
+  }
   while (auto d = p_.link.receive()) handle(*d);
   // One progress report per batch of chunks: the hub streams the next ones
   // in its reply (device-initiated exchange, sleepy-node friendly).
@@ -398,7 +485,11 @@ void NodeRuntime::step() {
     next_heartbeat_ = now + static_cast<TimeMs>(config_.heartbeat_interval_ms) * factor;
   }
 
-  for (int n = 0; n < kSendsPerStep; ++n) {
+  if (quarantined_) retry_quarantined(now);
+
+  // Nothing leaves before the epoch is persisted: the hub would drop a reused
+  // (epoch, seq) as a duplicate. Events wait in the queue meanwhile.
+  for (int n = 0; epoch_persisted_ && n < kSendsPerStep; ++n) {
     auto* s = queue_.next_due(now);
     if (!s) break;
     p_.link.send(s->event);
@@ -410,7 +501,18 @@ void NodeRuntime::step() {
 TimeMs NodeRuntime::next_wake_ms() const {
   const TimeMs now = p_.clock.now_ms();
   TimeMs next = next_heartbeat_;
-  if (auto due = queue_.earliest_due(); due && *due < next) next = *due;
+  if (!epoch_persisted_) {
+    if (next_epoch_retry_ < next) next = next_epoch_retry_;
+  } else if (auto due = queue_.earliest_due(); due && *due < next) {
+    next = *due;
+  }
+  if (quarantined_) {
+    for (std::uint8_t i = 0; i < kSlots; ++i) {
+      if ((quarantined_ & (1u << i)) && quarantine_retry_at_[i] < next) {
+        next = quarantine_retry_at_[i];
+      }
+    }
+  }
   for (const auto& st : slots_) {
     if (!st.enabled) continue;
     const TimeMs due = std::visit(

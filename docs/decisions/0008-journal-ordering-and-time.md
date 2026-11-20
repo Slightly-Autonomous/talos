@@ -9,7 +9,7 @@
 | `received_at` | hub clock, at append | When the hub accepted the entry | "State at time *t*", retention, UI timelines |
 | `observed_at` | device clock | When the device thinks it happened; may be wrong or absent | Display and diagnostics only. **Never used for ordering.** |
 
-`received_at` is kept **non-decreasing in journal order**. If the hub clock steps backwards, the entry keeps the previous `received_at` and is flagged `clock_regressed`. This makes `state_at(t)` (all entries with `received_at <= t`) always a clean journal prefix.
+`received_at` is kept **non-decreasing in journal order**. If the hub clock steps backwards, the entry keeps the previous `received_at` and is flagged `clock_regressed`. This makes `state_at(t)` (all entries with `received_at <= t`) always a clean journal prefix. Freshness fails closed after such a step: a capability whose `received_at` is ahead of the current hub time reads as **stale**, because its true age is unknown (`StateTest.ReceiptAheadOfTheClockIsStaleNotFresh`).
 
 ## Source positions and dedup
 - Each device reports `(boot_epoch, sequence)`. `boot_epoch` is a persistent counter incremented on every boot, and `sequence` restarts at each boot. This identifies an event **at its source** and orders events **only within one device**.

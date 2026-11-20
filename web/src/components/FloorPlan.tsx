@@ -6,6 +6,9 @@ import type { Point, Property } from "@talos/contracts/talos/v1/property_pb";
 import {
   bounds,
   deviceHealth,
+  portalDisplay,
+  portalLabel,
+  portalShowsLocked,
   portalStatus,
   wedgePath,
   zoneActivity,
@@ -95,26 +98,29 @@ export function FloorPlan({ property, state, nowMs, heat }: Props) {
         const s = asset.segment;
         if (!s?.a || !s.b) return null;
         const st = portals.get(asset.id);
-        const cls =
-          st?.open === undefined ? "portal-unknown" : st.open ? "portal-open" : "portal-closed";
+        const shown = portalDisplay(st);
+        const locked = portalShowsLocked(st);
+        // data-open/data-locked carry what is shown: a stale report is
+        // "unknown", never its last value. data-last-* keep that for debugging.
         return (
           <g
             key={asset.id}
             data-testid={`portal-${asset.id}`}
-            data-open={String(st?.open)}
-            data-locked={String(st?.locked)}
+            data-open={shown === "unknown" ? "unknown" : String(shown === "open")}
+            data-locked={st?.locked === undefined || st.lockedStale ? "unknown" : String(locked)}
+            data-stale={String(!!st?.stale)}
+            data-last-open={String(st?.open)}
+            data-last-locked={String(st?.locked)}
           >
             <line
-              className={`portal ${cls} ${st?.locked ? "portal-locked" : ""}`}
+              className={`portal portal-${shown} ${locked ? "portal-locked" : ""}`}
               x1={X(s.a.x)}
               y1={Y(s.a.y)}
               x2={X(s.b.x)}
               y2={Y(s.b.y)}
             >
               <title>
-                {asset.id}: {st?.open === undefined ? "unknown" : st.open ? "open" : "closed"}
-                {st?.locked === undefined ? "" : st.locked ? ", locked" : ", unlocked"}
-                {st?.stale ? " (stale)" : ""}
+                {asset.id}: {portalLabel(st)}
               </title>
             </line>
           </g>

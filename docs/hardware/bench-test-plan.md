@@ -167,7 +167,7 @@ PPK2 source mode on J3 (3.7 V) with the 10 kΩ NTC cable; no USB; ESP held in re
 | S-P01 | First power | V3V3_CORE 3.25–3.35 V; abort > 3.45 V or > 50 mA | PPK2, A |
 | S-P02 | VBAT ramp 2.8→4.0→2.8 V | SYS on between 3.08–3.46 V [VBATPOR], off near 3.0 V | PPK2, A |
 | S-P03 | USB only, no pack (IT-10) | CHG_IN ramps ~780 V/s; ST = 1; PG = 0; boots; no resets in 10 min | A |
-| S-P04 | PR1 threshold: bench PV 6 V, PPK2 sweeps IN1 5.0→3.5→5.0 V | ST flips at 3.99–4.39 V falling, 4.07–4.43 V rising | A |
+| S-P04 | PR1 threshold: bench PV 6 V, PPK2 sweeps IN1 5.0→3.5→5.0 V | ST flips within 3.61–4.13 V (27k/10k divider; VREF and 1 % resistor tolerance) | A |
 | S-P05 | USB priority with PV 6 V and 12 V | ST = 1; PV draws < 50 µA | supply |
 | S-P06 | PV only 5/6/7 V | ST = 0; USB_VBUS < 0.5 V | supply |
 | S-P07 | Reverse PV −7 V, 100 mA limit; then 12 V and 14 V | ≤ 0.5 mA; D3 conducts only above 13.3 V; boards still work | supply |
@@ -340,7 +340,7 @@ What the decisions became in hardware and firmware:
 | TL-TEST-001 at-speed loopback | 10k resistors; or LVC1G125 buffers | resistors |
 | SHT40 heater power on a slot | ≤ 20 mW only; or allow 110 mW (33 mA) | ≤ 20 mW in the field, 110 mW on TL-DBG-001 only |
 | LIS2DW12 sleep ODR | 12.5 Hz (1 µA) or 100 Hz (5 µA) | decide after strike data (C3, Stage 3) |
-| PV panel Voc | ≤ 12 V or wider | must be ≤ 12 V with SMAJ12A |
+| PV panel Voc | ≤ 9 V at the coldest rated temperature (HD-019) | SMAJ12A conducts from 13.3 V; the linear charger overheats near 12 V |
 | Module codes | point existing codes at Rev A manifests; or new codes | new codes per Rev A card plus one for TL-TEST-001 |
 
 ## 9. Open bench questions

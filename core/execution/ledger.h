@@ -9,6 +9,7 @@
 #include <map>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "core/base/result.h"
@@ -28,8 +29,13 @@ struct CommandRecord {
 
 struct RequestResult {
   CommandId id;            // existing id when duplicate
-  bool duplicate = false;  // same idempotency key seen before
+  bool duplicate = false;  // same principal reused an idempotency key or command id
+  // The command id already belongs to another principal's command: nothing
+  // was recorded and nothing about that command is revealed.
+  bool conflict = false;
   std::vector<CommandTransition> transitions;
+  // Set when journaling failed; the request was not (fully) recorded.
+  std::optional<Error> error;
 };
 
 class CommandLedger {
@@ -57,7 +63,9 @@ class CommandLedger {
 
  private:
   std::map<CommandId, CommandRecord> records_;
-  std::map<std::string, CommandId> by_idempotency_key_;
+  // Keyed by (principal, idempotency key): one principal's key never matches
+  // another principal's command.
+  std::map<std::pair<PrincipalId, std::string>, CommandId> by_idempotency_key_;
 };
 
 }  // namespace talos

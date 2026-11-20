@@ -5,6 +5,7 @@
 
 #include "codec/codec.h"
 #include "codec/yaml_loader.h"
+#include "core/execution/operations.h"
 
 namespace talos::server {
 
@@ -137,7 +138,9 @@ Result<LoadedConfig> build_config(v1::HubConfig hub, const std::string& base_dir
     e.principals.push_back({PrincipalId(p.id()), kind, {{e.property.id, to_risk(p.max_risk())}}});
   }
   out.base_principals = e.principals;
-  e.principals = with_rule_principals(out.base_principals, e.rules, e.property.id);
+  auto with_rules = with_rule_principals(out.base_principals, e.rules, e.property.id);
+  if (!with_rules) return with_rules.error();
+  e.principals = std::move(with_rules).value();
   *out.bootstrap_document.mutable_property() = out.property_proto;
   *out.bootstrap_document.mutable_rules() = hub.rules();
   if (auto parsed = parse_document(out.bootstrap_document, e.property.id); !parsed) {
@@ -149,7 +152,14 @@ Result<LoadedConfig> build_config(v1::HubConfig hub, const std::string& base_dir
                      u.principal_id() + "'");
     }
   }
-  std::set<std::string> device_tokens;
+  // One hash, one identity: a hash shared between credentials would make the
+  // authenticator silently pick one of them.
+  std::set<std::string> token_hashes;
+  for (const auto& p : hub.principals()) {
+    if (!p.token_sha256().empty() && !token_hashes.insert(p.token_sha256()).second) {
+      return invalid("token hashes must be unique across credentials (" + p.id() + ")");
+    }
+  }
   for (const auto& d : hub.devices()) {
     if (!e.property.find_device(DeviceId(d.device_id()))) {
       return invalid("device credential for unknown device " + d.device_id());
@@ -157,8 +167,8 @@ Result<LoadedConfig> build_config(v1::HubConfig hub, const std::string& base_dir
     if (!is_sha256_hex(d.token_sha256())) {
       return invalid("device " + d.device_id() + ": token_sha256 must be 64 lowercase hex chars");
     }
-    if (!device_tokens.insert(d.token_sha256()).second) {
-      return invalid("device tokens must be unique (" + d.device_id() + ")");
+    if (!token_hashes.insert(d.token_sha256()).second) {
+      return invalid("token hashes must be unique across credentials (" + d.device_id() + ")");
     }
   }
 
@@ -172,12 +182,19 @@ Result<LoadedConfig> build_config(v1::HubConfig hub, const std::string& base_dir
   return out;
 }
 
-std::vector<Principal> with_rule_principals(std::vector<Principal> base,
-                                            const std::vector<Rule>& rules,
-                                            const PropertyId& property) {
+Result<std::vector<Principal>> with_rule_principals(std::vector<Principal> base,
+                                                    const std::vector<Rule>& rules,
+                                                    const PropertyId& property) {
+  const std::size_t configured = base.size();
   for (const auto& rule : rules) {
+    for (std::size_t i = 0; i < configured; ++i) {
+      if (base[i].id == rule.principal) {
+        return invalid("rule " + rule.id.str() + " uses principal '" + rule.principal.str() +
+                       "', which is a configured principal; rules act under their own id");
+      }
+    }
     bool present = false;
-    for (const auto& p : base) present |= p.id == rule.principal;
+    for (std::size_t i = configured; i < base.size(); ++i) present |= base[i].id == rule.principal;
     if (!present) {
       base.push_back(
           {rule.principal, PrincipalKind::kRule, {{property, RiskClass::kDisruptiveOutput}}});
@@ -213,13 +230,52 @@ Result<ParsedDocument> parse_document(const v1::ConfigDocument& doc,
       return invalid("rule " + ru.id.str() + " uses unknown zone " + ru.trigger.zone->str());
     }
     for (const auto& a : ru.actions) {
-      if (!out.property.find_device(a.target.device)) {
+      const Device* device = out.property.find_device(a.target.device);
+      if (!device) {
         return invalid("rule " + ru.id.str() + " targets unknown device " + a.target.device.str());
+      }
+      if (!device->declares(a.target.capability)) {
+        return invalid("rule " + ru.id.str() + " targets " + a.target.capability.str() +
+                       ", which " + a.target.device.str() + " does not declare");
+      }
+      // The engine re-checks at run time; refusing here keeps a rule that
+      // could never be accepted out of the active configuration.
+      Command shape;
+      shape.operation = a.operation;
+      shape.target = a.target;
+      shape.args = a.args;
+      shape.expires_at = Timestamp{} + a.ttl;
+      shape.verification = a.verification;
+      shape.verification_window = a.verification_window;
+      shape.expect = a.expect;
+      if (auto n = normalize_command(shape); !n) {
+        return invalid("rule " + ru.id.str() + " action " + a.operation + ": " + n.error().code +
+                       " (" + n.error().message + ")");
       }
     }
     out.rules.push_back(ru);
   }
   return out;
+}
+
+Status check_dev_mode_hosts(const v1::HubConfig& hub, const std::string& http_host,
+                            bool allow_dev_on_network) {
+  if (!hub.dev_mode() || allow_dev_on_network) return Status::Ok();
+  auto loopback = [](const std::string& h) {
+    return h == "127.0.0.1" || h == "localhost" || h == "::1";
+  };
+  std::vector<std::string> hosts{http_host};
+  if (hub.coap().enabled()) {
+    hosts.push_back(hub.coap().listen_host().empty() ? http_host : hub.coap().listen_host());
+  }
+  for (const auto& h : hosts) {
+    if (!loopback(h)) {
+      return Error{"dev_mode_on_network",
+                   "refusing to listen on " + h +
+                       ": config has dev_mode=true (well-known dev tokens and keys)."};
+    }
+  }
+  return Status::Ok();
 }
 
 Result<LoadedConfig> load_config(const std::string& path) {

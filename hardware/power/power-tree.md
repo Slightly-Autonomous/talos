@@ -18,9 +18,9 @@ PV jack ─ SS34 ─ SMAJ12A ─ PV_IN ─────┘   (IN2 fallback, ST→
 | Battery only | BAT → BQ25186 BATFET → SYS_PATH → TPS63900 | Boots and sleeps; about 24 µA deep sleep (model) | Below VBUVLO the charger cuts SYS. Check pack protection and firmware low-battery shedding |
 | USB only, no battery | USB → TPS2121 IN1 → BQ25186 IN → SYS (4.5 V reg) | Runs normally. SYS is supplied from IN with an empty or missing battery *(src SLUSF69 §6.1)* | Charger sees no battery and may toggle detection. Bench IT-10 |
 | USB + battery | USB powers SYS and charges, ICHG ≤ 300 mA (fw) | Unplugging USB switches SYS to the battery seamlessly *(src §6.1)* | Brown-out during the switch: IT-09 |
-| PV + battery | PV → IN2 → BQ25186. VINDPM loads the panel and tracks VBAT | Charges by day, runs on the battery at night. ICHG ≤ 200 mA on PV (thermal) | Panel Voc must stay ≤ 12 V (TVS standoff) and below the 18.5 V OVP. Cloud transients |
+| PV + battery | PV → IN2 → BQ25186. VINDPM loads the panel and tracks VBAT | Charges by day, runs on the battery at night. ICHG ≤ 200 mA on PV (thermal) | Panel Voc must stay ≤ 9 V at the coldest rated temperature (HD-019): the SMAJ12A starts conducting at 13.3 V and the BQ25186 would run near 1.3 W in thermal regulation at 12 V. Cloud transients |
 | PV only, no battery | Same path | **Not supported**: it may brown out at dusk or in cloud. Firmware reports `power.source=pv_no_battery` as degraded | Document as refused, matching the handoff §20 |
-| USB + PV + battery | TPS2121 selects USB (priority) and blocks reverse current into the panel | No cross-feed. ST tells firmware which source is active | PR1/CP2 divider values are TBD (HD-007) |
+| USB + PV + battery | TPS2121 selects USB (priority) and blocks reverse current into the panel | No cross-feed. ST tells firmware which source is active | PR1 divider 27k/10k, CP2 to GND (VREF priority mode): switchover 3.61–4.13 V |
 | Reverse PV polarity | SS34 blocks | No damage within the diode/TVS rating | TVS orientation review item |
 | Over-voltage PV | SMAJ12A clamps; TPS2121 24 V abs max; BQ25186 OVP 18.5 V | Survives within the TVS energy rating | Size the TVS to the panel's short-circuit current |
 | Deeply discharged battery | BQ25186 precharge | Precharge or refuse | NTC cold and hot thresholds vs chemistry (HD-006) |

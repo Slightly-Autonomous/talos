@@ -88,4 +88,49 @@ describe("DevSim", () => {
     const lockState = observations(calls).find((c) => c.body!.eventType === "lock.state");
     expect(lockState!.body!.payload).toEqual({ lock: { locked: false } });
   });
+
+  test("refuses commands past expiresAtUnixMs and never acts on them", async () => {
+    const now = 1_800_000_000_000;
+    const pending = {
+      "lock-3": [
+        { id: "late", expiresAtUnixMs: String(now - 1), args: { setLocked: { locked: true } } },
+        { id: "edge", expiresAtUnixMs: String(now), args: { setLocked: { locked: true } } },
+      ],
+      patio_speaker: [
+        { id: "ok", expiresAtUnixMs: String(now + 5000), args: { audioSpeak: { text: "hi" } } },
+      ],
+    };
+    const hub = fakeHub(pending);
+    const s = new DevSim({
+      hubUrl: "http://hub",
+      devices: DEV_DEVICES,
+      fetch: hub.fetch,
+      speakerLatencyMs: 0,
+      lockTravelMs: 0,
+      nowMs: () => now,
+    });
+    await s.pollOnce();
+    const acks = hub.calls.filter((c) => c.path === "/v1/devices/acks").map((c) => c.body);
+    expect(acks).toContainEqual({ commandId: "late", accepted: false, detail: "expired" });
+    expect(acks).toContainEqual({ commandId: "edge", accepted: false, detail: "expired" });
+    expect(acks).toContainEqual({ commandId: "ok", accepted: true, detail: "playing" });
+    expect(s.status().devices["lock-3"]!.state.locked).toBeUndefined();
+    expect(observations(hub.calls).map((c) => c.body!.eventType)).toEqual([
+      "audio.playback_started",
+    ]);
+  });
+
+  test("keeps a base-path prefix and reports non-JSON hub errors", async () => {
+    const paths: string[] = [];
+    const s = new DevSim({
+      hubUrl: "http://hub/talos",
+      devices: DEV_DEVICES,
+      fetch: (async (input: string | URL) => {
+        paths.push(new URL(input.toString()).pathname);
+        return new Response("<html>bad gateway</html>", { status: 502 });
+      }) as typeof fetch,
+    });
+    await expect(s.heartbeat("node-07")).rejects.toThrow(/502/);
+    expect(paths).toEqual(["/talos/v1/devices/observations"]);
+  });
 });

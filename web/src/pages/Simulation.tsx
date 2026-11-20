@@ -2,10 +2,9 @@
 // acts as real devices over the hub's device API, so everything here flows
 // through the same ingress, rules and policy as physical hardware.
 import { useEffect, useState } from "react";
-import { create } from "@bufbuild/protobuf";
 import { HubError } from "@talos/contracts/client";
-import { CommandRequestSchema } from "@talos/contracts/talos/api/v1/api_pb";
 import { useHub } from "../hub/HubProvider";
+import { lockCommandRequest } from "../model/commands";
 
 const DEVSIM_URL = import.meta.env.VITE_DEVSIM_URL ?? "http://localhost:8090";
 
@@ -50,20 +49,7 @@ export function Simulation() {
   };
 
   const lockDoor = (locked: boolean) =>
-    client.requestCommand(
-      create(CommandRequestSchema, {
-        commandId: `ui-lock-${Date.now()}`,
-        operation: "access.set_locked",
-        target: { deviceId: "lock-3", capabilityId: "access.lock" },
-        args: { kind: { case: "setLocked", value: { locked } } },
-        ttlMs: 5000,
-        verificationWindowMs: 5000,
-        expect: {
-          source: { deviceId: "lock-3", capabilityId: "access.lock" },
-          payload: { kind: { case: "lock", value: { locked } } },
-        },
-      }),
-    );
+    client.requestCommand(lockCommandRequest("lock-3", locked, Date.now()));
 
   if (!status) {
     return (

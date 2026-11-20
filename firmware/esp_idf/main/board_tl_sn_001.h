@@ -23,6 +23,13 @@ inline constexpr int kBatterySenseAdc = 1;  // ADC1_CH0, 4.7M/4.7M divider
 // TCA9546A RESET_N through R_MUXRST (0R) from the U0RXD pad; R33 100k keeps it
 // high until the GPIO is configured. Pull the 0R to use UART0 RX for a console.
 inline constexpr std::uint8_t kMuxReset = 23;
+// Shared SPI to all four slots (ledger pads 18/19/9): SCK = IO4 (MTCK, weak
+// pull-up after reset), MOSI = IO5 (MTDI), MISO = IO0. Parked at boot by
+// esp::Gpio. Digital pads: they lose this state in deep sleep, so the board
+// needs pull-downs (sn-mcu-slots M3, hardware side, not yet in the netlist).
+inline constexpr std::uint8_t kSpiSck = 4;
+inline constexpr std::uint8_t kSpiMosi = 5;
+inline constexpr std::uint8_t kSpiMiso = 0;
 
 // I/O expanders and charger on the root I2C bus (intended-netlist.json):
 //   EXP_A 0x20: P00-P03 SLOT_SW_EN0-3, P04-P07 SLOT_AON_EN0-3,
@@ -56,6 +63,9 @@ inline BoardSupport tl_sn_001() {
   b.source_st = {kExpB, 14};
   b.sw_fault_n = {kExpB, 15};
   b.mux_reset_line = kMuxReset;
+  b.spi_sck_line = kSpiSck;
+  b.spi_mosi_line = kSpiMosi;
+  b.spi_miso_line = kSpiMiso;
   b.charger_address = kCharger;
   // Module admission budget on USB (provisional): every slot rail hangs off the TPS63900, which
   // guarantees 0.4 A x 3.3 V = 1.32 W; the MCU's 802.15.4 TX burst takes ~0.5 W of it. The generic

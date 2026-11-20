@@ -2,7 +2,14 @@ load("@rules_cc//cc:defs.bzl", "cc_library", "cc_test")
 load("//bazel:copts.bzl", "TALOS_COPTS")
 
 # Portable device firmware: host (tests, twin) and ESP32-H2 (ESP-IDF) build
-# the same sources. No heap in hot paths, no exceptions, no RTTI.
+# the same sources. No heap in hot paths, no exceptions, no RTTI: the host
+# build enforces the last two the way the ESP-IDF build does
+# (CONFIG_COMPILER_CXX_EXCEPTIONS=n, CONFIG_COMPILER_CXX_RTTI=n).
+PORTABLE_COPTS = TALOS_COPTS + [
+    "-fno-exceptions",
+    "-fno-rtti",
+]
+
 cc_library(
     name = "portable",
     srcs = [
@@ -28,7 +35,7 @@ cc_library(
         "types.h",
         "wire.h",
     ],
-    copts = TALOS_COPTS,
+    copts = PORTABLE_COPTS,
     visibility = ["//visibility:public"],
     deps = [
         "//common/coap",

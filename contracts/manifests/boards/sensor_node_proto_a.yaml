@@ -24,5 +24,5 @@ rails:
   - {name: v3v3_sw, voltage_mv: 3300, max_ma: 300, per_slot_max_ma: 150}
 power_sources:
   - {source: POWER_SOURCE_BATTERY_ONLY, sustained_mw: 0, sustained_uw: 100, peak_mw: 800}
-  - {source: POWER_SOURCE_USB, sustained_mw: 900, peak_mw: 800}
+  - {source: POWER_SOURCE_USB, sustained_mw: 800, peak_mw: 800}  # firmware usb_sustained_mw (TPS63900 budget minus radio TX)
   - {source: POWER_SOURCE_SOLAR_BATTERY, sustained_mw: 0, sustained_uw: 300, peak_mw: 800}

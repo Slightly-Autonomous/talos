@@ -1,9 +1,12 @@
 // Thread-safe facade over HubEngine for the API layer (ADR 0010).
 //
 // One mutex serializes every engine call, so the engine stays single-threaded
-// and deterministic given its inputs. Commands the engine dispatches are
-// queued per target device until a device adapter fetches them; live-stream
-// readers wait on a condition variable for new journal entries.
+// and deterministic given its inputs. Accepted commands wait in the engine
+// until the target's adapter fetches them; that fetch is the dispatch, so a
+// command whose TTL elapsed while the adapter was away is never delivered.
+// Full-journal replays (state_at, config at, rule preview) copy entries under
+// the mutex and reduce outside it. Live-stream readers wait on a condition
+// variable for new journal entries.
 #pragma once
 
 #include <chrono>
@@ -57,6 +60,8 @@ class HubService {
       const DeviceId& device, const talos::v1::ObservationEnvelope& env);
   Result<talos::api::v1::IngestResponse> ingest_ack(const DeviceId& device,
                                                     const talos::v1::CommandAck& ack);
+  // Hand-off is the dispatch (ADR 0004): dispatches and returns this device's
+  // accepted, unexpired commands. Expired commands are never returned.
   talos::api::v1::PendingCommands take_commands(const DeviceId& device);
 
   void tick();
@@ -112,7 +117,6 @@ class HubService {
   std::map<DeviceId, Campaign> campaigns_;
   Metrics metrics_;
   Status authorize_owner(const PrincipalId& who) const;
-  std::map<DeviceId, std::deque<Command>> outbound_;
   bool shutting_down_ = false;
 };
 

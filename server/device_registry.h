@@ -7,7 +7,9 @@
 #include <deque>
 #include <map>
 #include <optional>
+#include <set>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "core/domain/ids.h"
@@ -33,13 +35,25 @@ struct DeviceTelemetry {
   std::uint32_t running_version = 0;
   std::uint32_t applied_config_revision = 0;
   std::deque<talos::v1::Diagnostic> recent;  // newest last, bounded
+  // Recent (boot_epoch, seq) of applied non-journaled events, bounded; the
+  // journal's dedup covers the other kinds.
+  std::set<std::pair<std::uint32_t, std::uint32_t>> unjournaled_seen;
 };
 
 class DeviceRegistry {
  public:
   static constexpr std::size_t kRecentPerDevice = 64;
+  static constexpr std::size_t kSeenPerDevice = 256;
 
+  // Applies an event the caller has already established as fresh (for
+  // journaled kinds: ingest accepted it). Never call it for duplicates.
   void observe(const DeviceId& device, const fw::DeviceEvent& e, Timestamp received_at);
+  // For kinds the journal never sees (OTA, config, faults, power): applies
+  // the event only if its (boot_epoch, seq) was not applied before and is not
+  // older than the retained window, so a replayed frame cannot refresh
+  // last_seen, battery or OTA state. Reordering inside the window is fine.
+  // Returns whether it was applied.
+  bool observe_unjournaled(const DeviceId& device, const fw::DeviceEvent& e, Timestamp received_at);
   const DeviceTelemetry* find(const DeviceId& device) const;
   std::vector<talos::v1::Diagnostic> diagnostics(const DeviceId& device) const;
 

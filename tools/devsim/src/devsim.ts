@@ -24,6 +24,8 @@ export interface DevSimOptions {
   pollMs?: number;
   // The contact device whose door the lock bolts.
   doorContactDevice?: string;
+  // Device clock, for the command dispatch deadline. Defaults to Date.now.
+  nowMs?: () => number;
 }
 
 interface Device extends DeviceDef {
@@ -36,6 +38,8 @@ interface Device extends DeviceDef {
 
 interface Command {
   id: string;
+  // Dispatch deadline (int64 as a JSON string). A device never acts after it.
+  expiresAtUnixMs?: string | number;
   args?: { audioSpeak?: { text: string }; setLocked?: { locked?: boolean } };
 }
 
@@ -77,14 +81,15 @@ export class DevSim {
   }
 
   private async hub(d: Device, path: string, body?: unknown): Promise<unknown> {
-    const res = await this.fetchImpl(new URL(path, this.opts.hubUrl), {
+    const base = this.opts.hubUrl.endsWith("/") ? this.opts.hubUrl : `${this.opts.hubUrl}/`;
+    const res = await this.fetchImpl(new URL(path.replace(/^\/+/, ""), base), {
       method: body === undefined ? "GET" : "POST",
       headers: { Authorization: `Bearer ${d.token}`, "Content-Type": "application/json" },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
-    const json: unknown = await res.json();
-    if (!res.ok) throw new Error(`${path} ${res.status} ${JSON.stringify(json)}`);
-    return json;
+    const text = await res.text();
+    if (!res.ok) throw new Error(`${path} ${res.status} ${text.slice(0, 200)}`);
+    return text ? (JSON.parse(text) as unknown) : {};
   }
 
   private async observe(
@@ -175,6 +180,13 @@ export class DevSim {
     d.executed.add(cmd.id);
     const ack = (accepted: boolean, detail: string) =>
       this.hub(d, "/v1/devices/acks", { commandId: cmd.id, accepted, detail });
+    // TTL gates physical effect: past the deadline the device refuses (ADR 0004).
+    const expires = Number(cmd.expiresAtUnixMs ?? 0);
+    if (expires > 0 && (this.opts.nowMs ?? Date.now)() >= expires) {
+      this.log.push(`${d.id} refused expired ${cmd.id}`);
+      await ack(false, "expired");
+      return;
+    }
     const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
     if (d.kind === "speaker" && cmd.args?.audioSpeak) {

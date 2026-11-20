@@ -28,11 +28,26 @@ class NodeRuntime final : public IEventSink {
   static constexpr std::uint32_t kOtaMinMv = 3700;  // or external power
   static constexpr int kSendsPerStep = 4;
   static constexpr std::uint8_t kNotPowering = 0xFF;
-  // Time AON is held on before the attempt marker is cleared: a short pulls the
-  // core rail down well inside it (TPS22917 rise ~0.1 ms). Provisional (bench B2).
-  static constexpr std::uint32_t kSlotPowerSettleMs = 5;
+  // Time AON is held on, after set_rail() returns, before the attempt marker is
+  // cleared: a short pulls the core rail down well inside it. With the fitted
+  // 1 nF CT cap the TPS22917 turns on in ~3.8 ms typ (SLVSDW8B, no max given);
+  // BoardIo already waits BoardIo::kAonSettleMs (10 ms) inside set_rail(), so
+  // the marker spans ~20 ms, ~5x typ tON. Provisional (bench B2, L-13/L-14).
+  static constexpr std::uint32_t kSlotPowerSettleMs = 10;
+  // A reset while powering a slot is a strike against it; this many in a row
+  // quarantine it (one unrelated reset, e.g. a USB unplug, does not).
+  static constexpr std::uint8_t kQuarantineStrikes = 2;
+  // A quarantined slot is retried after this much uptime, doubling per further
+  // strike up to kQuarantineRetryMaxMs: a card that really shorts AON costs at
+  // most one node reset per retry, and a false positive heals by itself.
+  static constexpr std::uint32_t kQuarantineRetryMs = 60u * 60u * 1000u;           // 1 h
+  static constexpr std::uint32_t kQuarantineRetryMaxMs = 24u * 60u * 60u * 1000u;  // 24 h
+  // While the boot epoch is not persisted, nothing is transmitted (an event
+  // must never reuse an (epoch, seq) the hub has seen); the write is retried.
+  static constexpr std::uint32_t kEpochRetryMs = 1000;
 
-  explicit NodeRuntime(Platform& p) : p_(p), ota_(p) {}
+  explicit NodeRuntime(Platform& p, IWatchdog* watchdog = nullptr)
+      : p_(p), ota_(p), watchdog_(watchdog) {}
 
   void boot();
   void on_interrupt() { awake_ = true; }
@@ -59,16 +74,29 @@ class NodeRuntime final : public IEventSink {
   void rescan(std::optional<std::uint8_t> slot = std::nullopt);
   // False if the board's expanders or charger did not take their safe state at boot.
   bool board_ok() const { return board_ok_; }
+  // False while the boot epoch could not be written: events are held, not sent.
+  bool boot_epoch_persisted() const { return epoch_persisted_; }
   // Slots held unpowered because the node reset while switching their AON on.
   std::uint8_t quarantined_slots() const { return quarantined_; }
   // Operator action (diag `rail <slot> aon on`): let the slot be powered again.
   void clear_quarantine(std::uint8_t slot);
+  // Consecutive resets seen while powering the slot (cleared once it powers up).
+  std::uint8_t power_strikes(std::uint8_t slot) const { return strikes_[slot]; }
 
  private:
   void discover();
   void discover_slot(std::uint8_t i, TimeMs now);
   void admit_power();
   bool power_slot(std::uint8_t i);
+  // Returns true if the slot's AON should stay on (the card is usable or needs it for diagnosis).
+  bool init_slot(std::uint8_t i, SlotIo& io, TimeMs now);
+  void unpower_slot(std::uint8_t i);
+  void save_slot_power(std::uint8_t powering);
+  void retry_quarantined(TimeMs now);
+  bool persist_boot_epoch();
+  void feed_watchdog() {
+    if (watchdog_) watchdog_->feed();
+  }
   PowerMode compute_mode();
   void handle(const Downlink& d);
   void emit_ota_status(Priority priority);
@@ -78,6 +106,7 @@ class NodeRuntime final : public IEventSink {
 
   Platform& p_;
   Ota ota_;
+  IWatchdog* watchdog_ = nullptr;
   EventQueue<kQueueCapacity> queue_;
   std::array<SlotState, kSlots> slots_{};
   RuntimeConfig config_;
@@ -91,6 +120,10 @@ class NodeRuntime final : public IEventSink {
   bool board_ok_ = true;
   std::uint8_t quarantined_ = 0;
   std::uint8_t aon_on_ = 0;  // AON rails this runtime switched on
+  std::array<std::uint8_t, kSlots> strikes_{};
+  std::array<TimeMs, kSlots> quarantine_retry_at_{};
+  bool epoch_persisted_ = false;
+  TimeMs next_epoch_retry_ = 0;
 };
 
 }  // namespace talos::fw

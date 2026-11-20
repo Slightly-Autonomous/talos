@@ -8,6 +8,11 @@ import {
 import { JournalEntrySchema } from "@talos/contracts/talos/v1/journal_pb";
 import { PropertySchema } from "@talos/contracts/talos/v1/property_pb";
 import {
+  ageState,
+  STATE_MAX_AGE_MS,
+  portalDisplay,
+  portalLabel,
+  portalShowsLocked,
   bounds,
   describeEntry,
   deviceHealth,
@@ -119,13 +124,106 @@ describe("portalStatus", () => {
     expect(portalStatus(property, s).get("front_door")).toEqual({
       open: false,
       locked: true,
+      openStale: false,
+      lockedStale: true,
       stale: true,
     });
     expect(portalStatus(property, undefined).get("front_door")).toEqual({
       open: undefined,
       locked: undefined,
+      openStale: false,
+      lockedStale: false,
       stale: false,
     });
+  });
+
+  const door = (open: boolean, contact: Freshness, locked: boolean, lock: Freshness) =>
+    portalStatus(
+      property,
+      state({
+        capabilities: [
+          {
+            ref: { deviceId: "node-12", slot: 0, capabilityId: "contact.open_state" },
+            value: { kind: { case: "contact", value: { open } } },
+            freshness: contact,
+          },
+          {
+            ref: { deviceId: "lock-3", capabilityId: "access.lock" },
+            value: { kind: { case: "lock", value: { locked } } },
+            freshness: lock,
+          },
+        ],
+      }),
+    ).get("front_door");
+
+  test("a stale closed door renders unknown, never closed", () => {
+    const st = door(false, Freshness.STALE, true, Freshness.FRESH);
+    expect(portalDisplay(st)).toBe("unknown");
+    expect(portalLabel(st)).toBe("unknown (last: closed), locked");
+    expect(portalShowsLocked(st)).toBe(true);
+    const unknownFreshness = door(false, Freshness.UNKNOWN, true, Freshness.FRESH);
+    expect(portalDisplay(unknownFreshness)).toBe("unknown");
+  });
+
+  test("a stale lock is not shown as locked", () => {
+    const st = door(false, Freshness.FRESH, true, Freshness.STALE);
+    expect(portalDisplay(st)).toBe("closed");
+    expect(portalShowsLocked(st)).toBe(false);
+    expect(portalLabel(st)).toBe("closed, lock unknown (last: locked)");
+  });
+
+  test("fresh reports render as reported; no report is unknown", () => {
+    const st = door(true, Freshness.FRESH, false, Freshness.FRESH);
+    expect(portalDisplay(st)).toBe("open");
+    expect(portalLabel(st)).toBe("open, unlocked");
+    expect(portalDisplay(undefined)).toBe("unknown");
+    expect(portalLabel(portalStatus(property, undefined).get("front_door"))).toBe("unknown");
+  });
+});
+
+describe("ageState", () => {
+  const fresh = state({
+    capabilities: [
+      {
+        ref: { deviceId: "node-07", slot: 0, capabilityId: "motion.detect" },
+        value: { kind: { case: "motion", value: { detected: false } } },
+        receivedAtUnixMs: BigInt(NOW - 120_000),
+        freshness: Freshness.FRESH,
+      },
+      {
+        ref: { deviceId: "node-12", slot: 0, capabilityId: "contact.open_state" },
+        value: { kind: { case: "contact", value: { open: false } } },
+        freshness: Freshness.FRESH,
+      },
+    ],
+  });
+
+  test("a recent snapshot from a reachable hub is unchanged", () => {
+    expect(ageState(fresh, NOW - 1000, NOW, true)).toBe(fresh);
+    expect(
+      zoneActivity(property, ageState(fresh, NOW - 1000, NOW, true), NOW).get("backyard"),
+    ).toBe("quiet");
+  });
+
+  test("state older than the max age renders unknown, not quiet or closed", () => {
+    const aged = ageState(fresh, NOW - STATE_MAX_AGE_MS - 1, NOW, true);
+    expect(aged?.capabilities.every((c) => c.freshness === Freshness.UNKNOWN)).toBe(true);
+    expect(zoneActivity(property, aged, NOW).get("backyard")).toBe("unknown");
+    const st = portalStatus(property, aged).get("front_door");
+    expect(portalDisplay(st)).toBe("unknown");
+    expect(portalLabel(st)).toBe("unknown (last: closed)");
+    expect(deviceHealth(aged, "node-12")).toBe("stale");
+    // The input is not mutated.
+    expect(fresh.capabilities[0]?.freshness).toBe(Freshness.FRESH);
+  });
+
+  test("an unreachable hub renders unknown even for a recent snapshot", () => {
+    const aged = ageState(fresh, NOW - 1000, NOW, false);
+    expect(zoneActivity(property, aged, NOW).get("backyard")).toBe("unknown");
+    expect(ageState(fresh, undefined, NOW, true)?.capabilities[1]?.freshness).toBe(
+      Freshness.UNKNOWN,
+    );
+    expect(ageState(undefined, NOW, NOW, true)).toBeUndefined();
   });
 });
 

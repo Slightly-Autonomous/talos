@@ -216,6 +216,38 @@ TEST(Ledger, AckOnlyModeNeverReachesVerified) {
   EXPECT_EQ(status(l), CommandStatus::kCompletedUnverified);
 }
 
+TEST(Ledger, AckOnlyCommandCarryingAnExpectStillNeverVerifies) {
+  CommandLedger l;
+  Command c = lock_command();
+  c.verification = VerificationMode::kAckOnly;  // expect left set on purpose
+  commit(l, l.request(c, kAllow, kT0).transitions);
+  commit(l, l.dispatch(c.id, kT0));
+  EXPECT_TRUE(l.on_observation(lock_observation(true), kT0 + Millis{10}).empty());
+  commit(l, l.on_ack({c.id, true, ""}, kT0 + Millis{20}));
+  EXPECT_EQ(status(l), CommandStatus::kCompletedUnverified);
+}
+
+TEST(Ledger, IdempotencyKeysAreScopedToThePrincipal) {
+  CommandLedger l;
+  commit(l, l.request(lock_command("cmd-1"), kAllow, kT0).transitions);
+  // Another principal using the same key gets its own command, not cmd-1.
+  Command other = lock_command("cmd-2");
+  other.principal = PrincipalId("agent-1");
+  auto r = l.request(other, kAllow, kT0);
+  EXPECT_FALSE(r.duplicate);
+  EXPECT_FALSE(r.conflict);
+  commit(l, r.transitions);
+  EXPECT_EQ(l.records().size(), 2u);
+  // Reusing another principal's command id is a conflict that reveals nothing.
+  Command steal = lock_command("cmd-1");
+  steal.principal = PrincipalId("agent-1");
+  steal.idempotency_key = "fresh";
+  auto c = l.request(steal, kAllow, kT0);
+  EXPECT_TRUE(c.conflict);
+  EXPECT_FALSE(c.duplicate);
+  EXPECT_TRUE(c.transitions.empty());
+}
+
 TEST(Ledger, CancelOnlyBeforeDispatch) {
   CommandLedger l;
   commit(l, l.request(lock_command(), kAllow, kT0).transitions);

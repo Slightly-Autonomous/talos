@@ -420,7 +420,8 @@ std::optional<Downlink> Link::receive() {
 
 // --- Rev A board --------------------------------------------------------------------------
 
-RevABoard::RevABoard(const BoardSupport& board) : board_(board) {
+RevABoard::RevABoard(const BoardSupport& board, const Clock* clock) : board_(board), clock_(clock) {
+  exp_a.on_write = [this] { on_exp_a_write(); };
   exp_a.external = [this](std::uint8_t pin) {
     // P00-03 SW_EN and P04-07 AON_EN: 1M pull-downs (both rails default off);
     // P10-17 RESET_N/CS_N: 100k pull-up to the slot's AON.
@@ -464,8 +465,27 @@ bool RevABoard::expander_pin(const ExpanderPin& p, bool undriven) const {
   return chip.is_output(p.pin) ? chip.level(p.pin) : undriven;
 }
 
+void RevABoard::on_exp_a_write() {
+  const TimeMs now = clock_ ? clock_->now_ms() : 0;
+  for (std::uint8_t slot = 0; slot < kSlots; ++slot) {
+    const auto& io = board_.slot_io[slot];
+    if (!expander_pin(io.aon_enable, false)) {
+      aon_enabled_at_[slot].reset();
+    } else if (!aon_enabled_at_[slot]) {
+      aon_enabled_at_[slot] = now;
+    }
+    const bool driven_high = (exp_a.is_output(io.reset_n.pin) && exp_a.level(io.reset_n.pin)) ||
+                             (exp_a.is_output(io.cs_n.pin) && exp_a.level(io.cs_n.pin));
+    if (driven_high && !aon_on(slot)) backfed[slot] = true;
+  }
+}
+
 bool RevABoard::aon_on(std::uint8_t slot) const {
-  return expander_pin(board_.slot_io[slot].aon_enable, false);
+  if (!expander_pin(board_.slot_io[slot].aon_enable, false)) return false;
+  if (!clock_) return true;
+  // Enabled by a write this model has not seen (none today): treat as up.
+  if (!aon_enabled_at_[slot]) return true;
+  return clock_->now_ms() >= *aon_enabled_at_[slot] + aon_rise_ms;
 }
 bool RevABoard::sw_on(std::uint8_t slot) const {
   return aon_on(slot) && expander_pin(board_.slot_io[slot].sw_enable, false);
@@ -507,7 +527,7 @@ IPower& Node::select_power() {
     };
   }
   if (!board.slot_io[0].aon_enable.wired()) return power;
-  rev_a_.emplace(board);
+  rev_a_.emplace(board, &clock);
   i2c.attach(I2cBus::kRoot, board.slot_io[0].aon_enable.address, &rev_a_->exp_a);
   i2c.attach(I2cBus::kRoot, board.slot_io[0].present_n.address, &rev_a_->exp_b);
   if (board.charger_address) i2c.attach(I2cBus::kRoot, board.charger_address, &rev_a_->charger);
@@ -566,7 +586,9 @@ void Node::remove(std::uint8_t slot) {
 
 void Node::boot() {
   runtime_.reset();
-  runtime_.emplace(platform_);
+  if (rev_a_) board_io_.emplace(i2c, clock, adc, board);  // same storage: platform_ stays bound
+  runtime_.emplace(platform_, &watchdog);
+  watchdog.last_feed_ms = clock.now_ms();  // the ESP port arms it right before boot()
   runtime_->boot();
   for (std::uint8_t l = 0; l < 32; ++l) last_lines_[l] = gpio.read(l);
 }
@@ -599,6 +621,10 @@ void Node::run_for(TimeMs ms) {
       }
     }
     if (runtime_->reboot_requested()) {
+      ++reboots_;
+      boot();
+    } else if (esp_polling && clock.now_ms() - watchdog.last_feed_ms > watchdog.timeout_ms) {
+      ++watchdog.bites;  // task watchdog panic: the chip resets
       ++reboots_;
       boot();
     }

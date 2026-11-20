@@ -42,6 +42,16 @@ TEST(ValidateProperty, RejectsAssetAttachingForeignDevice) {
   EXPECT_EQ(s.error().code, "cross_property_reference");
 }
 
+TEST(ValidateProperty, RejectsAssetAttachingUndeclaredCapability) {
+  Property p = sample();
+  p.devices[0].capabilities = {CapabilityId("motion.detect")};
+  Status s = validate_property(p);
+  ASSERT_FALSE(s);
+  EXPECT_EQ(s.error().code, "undeclared_capability");
+  p.devices[0].capabilities.push_back(CapabilityId("contact.open_state"));
+  EXPECT_TRUE(validate_property(p));
+}
+
 TEST(ValidateProperty, RejectsDuplicateAndDanglingIds) {
   Property dup = sample();
   dup.zones.push_back({ZoneId("backyard"), "again", ZoneKind::kOutdoor});

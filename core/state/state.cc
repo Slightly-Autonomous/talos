@@ -53,6 +53,9 @@ Freshness freshness(const PropertyState& state, const CapabilityRef& ref, Timest
                     Millis max_age) {
   auto it = state.capabilities.find(ref);
   if (it == state.capabilities.end()) return Freshness::kUnknown;
+  // received_at ahead of now means the hub clock stepped back (ADR 0008 keeps
+  // received_at non-decreasing). The real age is unknown, so fail closed.
+  if (it->second.received_at > now) return Freshness::kStale;
   return (now - it->second.received_at) > max_age ? Freshness::kStale : Freshness::kFresh;
 }
 

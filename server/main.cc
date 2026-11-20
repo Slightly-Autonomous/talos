@@ -25,10 +25,12 @@
 #include "server/system_clock.h"
 
 namespace {
-talos::server::HttpServer* g_server = nullptr;
-void on_signal(int) {
-  if (g_server) g_server->stop();
-}
+// Signal handlers may only touch lock-free atomics; the ticker thread sees
+// the flag and performs the (mutex-taking) shutdown.
+std::atomic<bool> g_stop_requested{false};
+static_assert(std::atomic<bool>::is_always_lock_free);
+void on_signal(int) { g_stop_requested.store(true); }
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -103,14 +105,14 @@ int main(int argc, char** argv) {
   std::string host = hub_cfg.listen_host().empty() ? "127.0.0.1" : hub_cfg.listen_host();
   if (const char* env = std::getenv("TALOS_LISTEN_HOST")) host = env;
 
-  const bool loopback = host == "127.0.0.1" || host == "localhost" || host == "::1";
   const char* allow_dev = std::getenv("TALOS_ALLOW_DEV_ON_NETWORK");
-  if (hub_cfg.dev_mode() && !loopback && !(allow_dev && std::string(allow_dev) == "1")) {
+  if (talos::Status st =
+          check_dev_mode_hosts(hub_cfg, host, allow_dev && std::string(allow_dev) == "1");
+      !st) {
     std::fprintf(stderr,
-                 "refusing to listen on %s: config has dev_mode=true (well-known dev tokens).\n"
-                 "Use a config with real token hashes, or set TALOS_ALLOW_DEV_ON_NETWORK=1 for a\n"
-                 "local container whose port is bound to localhost.\n",
-                 host.c_str());
+                 "%s\nUse a config with real token hashes, or set TALOS_ALLOW_DEV_ON_NETWORK=1 for "
+                 "a\nlocal container whose port is bound to localhost.\n",
+                 st.error().message.c_str());
     return 2;
   }
 
@@ -171,7 +173,6 @@ int main(int argc, char** argv) {
     std::fprintf(stderr, "could not bind %s:%d\n", host.c_str(), port);
     return 2;
   }
-  g_server = &http;
   std::signal(SIGINT, on_signal);
   std::signal(SIGTERM, on_signal);
 
@@ -179,6 +180,10 @@ int main(int argc, char** argv) {
   const auto tick_ms = hub_cfg.tick_interval_ms() > 0 ? hub_cfg.tick_interval_ms() : 250;
   std::thread ticker([&] {
     while (running) {
+      if (g_stop_requested.load()) {
+        http.stop();  // listen() returns; main then joins this thread
+        break;
+      }
       hub.tick();
       std::this_thread::sleep_for(std::chrono::milliseconds(tick_ms));
     }

@@ -8,7 +8,7 @@ The hub is the authority (ADR 0002/0010). Every deployment below runs the **same
 |  | `STORAGE_DRIVER_POSTGRES` | reserved: rejected with a clear error |
 | `sync.target` | `SYNC_TARGET_NONE`, `SYNC_TARGET_SUPABASE` | implemented (run `connectors/supabase_sync`) |
 | `auth` | `AUTH_MODE_LOCAL` | implemented |
-|  | `AUTH_MODE_SUPABASE` | reserved |
+|  | `AUTH_MODE_SUPABASE` | implemented: Supabase HS256 JWTs mapped to principals, alongside local tokens (ADR 0015) |
 | `role` | `HUB_ROLE_HUB` | implemented |
 |  | `HUB_ROLE_RELAY` | reserved |
 

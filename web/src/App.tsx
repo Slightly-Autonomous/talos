@@ -23,7 +23,7 @@ export function App() {
 
 function Shell({ url, onDisconnect }: { url: string; onDisconnect: () => void }) {
   const [tab, setTab] = useState<Tab>("Live");
-  const { status, error } = useHub();
+  const { status, error, stateStale } = useHub();
   return (
     <div className="app">
       <header className="topbar">
@@ -44,6 +44,12 @@ function Shell({ url, onDisconnect }: { url: string; onDisconnect: () => void })
         <span className={`conn conn-${status}`} title={error} data-testid="connection">
           {status === "live" ? "Live" : status === "connecting" ? "Connecting…" : "Reconnecting…"} ·{" "}
           {url}
+          {stateStale && (
+            <span className="conn-stale" data-testid="state-stale">
+              {" "}
+              · state out of date, shown as unknown
+            </span>
+          )}
         </span>
         <button className="link" onClick={onDisconnect}>
           Disconnect

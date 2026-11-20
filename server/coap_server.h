@@ -1,8 +1,10 @@
 // CoAP/UDP device ingress (ADR 0014). Thread border routers forward node
-// traffic here. Per request: CoAP parse -> per-device key -> token-bucket
-// rate limit -> HMAC-verified frame -> HubService::device_exchange ->
-// authenticated piggybacked reply. Duplicate CON messages (same peer and
-// message id) get the cached reply instead of being processed twice.
+// traffic here. Per request: CoAP parse -> per-device key -> HMAC-verified
+// frame -> per-device token bucket (authenticated frames only) ->
+// HubService::device_exchange -> authenticated piggybacked reply. Frames that
+// fail authentication spend a separate per-peer bucket, so forged traffic
+// for a device id can never throttle that device's genuine frames. Duplicate CON messages (same
+// peer and message id) get the cached reply instead of being processed twice.
 #pragma once
 
 #include <atomic>
@@ -44,12 +46,11 @@ class CoapServer {
 
  private:
   void loop();
-  bool allow(const std::string& device);
-
   struct Bucket {
     double tokens = 0;
     std::chrono::steady_clock::time_point last;
   };
+  bool allow(std::map<std::string, Bucket>& buckets, const std::string& key);
   struct CachedReply {
     std::string peer;
     std::uint16_t message_id;
@@ -60,7 +61,8 @@ class CoapServer {
   DeviceKeyMap keys_;
   double rate_;
   double burst_;
-  std::map<std::string, Bucket> buckets_;
+  std::map<std::string, Bucket> buckets_;          // authenticated, per device
+  std::map<std::string, Bucket> failure_buckets_;  // failed auth, per peer host
   std::deque<CachedReply> cache_;
   int fd_ = -1;
   std::atomic<bool> running_{false};

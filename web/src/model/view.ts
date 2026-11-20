@@ -6,12 +6,39 @@ import type {
   CommandView,
   StateResponse,
 } from "@talos/contracts/talos/api/v1/api_pb";
-import { CommandOutcome, Freshness } from "@talos/contracts/talos/api/v1/api_pb";
+import { clone } from "@bufbuild/protobuf";
+import {
+  CommandOutcome,
+  Freshness,
+  StateResponseSchema,
+} from "@talos/contracts/talos/api/v1/api_pb";
 import type { JournalEntry } from "@talos/contracts/talos/v1/journal_pb";
 import type { Property, Point } from "@talos/contracts/talos/v1/property_pb";
 import { ArmMode } from "@talos/contracts/talos/v1/rule_pb";
 
 export const ACTIVE_WINDOW_MS = 30_000;
+
+// The hub computes freshness when it answers. The client re-reads state every
+// 5 s, so a snapshot older than this means several reads failed: its
+// "fresh" can no longer be trusted.
+export const STATE_MAX_AGE_MS = 15_000;
+
+// Ages a state snapshot locally. If the last successful fetch is older than
+// STATE_MAX_AGE_MS, or the hub is unreachable, every capability becomes
+// UNKNOWN (the last value is kept, for "unknown (last: ...)" labels).
+export function ageState(
+  state: StateResponse | undefined,
+  fetchedAtMs: number | undefined,
+  nowMs: number,
+  reachable: boolean,
+): StateResponse | undefined {
+  if (!state) return undefined;
+  if (reachable && fetchedAtMs !== undefined && nowMs - fetchedAtMs <= STATE_MAX_AGE_MS)
+    return state;
+  const aged = clone(StateResponseSchema, state);
+  for (const cap of aged.capabilities) cap.freshness = Freshness.UNKNOWN;
+  return aged;
+}
 
 // Structural ref shape so plain objects and protobuf messages both work.
 export interface RefLike {
@@ -79,8 +106,11 @@ function strongest(a: ZoneActivity, b: ZoneActivity): ZoneActivity {
 }
 
 export interface PortalStatus {
+  // Last reported values; check the *Stale flags before showing them.
   open: boolean | undefined;
   locked: boolean | undefined;
+  openStale: boolean;
+  lockedStale: boolean;
   stale: boolean;
 }
 
@@ -88,17 +118,55 @@ export function portalStatus(property: Property, state: StateResponse | undefine
   const caps = new Map(state?.capabilities.map((c) => [refKey(c.ref), c]) ?? []);
   const out = new Map<string, PortalStatus>();
   for (const asset of property.assets) {
-    const s: PortalStatus = { open: undefined, locked: undefined, stale: false };
+    const s: PortalStatus = {
+      open: undefined,
+      locked: undefined,
+      openStale: false,
+      lockedStale: false,
+      stale: false,
+    };
     for (const att of asset.attached) {
       const cap = caps.get(refKey(att));
       if (!cap) continue;
-      if (cap.freshness !== Freshness.FRESH) s.stale = true;
-      if (cap.value?.kind.case === "contact") s.open = cap.value.kind.value.open;
-      if (cap.value?.kind.case === "lock") s.locked = cap.value.kind.value.locked;
+      const stale = cap.freshness !== Freshness.FRESH;
+      if (stale) s.stale = true;
+      if (cap.value?.kind.case === "contact") {
+        s.open = cap.value.kind.value.open;
+        s.openStale = stale;
+      }
+      if (cap.value?.kind.case === "lock") {
+        s.locked = cap.value.kind.value.locked;
+        s.lockedStale = stale;
+      }
     }
     out.set(asset.id, s);
   }
   return out;
+}
+
+export type PortalDisplay = "open" | "closed" | "unknown";
+
+// What the plan shows for the door itself. Stale is unknown, never closed.
+export function portalDisplay(st: PortalStatus | undefined): PortalDisplay {
+  if (!st || st.open === undefined || st.openStale) return "unknown";
+  return st.open ? "open" : "closed";
+}
+
+// Locked styling only for a fresh lock report.
+export function portalShowsLocked(st: PortalStatus | undefined): boolean {
+  return !!st && st.locked === true && !st.lockedStale;
+}
+
+// Human label, e.g. "closed, locked" or "unknown (last: closed), lock unknown (last: locked)".
+export function portalLabel(st: PortalStatus | undefined): string {
+  const last = (v: boolean, yes: string, no: string) => `unknown (last: ${v ? yes : no})`;
+  let door: string;
+  if (!st || st.open === undefined) door = "unknown";
+  else if (st.openStale) door = last(st.open, "open", "closed");
+  else door = st.open ? "open" : "closed";
+  if (!st || st.locked === undefined) return door;
+  if (st.lockedStale) return `${door}, lock ${last(st.locked, "locked", "unlocked")}`;
+  return `${door}, ${st.locked ? "locked" : "unlocked"}`;
 }
 
 export type DeviceHealth = "fresh" | "stale" | "unknown";

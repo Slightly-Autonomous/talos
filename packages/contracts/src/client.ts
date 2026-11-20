@@ -43,6 +43,30 @@ export interface HubClientOptions {
   fetch?: typeof fetch;
 }
 
+// The hub sends an SSE keepalive every 15 s. With no bytes for this long the
+// stream is treated as dead (half-open TCP, stalled proxy) and fails, so the
+// caller can show "not live" and reconnect.
+export const EVENT_STREAM_IDLE_TIMEOUT_MS = 40_000;
+
+export interface EventStreamOptions {
+  idleTimeoutMs?: number;
+}
+
+// Resolves an API path against the base URL without dropping a base-path
+// prefix: base "https://x/talos" + "/v1/state" -> "https://x/talos/v1/state".
+export function hubUrl(baseUrl: string, path: string): URL {
+  const base = baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`;
+  return new URL(path.replace(/^\/+/, ""), base);
+}
+
+function parseJson(text: string): unknown {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return undefined;
+  }
+}
+
 export class HubClient {
   private readonly fetchImpl: typeof fetch;
 
@@ -55,7 +79,7 @@ export class HubClient {
     path: string,
     init: RequestInit = {},
   ): Promise<MessageShape<D>> {
-    const res = await this.fetchImpl(new URL(path, this.opts.baseUrl), {
+    const res = await this.fetchImpl(hubUrl(this.opts.baseUrl, path), {
       ...init,
       headers: {
         Authorization: `Bearer ${this.opts.token}`,
@@ -63,11 +87,26 @@ export class HubClient {
         ...(init.headers ?? {}),
       },
     });
-    const body: unknown = await res.json();
+    // Check the status before decoding: a proxy error page or an empty 404 is
+    // not JSON, and must still surface as a HubError.
+    const text = await res.text();
+    const body = parseJson(text);
     if (!res.ok) {
-      const err = fromJson(ErrorResponseSchema, body as never, { ignoreUnknownFields: true });
-      throw new HubError(res.status, err.code, err.message);
+      if (body !== null && typeof body === "object" && !Array.isArray(body)) {
+        try {
+          const err = fromJson(ErrorResponseSchema, body as never, { ignoreUnknownFields: true });
+          if (err.code || err.message) throw new HubError(res.status, err.code, err.message);
+        } catch (e) {
+          if (e instanceof HubError) throw e;
+        }
+      }
+      throw new HubError(
+        res.status,
+        `http_${res.status}`,
+        res.statusText || text.slice(0, 200) || `HTTP ${res.status}`,
+      );
     }
+    if (body === undefined) throw new HubError(res.status, "bad_response", "response is not JSON");
     return fromJson(schema, body as never, { ignoreUnknownFields: true });
   }
 
@@ -142,33 +181,81 @@ export class HubClient {
   }
 
   // Async iterator over live journal entries (SSE via fetch, so the bearer
-  // token stays in a header and never in the URL).
-  async *events(after: bigint, signal?: AbortSignal): AsyncGenerator<JournalEntry> {
-    const res = await this.fetchImpl(new URL(`/v1/events?after=${after}`, this.opts.baseUrl), {
-      headers: { Authorization: `Bearer ${this.opts.token}` },
-      signal,
-    });
-    if (!res.ok || !res.body)
-      throw new HubError(res.status, "stream_failed", "event stream failed");
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = "";
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) return;
-      buffer += decoder.decode(value, { stream: true });
-      let split: number;
-      while ((split = buffer.indexOf("\n\n")) >= 0) {
-        const frame = buffer.slice(0, split);
-        buffer = buffer.slice(split + 2);
-        const data = frame
-          .split("\n")
-          .filter((l) => l.startsWith("data: "))
-          .map((l) => l.slice(6))
-          .join("\n");
-        if (data)
-          yield fromJson(JournalEntrySchema, JSON.parse(data), { ignoreUnknownFields: true });
+  // token stays in a header and never in the URL). Fails with HubError
+  // "stream_idle" when nothing (not even a keepalive) arrives within
+  // `idleTimeoutMs`, including while waiting for the response headers.
+  async *events(
+    after: bigint,
+    signal?: AbortSignal,
+    opts: EventStreamOptions = {},
+  ): AsyncGenerator<JournalEntry> {
+    const idleMs = opts.idleTimeoutMs ?? EVENT_STREAM_IDLE_TIMEOUT_MS;
+    const ctrl = new AbortController();
+    const onAbort = () => ctrl.abort(signal?.reason);
+    if (signal?.aborted) ctrl.abort(signal.reason);
+    signal?.addEventListener("abort", onAbort);
+    let idle = false;
+    let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const arm = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        idle = true;
+        ctrl.abort();
+        void reader?.cancel().catch(() => {});
+      }, idleMs);
+    };
+    const idleError = () =>
+      new HubError(0, "stream_idle", `no data from event stream for ${idleMs} ms`);
+    try {
+      arm();
+      let res: Response;
+      try {
+        res = await this.fetchImpl(hubUrl(this.opts.baseUrl, `/v1/events?after=${after}`), {
+          headers: { Authorization: `Bearer ${this.opts.token}` },
+          signal: ctrl.signal,
+        });
+      } catch (e) {
+        if (idle) throw idleError();
+        throw e;
       }
+      clearTimeout(timer);
+      if (!res.ok || !res.body)
+        throw new HubError(res.status, "stream_failed", "event stream failed");
+      reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      for (;;) {
+        arm();
+        let chunk: ReadableStreamReadResult<Uint8Array>;
+        try {
+          chunk = await reader.read();
+        } catch (e) {
+          if (idle) throw idleError();
+          throw e;
+        }
+        clearTimeout(timer);
+        if (idle) throw idleError();
+        if (chunk.done) return;
+        buffer += decoder.decode(chunk.value, { stream: true });
+        let split: number;
+        while ((split = buffer.indexOf("\n\n")) >= 0) {
+          const frame = buffer.slice(0, split);
+          buffer = buffer.slice(split + 2);
+          const data = frame
+            .split("\n")
+            .filter((l) => l.startsWith("data: "))
+            .map((l) => l.slice(6))
+            .join("\n");
+          if (data)
+            yield fromJson(JournalEntrySchema, JSON.parse(data), {
+              ignoreUnknownFields: true,
+            });
+        }
+      }
+    } finally {
+      clearTimeout(timer);
+      signal?.removeEventListener("abort", onAbort);
     }
   }
 }

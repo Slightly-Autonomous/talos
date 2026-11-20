@@ -231,7 +231,7 @@ class Run {
       for (auto& [id, dev] : devices_) dev->sample(t, clock_.now(), world_, impacts, up);
       send_uplinks(t, up);
       for (auto& m : transport_.due(t)) deliver(t, m);
-      engine_->tick();
+      if (!engine_->tick()) report_.failures.push_back("journal append failed during tick");
       for (auto& cmd : engine_->take_outbound()) {
         transport_.send(t, cmd.target.device.str(), false, cmd);
       }

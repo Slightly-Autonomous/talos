@@ -116,6 +116,15 @@ TEST_F(StateTest, FreshnessNeverReportsUnknownAsFresh) {
   EXPECT_EQ(freshness(s, kDoor, Timestamp{61'001}, Millis{60'000}), Freshness::kStale);
 }
 
+TEST_F(StateTest, ReceiptAheadOfTheClockIsStaleNotFresh) {
+  // After a hub clock step back, received_at can be ahead of now; the age is
+  // unknown, so the capability must not read as fresh.
+  feed(contact("node-12", 1, 1, true), 100'000);
+  PropertyState s = replay({}, journal);
+  EXPECT_EQ(freshness(s, kDoor, Timestamp{100'000}, Millis{60'000}), Freshness::kFresh);
+  EXPECT_EQ(freshness(s, kDoor, Timestamp{99'999}, Millis{60'000}), Freshness::kStale);
+}
+
 TEST_F(StateTest, CommandTransitionsReplayIntoLedger) {
   CommandTransition created;
   created.command = CommandId("cmd-1");

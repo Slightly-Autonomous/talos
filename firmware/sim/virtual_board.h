@@ -31,6 +31,24 @@ class Clock final : public IClock {
   TimeMs t_ = 1'000;
 };
 
+// The ESP task watchdog: Node resets the runtime (a reboot) when feed() has
+// not been called for timeout_ms while the ESP-style polling loop runs.
+class Watchdog final : public IWatchdog {
+ public:
+  explicit Watchdog(const Clock& clock) : clock_(clock) {}
+  void feed() override {
+    ++feeds;
+    last_feed_ms = clock_.now_ms();
+  }
+  TimeMs timeout_ms = 5'000;  // firmware/esp_idf/main/main.cc kWatchdogTimeoutMs
+  std::uint32_t feeds = 0;
+  std::uint32_t bites = 0;
+  TimeMs last_feed_ms = 0;
+
+ private:
+  const Clock& clock_;
+};
+
 class Gpio final : public IGpio {
  public:
   bool read(std::uint8_t line) override { return line < lines_.size() && lines_[line]; }
@@ -159,7 +177,13 @@ class Adc final : public IBatteryAdc {
 class RevABoard {
  public:
   enum class Source : std::uint8_t { kUsb, kSolar, kBatteryOnly };
-  explicit RevABoard(const BoardSupport& board);
+  // With a clock, each AON rail turns on aon_rise_ms after its enable goes
+  // high (TPS22917 tON with the fitted 1 nF CT cap); without one, instantly.
+  explicit RevABoard(const BoardSupport& board, const Clock* clock = nullptr);
+  TimeMs aon_rise_ms = 4;  // SLVSDW8B: 3.8 us/pF x 1 nF typ at VIN 3.6 V
+  // A card line (RESET_N / CS_N) was driven high while the slot's AON was not
+  // up yet: the card was backfed through its I/O clamps.
+  std::array<bool, kSlots> backfed{};
   Tca9535Model exp_a, exp_b;
   Bq25186Model charger;
   std::array<bool, kSlots> seated{};       // a card grounds PRESENT_N
@@ -174,8 +198,11 @@ class RevABoard {
 
  private:
   bool expander_pin(const ExpanderPin& p, bool undriven) const;
+  void on_exp_a_write();
   std::uint8_t exp_a_address() const { return board_.slot_io[0].aon_enable.address; }
   const BoardSupport& board_;
+  const Clock* clock_;
+  std::array<std::optional<TimeMs>, kSlots> aon_enabled_at_{};
 };
 
 // LIS2DW12 (DS11811) as far as the driver depends on it: WHO_AM_I, soft reset,
@@ -306,6 +333,12 @@ class Flash final : public IFlash {
   bool write(std::uint8_t slot, std::uint32_t offset, const std::uint8_t* data,
              std::size_t n) override;
   bool read(std::uint8_t slot, std::uint32_t offset, std::uint8_t* out, std::size_t n) override;
+  bool mark_running_valid() override {
+    ++valid_marks;
+    return !fail_mark_valid;
+  }
+  std::uint32_t valid_marks = 0;  // bootloader told the running image is good
+  bool fail_mark_valid = false;
 
  private:
   std::array<std::vector<std::uint8_t>, 2> slots_;
@@ -346,7 +379,9 @@ class Node {
   Sht40& sht(std::uint8_t slot) { return *shts_.at(slot); }
   Tmag5273& hall(std::uint8_t slot) { return *halls_.at(slot); }
 
-  void boot();  // power-on / reset: fresh runtime, same store and flash
+  // MCU reset: fresh runtime and BoardIo (RAM), same store and flash; the
+  // expanders are not reset (they sit on V3V3_CORE) and keep their registers.
+  void boot();
   // Advances virtual time in 1 ms ticks, stepping the runtime when it is due
   // or a wake line changed; handles requested reboots.
   void run_for(TimeMs ms);
@@ -365,6 +400,7 @@ class Node {
   std::uint32_t reboots() const { return reboots_; }
 
   Clock clock;
+  Watchdog watchdog{clock};
   Gpio gpio;
   I2cBus i2c;
   Power power;

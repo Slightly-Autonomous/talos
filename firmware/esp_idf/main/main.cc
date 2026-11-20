@@ -74,12 +74,16 @@ extern "C" void app_main(void) {
   static esp::BatteryAdc adc;
   static BoardIo power(i2c, clock, adc, board);  // expanders, rails, source, charger
   static esp::Store store;
+  // Longer than any blocking stretch in a step: an NVS page erase (tens of ms),
+  // four slot power-ups at ~20 ms each, a full console line. PROVISIONAL.
+  constexpr std::uint32_t kWatchdogTimeoutMs = 5'000;
+  static esp::Watchdog watchdog(kWatchdogTimeoutMs);
   static esp::Flash flash;
   static ConsoleOut console;
   static SerialDatagram serial_net(console);
   static ProvisionedLink link(serial_net, store);  // CoAP over the console until Thread lands
   static Platform platform{clock, gpio, i2c, power, store, flash, link, board};
-  static NodeRuntime runtime(platform);
+  static NodeRuntime runtime(platform, &watchdog);
 
   runtime.boot();
   // Stable, parseable lines for bench checks and HIL tests (tests/hil).
@@ -88,6 +92,12 @@ extern "C" void app_main(void) {
            static_cast<unsigned long>(runtime.boot_epoch()),
            static_cast<unsigned long>(runtime.running_version()),
            static_cast<int>(esp_reset_reason()), runtime.board_ok() ? 1 : 0);
+  ESP_LOGI(kTag, "talos persist nvs=%d epoch=%d watchdog=%d", store.ok() ? 1 : 0,
+           runtime.boot_epoch_persisted() ? 1 : 0, watchdog.ok() ? 1 : 0);
+  if (!runtime.boot_epoch_persisted()) {
+    // Events are held until the epoch is written (retried every step).
+    ESP_LOGE(kTag, "talos boot epoch not persisted: uplink held");
+  }
   static Diag diag(platform, runtime, &power);
   static LineReader reader;
   ESP_LOGI(kTag, "talos link %s device=%s", link.provisioned() ? "serial" : "unprovisioned",

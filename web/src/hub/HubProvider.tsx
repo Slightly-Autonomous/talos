@@ -1,12 +1,23 @@
 // Loads property, state and the journal from the hub, then follows the live
 // event stream. The hub is the authority: the UI never derives state it
 // cannot get from the API, and refetches /v1/state after every new entry.
-import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+// Freshness is aged locally (ageState): if state reads stop succeeding, every
+// capability turns unknown instead of keeping its last "fresh" verdict.
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import type { ReactNode } from "react";
 import { HubClient } from "@talos/contracts/client";
 import type { ConfigResponse, StateResponse } from "@talos/contracts/talos/api/v1/api_pb";
 import type { JournalEntry } from "@talos/contracts/talos/v1/journal_pb";
 import type { Property } from "@talos/contracts/talos/v1/property_pb";
+import { ageState } from "../model/view";
 
 export type ConnectionStatus = "connecting" | "live" | "reconnecting";
 
@@ -14,7 +25,11 @@ export interface HubContextValue {
   client: HubClient;
   property: Property | undefined;
   config: ConfigResponse | undefined;
+  // Locally aged: capabilities are UNKNOWN when the snapshot is too old or
+  // the hub is unreachable.
   state: StateResponse | undefined;
+  // True while `state` is being shown aged (unknown) for either reason.
+  stateStale: boolean;
   entries: JournalEntry[];
   status: ConnectionStatus;
   error: string | undefined;
@@ -44,7 +59,9 @@ async function loadJournal(client: HubClient, after: bigint): Promise<JournalEnt
 export function HubProvider({ client, children }: { client: HubClient; children: ReactNode }) {
   const [property, setProperty] = useState<Property>();
   const [config, setConfig] = useState<ConfigResponse>();
-  const [state, setState] = useState<StateResponse>();
+  const [snapshot, setSnapshot] = useState<{ state: StateResponse; fetchedAtMs: number }>();
+  const [reachable, setReachable] = useState(true);
+  const [nowMs, setNowMs] = useState(() => Date.now());
   const [entries, setEntries] = useState<JournalEntry[]>([]);
   const [status, setStatus] = useState<ConnectionStatus>("connecting");
   const [error, setError] = useState<string>();
@@ -52,8 +69,26 @@ export function HubProvider({ client, children }: { client: HubClient; children:
   const refreshTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const refresh = useCallback(async () => {
-    setState(await client.state());
+    try {
+      const s = await client.state();
+      setSnapshot({ state: s, fetchedAtMs: Date.now() });
+      setReachable(true);
+    } catch (e) {
+      setReachable(false);
+      throw e;
+    }
   }, [client]);
+
+  useEffect(() => {
+    const t = setInterval(() => setNowMs(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  const state = useMemo(
+    () => ageState(snapshot?.state, snapshot?.fetchedAtMs, nowMs, reachable),
+    [snapshot, nowMs, reachable],
+  );
+  const stateStale = !!snapshot && state !== snapshot.state;
 
   const reloadConfig = useCallback(async () => {
     try {
@@ -114,7 +149,18 @@ export function HubProvider({ client, children }: { client: HubClient; children:
 
   return (
     <HubContext.Provider
-      value={{ client, property, config, state, entries, status, error, refresh, reloadConfig }}
+      value={{
+        client,
+        property,
+        config,
+        state,
+        stateStale,
+        entries,
+        status,
+        error,
+        refresh,
+        reloadConfig,
+      }}
     >
       {children}
     </HubContext.Provider>

@@ -59,6 +59,13 @@ message Device {
   optional string zone_id = 5;
   optional Point position = 6;
   repeated Coverage coverage = 7;
+  // Board revision (e.g. "proto-a"). Firmware campaigns require it to match
+  // the release's board_revision.
+  optional string board_revision = 8;
+  // Capability ids this device reports and accepts commands on. When set,
+  // the hub rejects observations and commands for any other capability
+  // (device.health is implied). Empty: not checked (legacy configs).
+  repeated string capabilities = 9;
 }
 
 message Property {

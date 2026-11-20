@@ -28,6 +28,8 @@ std::string Metrics::prometheus() const {
   out += "talos_coap_frames_total{outcome=\"duplicate_message\"} " +
          std::to_string(coap_duplicate_messages) + "\n";
   counter("talos_ota_chunks_sent_total", "Firmware chunks sent to devices.", "", ota_chunks_sent);
+  counter("talos_journal_append_failures_total", "Journal writes that failed (fail closed).", "",
+          journal_append_failures);
   out += "# HELP talos_journal_seq Last journal sequence number.\n# TYPE talos_journal_seq gauge\n";
   out += "talos_journal_seq " + std::to_string(journal_seq) + "\n";
   return out;

@@ -5,6 +5,14 @@
 // Safety rules enforced here (sensor_edge_v1 S-2/S-3, bench-test-plan.md §1):
 // - Expander outputs are written before their pins are made outputs, so no
 //   pin ever drives its power-on default (all ones) into a rail enable.
+// - The output shadow starts at that safe pattern, not at the chip's POR value:
+//   after an MCU warm reset the expander keeps its pins as outputs, and a
+//   read-modify-write from an all-ones shadow would switch every rail on.
+//   Rails and the UART mux are refused until the expanders took their safe
+//   state (begin() is retried on the next request).
+// - RESET_N and CS_N go high only kAonSettleMs after AON_EN, once the slot's
+//   rail is up (TPS22917 tON with the fitted CT cap), so the card is never
+//   backfed through its I/O clamps while its VDD ramps.
 // - SW on only while AON is on; AON off only after SW is off.
 // - CS_N and RESET_N are driven low while a slot's AON is off (no backfeed
 //   through the card's pull-ups), and the mux never selects an unpowered slot.
@@ -33,6 +41,8 @@ class Tca9535 {
   bool configure(std::uint16_t outputs, std::uint16_t inputs_mask);
   bool write_outputs(std::uint16_t outputs);
   bool set_output(std::uint8_t pin, bool level);
+  // Sets the shadow without bus traffic: the pattern the next read-modify-write starts from.
+  void set_shadow(std::uint16_t outputs) { outputs_ = outputs; }
   // Reads both input ports (clears INT). nullopt on NACK.
   std::optional<std::uint16_t> read_inputs();
   std::optional<std::uint16_t> read_register_pair(std::uint8_t reg);
@@ -41,7 +51,9 @@ class Tca9535 {
  private:
   II2c& i2c_;
   std::uint8_t address_;
-  std::uint16_t outputs_ = 0xFFFF;  // shadow: never read-modify-write from the input register
+  // Shadow: never read-modify-write from the input register. Not the POR value
+  // (0xFFFF): BoardIo sets it to the board's safe pattern before any write.
+  std::uint16_t outputs_ = 0x0000;
 };
 
 struct ChargerStatus {
@@ -92,6 +104,10 @@ class BoardIo final : public IPower {
  public:
   static constexpr std::uint32_t kUsbChargeMa = 300;  // power-tree.md
   static constexpr std::uint32_t kSolarChargeMa = 200;
+  // AON_EN high to RESET_N/CS_N high. TPS22917 (SLVSDW8B §7.6) at VIN 3.6 V:
+  // tON = 3.8 us/pF x C_CT, so ~3.8 ms typ with the fitted 1 nF (C27-C30); the
+  // datasheet gives no max. ~2.6x typ. PROVISIONAL: scope it on the bench (L-13/L-14).
+  static constexpr std::uint32_t kAonSettleMs = 10;
 
   BoardIo(II2c& i2c, IClock& clock, IBatteryAdc& adc, const BoardSupport& board);
 
@@ -105,6 +121,8 @@ class BoardIo final : public IPower {
   std::uint8_t take_sw_faults() override;
 
   bool rail_on(std::uint8_t slot, Rail rail) const;
+  // True once every expander took its safe state (begin() or a later retry).
+  bool expanders_ready() const { return expanders_ready_; }
   bool charger_ok() const { return charger_ok_; }
   std::optional<ChargerStatus> charger_status();
   // UART mux (TS3A5017): route the card UART to one slot, or park it (nullopt).
@@ -123,12 +141,22 @@ class BoardIo final : public IPower {
     std::uint8_t pin = 0;
   };
   PinRef ref(const ExpanderPin& p);
+  // Writes the safe pattern to every expander (outputs, then directions).
+  bool configure_expanders();
+  // Retries the expander configuration if begin() did not complete it.
+  bool ensure_ready() { return expanders_ready_ || configure_expanders(); }
+  struct Plan {
+    std::uint16_t outputs = 0xFFFF;
+    std::uint16_t output_mask = 0;  // 1 = driven by the expander
+  };
 
   II2c& i2c_;
   IClock& clock_;
   IBatteryAdc& adc_;
   const BoardSupport& board_;
   std::array<std::optional<Tca9535>, 2> expanders_;
+  std::array<Plan, 2> safe_{};  // per expander, same order as expanders_
+  bool expanders_ready_ = false;
   std::optional<Bq25186> charger_;
   std::array<std::array<bool, 2>, kSlots> rails_{};  // [slot][AON, SW]
   std::optional<std::uint8_t> uart_slot_;

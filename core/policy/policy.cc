@@ -3,28 +3,14 @@
 #include <string>
 #include <utility>
 
+#include "core/execution/operations.h"
+
 namespace talos {
 
 RiskClass risk_class_for(std::string_view op) {
-  struct Entry {
-    std::string_view operation;
-    RiskClass risk;
-  };
-  // Phase 1 catalog. Grows with capabilities; anything absent fails closed.
-  static constexpr Entry kCatalog[] = {
-      {"state.read", RiskClass::kInformational},
-      {"camera.snapshot", RiskClass::kSensitiveRead},
-      {"notify", RiskClass::kBenignOutput},
-      {"light.set_on", RiskClass::kBenignOutput},
-      {"audio.speak", RiskClass::kDisruptiveOutput},
-      {"alarm.activate", RiskClass::kDisruptiveOutput},
-      {"access.set_locked", RiskClass::kSecurityCritical},
-      {"alarm.disarm", RiskClass::kSecurityCritical},
-  };
-  for (const auto& e : kCatalog) {
-    if (e.operation == op) return e.risk;
-  }
-  return RiskClass::kSecurityCritical;
+  // The operation catalog (core/execution/operations.h) is the single source.
+  const OperationSpec* spec = find_operation(op);
+  return spec ? spec->risk : RiskClass::kSecurityCritical;
 }
 
 Authorization evaluate(const Principal& principal, const Command& command,

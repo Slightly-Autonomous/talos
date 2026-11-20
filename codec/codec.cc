@@ -486,6 +486,11 @@ Result<Property> from_proto(const v1::Property& p) {
       }
     }
     if (d.has_zone_id()) dev.zone = ZoneId(d.zone_id());
+    if (d.has_board_revision()) dev.board_revision = d.board_revision();
+    for (const auto& c : d.capabilities()) {
+      if (c.empty()) return Error{"invalid_property", "device " + d.id() + ": empty capability"};
+      dev.capabilities.emplace_back(c);
+    }
     out.devices.push_back(std::move(dev));
   }
   return out;

@@ -12,7 +12,7 @@ A living register (spec §55). Nothing here is decided until an ADR, a test, a b
 | P0 | OTA resources | Is 4 MB flash enough? Partition sizes; update over Thread | Real images + HIL |
 | P0 | Actuation safety | Strong authorization, local fail-safe, no policy bypass paths | Security invariants + hardware interlocks |
 | P1 | Postgres driver | libpq via Bazel for `STORAGE_DRIVER_POSTGRES` (cloud-hosted hub on Supabase/Postgres) | Implement behind `IJournal` + conformance suite |
-| P1 | Remote access | Relay role, Supabase JWT auth, per-principal read scopes | Remote-access phase (ADR 0010) |
+| P1 | Remote access | Relay role, per-principal read scopes (Supabase JWT auth is done: ADR 0015) | Remote-access phase (ADR 0010) |
 
 | P1 | Sensor specifics | Hall vs reed, accelerometer thresholds, PIR model | Prototype BOM, measured false alarms and power |
 | P1 | Power budget | Real sleepy-node average, charger quiescent, pack life, panel size | Profiler measurements + weather scenarios |

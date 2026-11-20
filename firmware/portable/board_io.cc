@@ -122,6 +122,37 @@ BoardIo::BoardIo(II2c& i2c, IClock& clock, IBatteryAdc& adc, const BoardSupport&
     add(*p);
   }
   if (board_.charger_address) charger_.emplace(i2c_, board_.charger_address);
+
+  // Safe state, per expander: outputs (level, is_output) for every driven pin;
+  // everything else, including unused pins, stays an input.
+  auto plan = [&](const ExpanderPin& p, bool level) {
+    for (std::size_t i = 0; i < expanders_.size(); ++i) {
+      if (expanders_[i] && p.wired() && expanders_[i]->address() == p.address) {
+        const auto bit = static_cast<std::uint16_t>(1u << p.pin);
+        safe_[i].output_mask = static_cast<std::uint16_t>(safe_[i].output_mask | bit);
+        safe_[i].outputs = level ? static_cast<std::uint16_t>(safe_[i].outputs | bit)
+                                 : static_cast<std::uint16_t>(safe_[i].outputs & ~bit);
+      }
+    }
+  };
+  for (const auto& s : board_.slot_io) {
+    // Both rails match their hardware default (pull-downs: off). The runtime
+    // powers seated slots one at a time during discovery, so a shorted card
+    // can't take the whole node down at power-on.
+    plan(s.aon_enable, false);
+    plan(s.sw_enable, false);
+    plan(s.reset_n, false);  // AON is off: card lines low, no backfeed through its pull-ups
+    plan(s.cs_n, false);
+  }
+  plan(board_.present_probe, false);  // probe only while reading: saves 33 uA per card
+  plan(board_.uart_mux_en_n, true);   // UART mux parked
+  plan(board_.uart_sel0, false);
+  plan(board_.uart_sel1, false);
+  // Until begin() writes it, a read-modify-write must start from the safe
+  // pattern: the chip may still hold outputs from before an MCU reset.
+  for (std::size_t i = 0; i < expanders_.size(); ++i) {
+    if (expanders_[i]) expanders_[i]->set_shadow(safe_[i].outputs);
+  }
 }
 
 Tca9535* BoardIo::expander(std::uint8_t address) {
@@ -149,46 +180,21 @@ std::optional<bool> BoardIo::sense(const ExpanderPin& p) {
   return ((*in >> r.pin) & 1u) != 0;
 }
 
-bool BoardIo::begin() {
-  // Safe state, per expander: outputs (level, is_output) for every driven pin;
-  // everything else, including unused pins, stays an input.
-  struct Plan {
-    std::uint16_t outputs = 0xFFFF;
-    std::uint16_t output_mask = 0;
-  };
-  std::array<Plan, 2> plans{};
-  auto plan = [&](const ExpanderPin& p, bool level) {
-    for (std::size_t i = 0; i < expanders_.size(); ++i) {
-      if (expanders_[i] && p.wired() && expanders_[i]->address() == p.address) {
-        const auto bit = static_cast<std::uint16_t>(1u << p.pin);
-        plans[i].output_mask = static_cast<std::uint16_t>(plans[i].output_mask | bit);
-        plans[i].outputs = level ? static_cast<std::uint16_t>(plans[i].outputs | bit)
-                                 : static_cast<std::uint16_t>(plans[i].outputs & ~bit);
-      }
-    }
-  };
-  for (std::uint8_t i = 0; i < kSlots; ++i) {
-    const auto& s = board_.slot_io[i];
-    // Both rails match their hardware default (pull-downs: off). The runtime
-    // powers seated slots one at a time during discovery, so a shorted card
-    // can't take the whole node down at power-on.
-    plan(s.aon_enable, false);
-    plan(s.sw_enable, false);
-    plan(s.reset_n, false);  // AON is off: card lines low, no backfeed through its pull-ups
-    plan(s.cs_n, false);
-    rails_[i] = {false, false};
-  }
-  plan(board_.present_probe, false);  // probe only while reading: saves 33 uA per card
-  plan(board_.uart_mux_en_n, true);   // UART mux parked
-  plan(board_.uart_sel0, false);
-  plan(board_.uart_sel1, false);
+bool BoardIo::configure_expanders() {
   bool ok = true;
   for (std::size_t i = 0; i < expanders_.size(); ++i) {
     if (!expanders_[i]) continue;
-    ok &= expanders_[i]->configure(plans[i].outputs,
-                                   static_cast<std::uint16_t>(~plans[i].output_mask));
+    ok &= expanders_[i]->configure(safe_[i].outputs,
+                                   static_cast<std::uint16_t>(~safe_[i].output_mask));
   }
+  expanders_ready_ = ok;
+  return ok;
+}
+
+bool BoardIo::begin() {
+  for (auto& r : rails_) r = {false, false};
   uart_slot_.reset();
+  bool ok = configure_expanders();
   if (charger_) {
     last_source_ = source();
     charger_ok_ =
@@ -202,6 +208,8 @@ void BoardIo::set_rail(std::uint8_t slot, Rail rail, bool on) {
   if (slot >= kSlots) return;
   const auto& s = board_.slot_io[slot];
   auto& state = rails_[slot];
+  // Nothing turns on until the expanders hold a known state (off is always allowed).
+  if (on && !ensure_ready()) return;
   if (rail == Rail::kSwitched3v3) {
     if (on && !state[0]) return;  // S-2: SW only while AON is on
     if (drive(s.sw_enable, on)) state[1] = on;
@@ -211,7 +219,7 @@ void BoardIo::set_rail(std::uint8_t slot, Rail rail, bool on) {
   if (on) {
     if (!drive(s.aon_enable, true)) return;
     state[0] = true;
-    clock_.delay_ms(1);  // TPS22917 rise ~0.1 ms at CT open
+    clock_.delay_ms(kAonSettleMs);  // rail up before the card's lines go high (no backfeed)
     drive(s.reset_n, true);
     drive(s.cs_n, true);
     return;
@@ -294,6 +302,7 @@ std::uint8_t BoardIo::take_sw_faults() {
 bool BoardIo::select_uart(std::optional<std::uint8_t> slot) {
   if (!board_.uart_mux_en_n.wired()) return false;
   if (slot && (*slot >= kSlots || !rails_[*slot][0])) return false;  // S-3: never an unpowered slot
+  if (!ensure_ready()) return false;
   // Disable, change the select lines, then enable: no glitch onto another slot.
   if (!drive(board_.uart_mux_en_n, true)) return false;
   uart_slot_.reset();

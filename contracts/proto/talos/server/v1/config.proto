@@ -115,6 +115,9 @@ message SupabaseAuth {
   // Expected "aud" claim; defaults to "authenticated".
   string audience = 2;
   repeated SupabaseUser users = 3;
+  // Expected "iss" claim (e.g. https://<project>.supabase.co/auth/v1).
+  // Empty: not checked.
+  string issuer = 4;
 }
 
 message SupabaseUser {
