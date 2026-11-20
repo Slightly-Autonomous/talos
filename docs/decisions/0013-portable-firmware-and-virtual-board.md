@@ -38,4 +38,4 @@
 - **Boot epoch:** the save is checked and retried, nothing is transmitted until it is persisted, and an exhausted epoch fails loudly. NVS is erased only on `NO_FREE_PAGES` or `NEW_VERSION_FOUND`.
 - **Shared SPI pins** are parked at boot: GPIO4/5 driven low, no pull; MISO pulled down. Deep sleep still needs board pull-downs (HD-027).
 - **OTA trial images** are marked valid (`esp_ota_mark_app_valid_cancel_rollback`) only after a hub ACK *and* with the board's safe state reached. A node whose charger never answers rolls the update back.
-- The portable library builds with `-fno-exceptions -fno-rtti` on the host too. OTA progress is persisted every 4 KiB, not every chunk.
+- The portable library builds with `-fno-exceptions` on the host too (no-RTTI stays enforced by the ESP-IDF build; UBSan needs typeinfo on the host). OTA progress is persisted every 4 KiB, not every chunk.

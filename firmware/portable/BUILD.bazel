@@ -2,12 +2,13 @@ load("@rules_cc//cc:defs.bzl", "cc_library", "cc_test")
 load("//bazel:copts.bzl", "TALOS_COPTS")
 
 # Portable device firmware: host (tests, twin) and ESP32-H2 (ESP-IDF) build
-# the same sources. No heap in hot paths, no exceptions, no RTTI: the host
-# build enforces the last two the way the ESP-IDF build does
-# (CONFIG_COMPILER_CXX_EXCEPTIONS=n, CONFIG_COMPILER_CXX_RTTI=n).
+# the same sources. No heap in hot paths, no exceptions, no RTTI. The host
+# build enforces no exceptions (CONFIG_COMPILER_CXX_EXCEPTIONS=n on the ESP).
+# RTTI stays on here: UBSan's vptr check needs typeinfo for these classes when
+# host targets link them, and the ESP-IDF CI build (CONFIG_COMPILER_CXX_RTTI=n)
+# already fails on any dynamic_cast or typeid in portable code.
 PORTABLE_COPTS = TALOS_COPTS + [
     "-fno-exceptions",
-    "-fno-rtti",
 ]
 
 cc_library(
