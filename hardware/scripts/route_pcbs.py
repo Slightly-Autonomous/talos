@@ -124,13 +124,23 @@ def _crowds_power_pin(pad, plane_nets, radius_mm: float = 0.9) -> bool:
     return False
 
 
+
+def _is_thermal_pad(pad) -> bool:
+    """An exposed/thermal pad: on a part with four or more pads, at least twice the median pad area."""
+    fp = pad.GetParentFootprint()
+    areas = sorted(q.GetSize().x * q.GetSize().y for q in fp.Pads())
+    if len(areas) < 4:
+        return False
+    return pad.GetSize().x * pad.GetSize().y >= 2 * areas[len(areas) // 2]
+
+
 def plane_fanout(board, via_d=0.6, drill=0.3, clear=0.2, track_w=0.25, stub_clear=0.17) -> int:
     """Give every SMD pad on a plane net (GND on In1, V3V3_CORE on In2) its own via before autorouting.
 
     Freerouting fans plane pins out poorly (it left >100 GND pins unconnected and spent minutes per
     pass on them). A deterministic, clearance-checked stub + via per pad removes the plane net from the
-    router's job. Pads larger than the via (exposed thermal pads) get the via in the pad: that needs a
-    plugged/tented via at fab (review item).
+    router's job. Only exposed thermal pads get the via in the pad (plugged/tented at fab: review item);
+    an ordinary pad, however large (an 0805 cap), gets a stub to a via beside it, so solder can't wick.
     """
     planes = [z for z in board.Zones() if not z.GetIsRuleArea() and board.GetLayerType(z.GetLayer()) == pcbnew.LT_POWER]
     plane_nets = sorted({z.GetNetCode() for z in planes})
@@ -194,7 +204,7 @@ def plane_fanout(board, via_d=0.6, drill=0.3, clear=0.2, track_w=0.25, stub_clea
             return True
 
         spot = None
-        if min(w, h) >= via_d + 0.1 and via_ok(px, py):  # thermal pad: via in pad
+        if _is_thermal_pad(pad) and min(w, h) >= via_d + 0.1 and via_ok(px, py):  # thermal pad: via in pad
             spot = (px, py)
         else:
             fp = pad.GetParentFootprint()
@@ -280,6 +290,119 @@ def drop_plane_pins(dsn: str, connected: dict[str, set[str]]) -> int:
                   else m.group(0), text)
     open(dsn, "w").write(text)
     return dropped
+
+
+def stitch_vias(board, pitch_mm: float = 3.0, via_d: float = 0.6, drill: float = 0.3) -> int:
+    """Ground stitching: a GND via on a grid wherever the outer GND pours are filled on both sides with
+    room for the via (every sample on its rim inside both fills, away from keep-outs and other vias).
+    Ties each pour fragment to the others and to the In1 plane, and shortens return paths."""
+    F = pcbnew.FromMM
+    gnd = board.GetNetcodeFromNetname("/GND")
+    if gnd < 0:
+        return 0
+    pcbnew.ZONE_FILLER(board).Fill(board.Zones())
+    pours = {L: [z for z in board.Zones() if not z.GetIsRuleArea() and z.GetNetCode() == gnd and z.GetLayer() == L]
+             for L in (pcbnew.F_Cu, pcbnew.B_Cu)}
+    if not pours[pcbnew.F_Cu] or not pours[pcbnew.B_Cu]:
+        return 0
+    no_via = [z for z in board.Zones() if z.GetIsRuleArea() and z.GetDoNotAllowVias()]
+    no_via += [z for fp in board.Footprints() for z in fp.Zones() if z.GetIsRuleArea() and z.GetDoNotAllowVias()]
+    existing = [t.GetPosition() for t in board.GetTracks() if t.GetClass() == "PCB_VIA"]
+    holes = [p.GetPosition() for p in board.GetPads() if p.GetDrillSize().x > 0]
+    r = F(via_d / 2 + 0.05)
+    rim = [pcbnew.VECTOR2I(int(r * math.cos(k * math.pi / 6)), int(r * math.sin(k * math.pi / 6))) for k in range(12)]
+    box = board.GetBoardEdgesBoundingBox()
+    step = F(pitch_mm)
+    added = 0
+    y = box.GetY() + step // 2
+    while y < box.GetBottom():
+        x = box.GetX() + step // 2
+        while x < box.GetRight():
+            c = pcbnew.VECTOR2I(x, y)
+            pts = [c] + [c + d for d in rim]
+            ok = all(any(z.GetFilledPolysList(L).Contains(pt) for z in pours[L]) for L in pours for pt in pts)
+            ok = ok and not any(z.Outline().Contains(c) for z in no_via)
+            ok = ok and all((c - e).EuclideanNorm() > F(0.9) for e in existing + holes)
+            if ok:
+                v = pcbnew.PCB_VIA(board)
+                v.SetPosition(c)
+                v.SetWidth(F(via_d))
+                v.SetDrill(F(drill))
+                v.SetNetCode(gnd)
+                v.SetLocked(True)
+                board.Add(v)
+                existing.append(c)
+                added += 1
+            x += step
+        y += step
+    pcbnew.ZONE_FILLER(board).Fill(board.Zones())
+    # Fragments the grid missed: any outer GND fill island with no via or through-hole pad gets one at the
+    # first spot (0.2 mm search) where a via fits inside it and clears every other net on both outer layers.
+    clear = F(0.2)
+    others = [i for i in list(board.GetPads()) + list(board.GetTracks()) if i.GetNetCode() != gnd]
+    for L in pours:
+        for z in pours[L]:
+            polys = z.GetFilledPolysList(L)
+            for k in range(polys.OutlineCount()):
+                isl = pcbnew.SHAPE_POLY_SET()
+                isl.AddOutline(polys.Outline(k))
+                for hk in range(polys.HoleCount(k)):
+                    isl.AddHole(polys.Hole(k, hk))
+                gnd_links = [t.GetPosition() for t in board.GetTracks() if t.GetClass() == "PCB_VIA"
+                             and t.GetNetCode() == gnd]
+                gnd_links += [q.GetPosition() for q in board.GetPads() if q.GetNetCode() == gnd and q.GetDrillSize().x > 0]
+                if any(polys.Contains(e, k) for e in gnd_links):  # respects the island's holes
+                    continue
+                bb = isl.BBox()
+                spot = None
+                yy = bb.GetY()
+                while spot is None and yy < bb.GetBottom():
+                    xx = bb.GetX()
+                    while xx < bb.GetRight():
+                        c = pcbnew.VECTOR2I(xx, yy)
+                        if all(isl.Contains(c + d) for d in rim) and not any(zz.Outline().Contains(c) for zz in no_via):
+                            shape = pcbnew.SHAPE_CIRCLE(c, F(via_d / 2))
+                            if not any(o.IsOnLayer(LL) and o.GetEffectiveShape(LL).Collide(shape, clear)
+                                       for o in others for LL in (pcbnew.F_Cu, pcbnew.B_Cu)):
+                                spot = c
+                                break
+                        xx += F(0.2)
+                    yy += F(0.2)
+                if spot is None:  # too small for a via: maze-route one of its GND pads to the nearest GND via
+                    import maze_route
+                    pads_in = [q for q in board.GetPads() if q.GetNetCode() == gnd and q.IsOnLayer(L)
+                               and polys.Contains(q.GetPosition(), k)]
+                    gvias = [t for t in board.GetTracks() if t.GetClass() == "PCB_VIA" and t.GetNetCode() == gnd]
+                    for q in pads_in[:1]:
+                        # its own IC's other ground pads (exposed pad) first, then the nearest GND vias
+                        targets = [o for o in q.GetParentFootprint().Pads() if o.GetNetCode() == gnd
+                                   and o.GetNumber() != q.GetNumber() and not polys.Contains(o.GetPosition(), k)]
+                        targets += sorted(gvias, key=lambda t: (t.GetPosition() - q.GetPosition()).EuclideanNorm())[:3]
+                        done = False
+                        for rip in (False, True):
+                            for t in targets:
+                                if maze_route.connect(board, q, t, 6.0, rip):
+                                    done = True
+                                    break
+                            if done:
+                                break
+                        if done:
+                            print(f"    stitch: GND island at {q.GetParentFootprint().GetReference()}-"
+                                  f"{q.GetNumber()} tied to ground by a track")
+                            added += 1
+                    continue
+                if spot is not None:
+                    v = pcbnew.PCB_VIA(board)
+                    v.SetPosition(spot)
+                    v.SetWidth(F(via_d))
+                    v.SetDrill(F(drill))
+                    v.SetNetCode(gnd)
+                    v.SetLocked(True)
+                    board.Add(v)
+                    existing.append(spot)
+                    added += 1
+    pcbnew.ZONE_FILLER(board).Fill(board.Zones())
+    return added
 
 
 def freeroute(board, name: str, passes: str, clearance_mm: float) -> int:
@@ -476,6 +599,9 @@ def repair(path: pathlib.Path, name: str) -> None:
     if ripped:  # ripping opens connections; DRC names them so the stitch can close them
         board.Save(str(path))
     fixed = stitch(board, drc_report(path))
+    import maze_route
+    pcbnew.ZONE_FILLER(board).Fill(board.Zones())
+    maze_route.tidy(board)  # stubs left by rip-up
     remove_dangling_vias(board)
     pcbnew.ZONE_FILLER(board).Fill(board.Zones())
     board.Save(str(path))
@@ -598,6 +724,13 @@ def main() -> int:
     ok = True
     for name in sys.argv[1:] or BOARDS:
         ok &= route_until_clean(name)
+        pcb = BOARDS_DIR / name / f"{name}.kicad_pcb"
+        board = pcbnew.LoadBoard(str(pcb))
+        n = stitch_vias(board)
+        board.Save(str(pcb))
+        errors = drc_errors(pcb)
+        print(f"{name}: {n} ground stitching vias; {len(errors)} DRC errors after stitching", flush=True)
+        ok &= not errors
         r = silk_pass.finish(str(BOARDS_DIR / name / f"{name}.kicad_pcb"))
         print(f"{name}: silkscreen {r['placed']} references placed, {r['fab_only']} on the fab layer only")
     return 0 if ok else 1

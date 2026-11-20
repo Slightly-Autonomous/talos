@@ -278,7 +278,11 @@ def add_zone(board, net, layer, rect, priority=0) -> None:
     z.SetAssignedPriority(priority)
     z.SetLocalClearance(mm(0.25))
     z.SetMinThickness(mm(0.2))
-    z.SetPadConnection(pcbnew.ZONE_CONNECTION_FULL)  # reflow-only assembly
+    # Pours connect solidly (ICs' fine-pitch ground pins rely on it); two-pad passives override to
+    # thermal relief (build() below) so one flooded pad can't tombstone a 0402 in reflow.
+    z.SetPadConnection(pcbnew.ZONE_CONNECTION_FULL)
+    z.SetThermalReliefGap(mm(0.25))
+    z.SetThermalReliefSpokeWidth(mm(0.3))
     z.SetIslandRemovalMode(pcbnew.ISLAND_REMOVAL_MODE_ALWAYS)  # no floating copper
     ol = z.Outline()
     ol.NewOutline()
@@ -630,6 +634,9 @@ def build(board_name: str) -> dict:
                 pad.SetNet(nets[net])
                 continue
             pad.SetNet(nets[net])
+        if len(fp.Pads()) == 2 and all(q.GetAttribute() == pcbnew.PAD_ATTRIB_SMD for q in fp.Pads()):
+            for q in fp.Pads():  # two-pad SMD passives: thermal relief against tombstoning
+                q.SetLocalZoneConnection(pcbnew.ZONE_CONNECTION_THERMAL)
         board.Add(fp)
         fps[ref] = fp
 

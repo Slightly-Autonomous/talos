@@ -11,7 +11,7 @@ The owner chose to start layout before an EE review. Treat everything here as a 
 | Functional blocks | `scripts/layout_groups.py` | `kicad/TL-SN-001/TL-SN-001.groups.json`: which parts form each block (a slot, the regulator, the charger, the MCU, the bus), derived from the netlist. KiCadRoutingTools' groups format |
 | Placement optimisation | `scripts/place_opt.py` (called by `gen_pcbs.py`) | Simulated annealing (seeded and deterministic, including across Python hash seeds) over every part except the connectors and the radio module. Minimises Manhattan MST wirelength, decoupling-cap distance to its IC pin, RUDY routing congestion and **block spread** (each block pulled to its centroid, plus whole-block moves). It then **lays out slot 0 once and copies it to the other three slots** (the right-hand pair rotated 180°), re-settles the rest around them, and legalises with courtyard halos. KiCad has no auto-placer |
 | Hand tweaks | `scripts/layout_tweaks.py` | Lock parts you moved in KiCad, run `capture`, and `gen_pcbs.py` pins them from then on (`<board>.placement.json`) |
-| Plane fanout | `scripts/route_pcbs.py` | Before autorouting, every SMD pad on a plane net (GND→In1, V3V3_CORE→In2) gets a clearance-checked stub and via, sized to the pad, so the router only handles signals |
+| Plane fanout | `scripts/route_pcbs.py` | Before autorouting, every SMD pad on a plane net (GND→In1, V3V3_CORE→In2) gets a clearance-checked stub and via beside it (in the pad only for exposed thermal pads), so the router only handles signals. After routing, GND stitching vias tie the outer pours to In1 |
 | Routing | `scripts/route_pcbs.py` + Freerouting 2.5.0 | Routed `.kicad_pcb`. Attempts run in parallel (`ROUTE_JOBS`, default a quarter of the cores), each in its own temp copy of the board folder, and each is DRC-gated. Pins the planes already reach are hidden from Freerouting (it doesn't credit plane connections and otherwise spends ~40 min chasing them). The first clean attempt wins and the rest are stopped. If none is clean, a repair pass keeps the best attempt, rips up tracks in clearance violations and closes leftover open connections: short straight/L tracks first, then a grid maze router (`maze_route.py`, A* on both outer layers with vias, then rip-up of other nets' tracks) |
 | Silkscreen | `scripts/silk_pass.py` (run by `route_pcbs.py`) | Every reference designator moved to a spot clear of pads, other silk and the edge; modules carry theirs on the body; a part with no room keeps its reference on the fab layer only. Back-side text is mirrored |
 | Block map | `scripts/layout_view.py` | PNG of courtyards coloured by block (with `--tracks`, the routing): the picture used to judge structure |
@@ -64,23 +64,26 @@ The first layout was compact enough to route but looked scattered: the placer mi
 | Outline sweep (100×80, 90×75, 80×70, 75×65) | 75×65 has no room for the debug header. 80×70 places and routes clean once the two sockets per edge keep their 24 mm pitch (their courtyards are 23.3 mm long) |
 | Hide plane-connected pins from Freerouting | Same incremental job: 42 → 16 min |
 | Silkscreen pass | DRC warnings 100 → 6 (all six are deliberate edge-straddling footprints) |
+| Layout red team fixes | Fanout puts vias only in thermal pads; two-pad passives get thermal relief (tombstoning); GND via stitching on a 3 mm grid plus a rescue for pour islands; the maze router keeps hole spacing, reuses same-net vias and tidies rip-up stubs |
 
 **TL-SN-001 at 80 × 70 mm vs the 100 × 80 mm first layout:**
 
 | | 100 × 80 (old) | 80 × 70 (now) |
 |---|---:|---:|
 | Area | 8000 mm² | 5600 mm² (−30 %) |
-| Track length | 5654 mm | 5156 mm (−9 %) |
-| Vias | 470 | 476 |
+| Track length | 5654 mm | 5279 mm (−7 %) |
+| Vias | 470 | 488, including ~120 ground-stitching vias |
 | DRC errors | 0 | 0 |
 | DRC warnings | 100 (silkscreen) | 6 (sockets and module straddling the edge by design; budgeted in `layout-status.json`) |
 | Routing time | ~32 min (6 attempts, 3 at a time) | ~37 min (4 attempts at once, plane pins hidden) |
-| Hottest part (kisi, 25 °C) | U4 58 °C | U4 60 °C |
+| Hottest part (kisi, 25 °C) | U4 58 °C | U4 61 °C |
+| Vias in ordinary SMD pads | ~20 | 1 (Freerouting's; thermal-pad vias are deliberate, HD-039) |
 
 **What is still not possible automatically, and why.**
 - **Hand-quality power layout.** No open-source placer knows that the TPS63900's input cap, inductor and output cap form a hot loop to keep tiny, or that the BQ25186 needs thermal vias. Next: per-block templates from each vendor's layout example (fixed relative positions inside the block, placed as one rigid macro).
 - **Every reference on silk.** At 0.8 mm text, about a third of the densely packed passives have no clear spot, so their references stay on the fab layer (the assembly drawing). Smaller text would fail the fab's minimum text height.
 - **Routing time.** Freerouting is still 30–90 min an attempt on this board and not deterministic, so routing stays local: in parallel, never in CI.
+- **Vendor-quality power blocks.** The red team measured the TPS63900 and charger blocks as loose (HD-036..038). Block templates are the next generator step; until then hand-place those blocks and capture them with `layout_tweaks.py`.
 - **The last connection or two.** When Freerouting leaves one, the maze router with rip-up closes most of them. Two nets fighting over one channel can still be left open; another Freerouting attempt usually fixes that.
 
 ## Finishing the Sensor Node layout
@@ -97,10 +100,11 @@ Autorouted is not reviewed. A layout engineer still has to review the power sect
 1. **HSEC8-EM2 socket.** The footprint, the host locating slot and the card tongue follow Samtec's drawings (HD-002). Two values were read from drawing geometry, not printed callouts: the slot depth (4.375 mm) and the 0.80 mm pad setback. Check both against a sample socket before ordering. Host and card boards must be 1.57 mm (1.6 mm nominal is within ±0.15 mm).
 2. **Check the EKMB pin mapping** (Vdd/OUT/GND on a 5.08 mm PCD) against a physical part.
 3. **RF:** the module sits on the top edge with Espressif's keepout honoured, but nobody has reviewed antenna ground clearance, enclosure or detuning.
-4. **Power layout:**
-   - TPS63900: loop and inductor placement were not done to TI's layout guidance.
-   - BQ25186: thermal pad vias are not added.
-   - TPS2121: still has TBD component values (HD-007).
+4. **Power layout** (measured by the 2026-11-20 layout red team):
+   - TPS63900: input/output caps 2.8–3.2 mm from their pins, LX traces 8–10 mm with vias, L1 8 mm away (HD-036). Not to TI's layout guidance.
+   - BQ25186: one thermal via; no local input cap (HD-037, HD-041).
+   - Power/Rail nets neck to ~0.19 mm in places (HD-038).
+   - Thermal-pad vias are open vias in pads: order filled/capped (HD-039).
 5. **The autorouter is not a designer.** There is:
    - no impedance control on USB D+/D−
    - no deliberate return paths

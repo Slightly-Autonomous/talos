@@ -112,6 +112,20 @@ def connect(board, a, b, window_mm: float = 12.0, rip: bool = False) -> bool:
     via_r = clear + via_d // 2
     viab = {L: _blocked(board, win, net, L, via_r) for L in LAYERS}
     no_via = bytearray(win.nx * win.ny)
+    same_via = bytearray(win.nx * win.ny)  # inside a via of this net: change layer there for free
+    hole_gap = via_drill + F(0.3)  # drill-to-drill centre spacing (hole_to_hole rule plus margin)
+    drilled = [t for t in board.GetTracks() if t.GetClass() == "PCB_VIA"]
+    drilled += [q for q in board.GetPads() if q.GetDrillSize().x > 0]
+    for d in drilled:
+        c = d.GetPosition()
+        r = hole_gap if d.GetClass() == "PCB_VIA" else hole_gap + d.GetDrillSize().x // 2
+        box = pcbnew.BOX2I(pcbnew.VECTOR2I(c.x - r, c.y - r), pcbnew.VECTOR2L(2 * r, 2 * r))
+        for i, j in win.cells(box):
+            dist = (win.pt(i, j) - c).EuclideanNorm()
+            if dist < r:
+                no_via[j * win.nx + i] = 1
+            if d.GetClass() == "PCB_VIA" and d.GetNetCode() == net and dist < d.GetWidth(pcbnew.F_Cu) // 2:
+                same_via[j * win.nx + i] = 1
     for z in [z for z in board.Zones() if z.GetIsRuleArea() and z.GetDoNotAllowVias()]:
         box = z.GetBoundingBox()
         box.Inflate(via_r)
@@ -158,9 +172,11 @@ def connect(board, a, b, window_mm: float = 12.0, rip: bool = False) -> bool:
                     nbrs.append(((ni, nj, L), c + RIP_COST))
         k = j * win.nx + i
         va, vb = viab[LAYERS[0]][k], viab[LAYERS[1]][k]
-        if not no_via[k] and (va, vb) == (0, 0):
+        if same_via[k]:  # an existing via of this net: use it instead of drilling another
+            nbrs.append(((i, j, LAYERS[1] if L == LAYERS[0] else LAYERS[0]), 0.0))
+        elif not no_via[k] and (va, vb) == (0, 0):
             nbrs.append(((i, j, LAYERS[1] if L == LAYERS[0] else LAYERS[0]), VIA_COST))
-        elif rip and not no_via[k] and va != 1 and vb != 1:
+        elif rip and not no_via[k] and not same_via[k] and va != 1 and vb != 1:
             nbrs.append(((i, j, LAYERS[1] if L == LAYERS[0] else LAYERS[0]), VIA_COST + 4 * RIP_COST))
         for n, c in nbrs:
             nd = d + c
@@ -185,6 +201,8 @@ def connect(board, a, b, window_mm: float = 12.0, rip: bool = False) -> bool:
     pts.append(path[-1])
     added = []
     for p, q in zip(pts, pts[1:]):
+        if p[2] != q[2] and same_via[p[1] * win.nx + p[0]]:
+            continue  # layer change through an existing via
         if p[2] != q[2]:
             v = pcbnew.PCB_VIA(board)
             v.SetPosition(win.pt(p[0], p[1]))
@@ -220,3 +238,35 @@ def connect(board, a, b, window_mm: float = 12.0, rip: bool = False) -> bool:
             board.Delete(t)
         print(f"    maze: {a.GetNetname()} routed through {len(victims)} other track segment(s), ripped for re-route")
     return True
+
+
+def tidy(board) -> int:
+    """Remove what rip-up leaves behind: track segments with a free end (repeatedly), and vias that
+    connect nothing. Returns the number of items removed."""
+    removed = 0
+    while True:
+        tracks = [t for t in board.GetTracks() if t.GetClass() == "PCB_TRACK"]
+        vias = [t for t in board.GetTracks() if t.GetClass() == "PCB_VIA"]
+        pads = list(board.GetPads())
+        zones = [z for z in board.Zones() if not z.GetIsRuleArea()]
+        dead = []
+        for t in tracks:
+            if t.IsLocked() and t.GetLength() == 0:
+                dead.append(t)
+                continue
+            for end in (t.GetStart(), t.GetEnd()):
+                net, L = t.GetNetCode(), t.GetLayer()
+                hit = any(o is not t and o.GetNetCode() == net and o.IsOnLayer(L) and
+                          o.GetEffectiveShape(L).Collide(end, t.GetWidth() // 2) for o in tracks + vias)
+                hit = hit or any(p.GetNetCode() == net and p.IsOnLayer(L) and p.GetEffectiveShape(L).Collide(end, 0)
+                                 for p in pads)
+                hit = hit or any(z.GetNetCode() == net and z.GetLayer() == L and z.GetFilledPolysList(L).Contains(end)
+                                 for z in zones)
+                if not hit:
+                    dead.append(t)
+                    break
+        if not dead:
+            return removed
+        for t in dead:
+            board.Delete(t)
+        removed += len(dead)
