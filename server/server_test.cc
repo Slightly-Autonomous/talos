@@ -848,6 +848,186 @@ TEST_F(HttpE2E, ReplayedHeartbeatDoesNotKeepADeadDeviceAlive) {
   }
 }
 
+// Red team: maintenance covers the tamper alarm only. It used to return
+// MAINTENANCE before looking at anything else, hiding a slot fault or a flat
+// battery on that node. Offline still wins and still names an open lid.
+TEST(ProjectHealth, MaintenanceCoversOnlyTheTamperAlarm) {
+  const DeviceId dev("node-12");
+  const Timestamp now{1'000'000};
+  const Millis offline{60'000};
+  const auto until = std::optional<Timestamp>(now + Millis{600'000});
+  DeviceTelemetry t;
+  t.last_seen = now;
+  auto h = project_health(dev, &t, Freshness::kFresh, now, now, offline, nullptr, true, until);
+  EXPECT_EQ(h.status(), talos::v1::HEALTH_STATUS_MAINTENANCE);
+  t.slots[1] = {0x22, fw::ModuleFault::kBusError};
+  h = project_health(dev, &t, Freshness::kFresh, now, now, offline, nullptr, true, until);
+  EXPECT_EQ(h.status(), talos::v1::HEALTH_STATUS_FAULTED);
+  bool noted = false;
+  for (const auto& e : h.evidence()) noted |= e.find("maintenance") != std::string::npos;
+  EXPECT_TRUE(noted);
+  t.slots.clear();
+  t.power_mode = fw::PowerMode::kCritical;
+  h = project_health(dev, &t, Freshness::kFresh, now, now, offline, nullptr, false, until);
+  EXPECT_EQ(h.status(), talos::v1::HEALTH_STATUS_LOW_POWER);
+  t.power_mode = fw::PowerMode::kNormal;
+  t.last_seen = now - Millis{120'000};
+  h = project_health(dev, &t, Freshness::kStale, std::nullopt, now, offline, nullptr, true, until);
+  EXPECT_EQ(h.status(), talos::v1::HEALTH_STATUS_OFFLINE);
+  bool lid = false;
+  for (const auto& e : h.evidence()) lid |= e.find("enclosure") != std::string::npos;
+  EXPECT_TRUE(lid);
+}
+
+// Red team: the registry copy of a node's tamper (nodes that don't declare
+// tamper.enclosure) took whatever arrived last, so a late "closed" cleared an
+// open lid. Only the newest source position counts.
+TEST(DeviceRegistryTamper, ALateClosedReportDoesNotClearAnOpenLid) {
+  DeviceRegistry reg;
+  fw::DeviceEvent open;
+  open.kind = fw::EventKind::kTamper;
+  open.boot_epoch = 1;
+  open.seq = 5;
+  open.flag = true;
+  fw::DeviceEvent closed = open;
+  closed.seq = 4;
+  closed.flag = false;
+  ASSERT_TRUE(reg.observe_unjournaled(DeviceId("n"), open, Timestamp{1}));
+  ASSERT_TRUE(reg.observe_unjournaled(DeviceId("n"), closed, Timestamp{2}));
+  EXPECT_EQ(reg.find(DeviceId("n"))->tamper_open, std::optional<bool>{true});
+  closed.seq = 6;
+  ASSERT_TRUE(reg.observe_unjournaled(DeviceId("n"), closed, Timestamp{3}));
+  EXPECT_EQ(reg.find(DeviceId("n"))->tamper_open, std::optional<bool>{false});
+}
+
+// HD-032: a node's enclosure tamper report shows in its health until the lid closes.
+TEST_F(HttpE2E, TamperOpenFaultsTheDeviceUntilRestored) {
+  Hub hub(db, clock);
+  auto health_of = [&](const std::string& id) {
+    const auto all = hub.service().device_health();
+    for (const auto& h : all.devices()) {
+      if (h.device_id() == id) return h;
+    }
+    return talos::v1::Health{};
+  };
+  fw::DeviceEvent beat;
+  beat.boot_epoch = 1;
+  beat.seq = 1;
+  beat.kind = fw::EventKind::kHeartbeat;
+  beat.a = 3'900;
+  (void)hub.service().device_exchange(DeviceId("node-12"), {beat}, 512);
+  EXPECT_EQ(health_of("node-12").status(), talos::v1::HEALTH_STATUS_HEALTHY);
+  fw::DeviceEvent open;
+  open.boot_epoch = 1;
+  open.seq = 2;
+  open.kind = fw::EventKind::kTamper;
+  open.priority = fw::Priority::kP0Critical;
+  open.flag = true;
+  const auto acks = hub.service().device_exchange(DeviceId("node-12"), {open}, 512);
+  ASSERT_FALSE(acks.empty());
+  EXPECT_TRUE(std::holds_alternative<fw::Ack>(acks.front()));
+  const auto h = health_of("node-12");
+  EXPECT_EQ(h.status(), talos::v1::HEALTH_STATUS_FAULTED);
+  // node-12 declares tamper.enclosure: the opening is journaled as an observation.
+  auto c = hub.client();
+  auto journal = parse<api::JournalPage>(c.Get("/v1/journal", bearer(kOwnerToken))->body);
+  bool journaled = false;
+  for (const auto& e : journal.entries()) {
+    journaled |= e.has_observation() &&
+                 e.observation().envelope().event_type() == "tamper.opened" &&
+                 e.observation().envelope().source().capability_id() == "tamper.enclosure";
+  }
+  EXPECT_TRUE(journaled) << journal.DebugString();
+  ASSERT_GT(h.evidence_size(), 0);
+  EXPECT_NE(h.evidence(0).find("tamper"), std::string::npos);
+  fw::DeviceEvent closed = open;
+  closed.seq = 3;
+  closed.priority = fw::Priority::kP1State;
+  closed.flag = false;
+  (void)hub.service().device_exchange(DeviceId("node-12"), {closed}, 512);
+  EXPECT_EQ(health_of("node-12").status(), talos::v1::HEALTH_STATUS_HEALTHY);
+}
+
+// The HTTP device API (devsim, adapters) reaches the same alarm path: journaled,
+// and health shows the open enclosure even with a fresh heartbeat. Another
+// device cannot report node-12's tamper.
+TEST_F(HttpE2E, TamperOverTheDeviceApiIsJournaledAndFaultsHealth) {
+  Hub hub(db, clock);
+  auto c = hub.client();
+  auto health_of = [&](const std::string& id) {
+    auto h = parse<api::HealthListResponse>(c.Get("/v1/health/devices", bearer(kOwnerToken))->body);
+    for (const auto& d : h.devices()) {
+      if (d.device_id() == id) return d.status();
+    }
+    return talos::v1::HEALTH_STATUS_UNSPECIFIED;
+  };
+  auto beat = envelope("node-12", std::nullopt, "device.health", "device.heartbeat", 1,
+                       R"({"heartbeat":{"batteryMv":3900}})");
+  ASSERT_EQ(post(c, "/v1/devices/observations", kNode12Token, json(beat))->status, 200);
+  EXPECT_EQ(health_of("node-12"), talos::v1::HEALTH_STATUS_HEALTHY);
+  auto open = envelope("node-12", std::nullopt, "tamper.enclosure", "tamper.opened", 2,
+                       R"({"tamper":{"open":true}})");
+  auto spoof = open;
+  spoof.mutable_source()->set_device_id("node-07");  // node-07's token, node-07 has no lid loop
+  spoof.set_event_id("node-07:1:9");
+  EXPECT_NE(post(c, "/v1/devices/observations", kNodeToken, json(spoof))->status, 200);
+  ASSERT_EQ(post(c, "/v1/devices/observations", kNode12Token, json(open))->status, 200);
+  EXPECT_EQ(health_of("node-12"), talos::v1::HEALTH_STATUS_FAULTED);
+  auto closed = envelope("node-12", std::nullopt, "tamper.enclosure", "tamper.closed", 3,
+                         R"({"tamper":{"open":false}})");
+  ASSERT_EQ(post(c, "/v1/devices/observations", kNode12Token, json(closed))->status, 200);
+  EXPECT_EQ(health_of("node-12"), talos::v1::HEALTH_STATUS_HEALTHY);
+}
+
+// Maintenance over the ordinary command API: humans only, journaled, shown in
+// state and health, and it expires on the hub clock.
+TEST_F(HttpE2E, MaintenanceIsAHumanCommandShownInStateAndHealthUntilItExpires) {
+  Hub hub(db, clock);
+  auto c = hub.client();
+  auto beat = envelope("node-12", std::nullopt, "device.health", "device.heartbeat", 1,
+                       R"({"heartbeat":{"batteryMv":3900}})");
+  ASSERT_EQ(post(c, "/v1/devices/observations", kNode12Token, json(beat))->status, 200);
+  const std::string body = R"({"commandId": "%ID%", "operation": "device.maintenance",
+    "target": {"deviceId": "node-12", "capabilityId": "device.health"},
+    "args": {"setMaintenance": {"durationMs": 600000}}})";
+  auto with_id = [&](const std::string& id) {
+    std::string b = body;
+    return b.replace(b.find("%ID%"), 4, id);
+  };
+  auto agent = post(c, "/v1/commands", kAgentToken, with_id("agent-maint"));
+  ASSERT_EQ(agent->status, 202) << agent->body;
+  EXPECT_EQ(parse<api::CommandResponse>(agent->body).status(), talos::v1::COMMAND_STATUS_DENIED);
+  auto owner = post(c, "/v1/commands", kOwnerToken, with_id("owner-maint"));
+  ASSERT_EQ(owner->status, 202) << owner->body;
+  EXPECT_EQ(parse<api::CommandResponse>(owner->body).status(), talos::v1::COMMAND_STATUS_VERIFIED);
+  auto state = parse<api::StateResponse>(c.Get("/v1/state", bearer(kOwnerToken))->body);
+  ASSERT_EQ(state.maintenance_size(), 1);
+  EXPECT_EQ(state.maintenance(0).device_id(), "node-12");
+  EXPECT_EQ(state.maintenance(0).until_unix_ms(), clock.now().unix_ms + 600'000);
+  EXPECT_EQ(state.maintenance(0).principal_id(), "owner");
+  auto health_of = [&](const std::string& id) {
+    auto h = parse<api::HealthListResponse>(c.Get("/v1/health/devices", bearer(kOwnerToken))->body);
+    for (const auto& d : h.devices()) {
+      if (d.device_id() == id) return d.status();
+    }
+    return talos::v1::HEALTH_STATUS_UNSPECIFIED;
+  };
+  EXPECT_EQ(health_of("node-12"), talos::v1::HEALTH_STATUS_MAINTENANCE);
+  clock.advance(600'000);
+  hub.service().tick();
+  state = parse<api::StateResponse>(c.Get("/v1/state", bearer(kOwnerToken))->body);
+  EXPECT_EQ(state.maintenance_size(), 0);
+  auto journal = parse<api::JournalPage>(c.Get("/v1/journal", bearer(kOwnerToken))->body);
+  int started = 0, expired = 0;
+  for (const auto& e : journal.entries()) {
+    if (!e.has_maintenance_changed()) continue;
+    started += e.maintenance_changed().reason() == "started";
+    expired += e.maintenance_changed().reason() == "expired";
+  }
+  EXPECT_EQ(started, 1);
+  EXPECT_EQ(expired, 1);
+}
+
 TEST_F(HttpE2E, LiveEventStreamsAreCapped) {
   constexpr int kCap = 2;
   Hub hub(db, clock, kCap);

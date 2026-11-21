@@ -57,8 +57,10 @@ def uid(*parts: str) -> str:
 SOCKET_PITCH_MM = 24.0  # HSEC8-110-01-S-D-EM2 courtyard 23.29 mm along the edge, plus 0.7 mm
 
 
-def sn_spec(w: float = 80.0, h: float = 70.0, seed: int = 1) -> dict:
-    """80 x 70 mm since 2026-11-20 (the first layout was 100 x 80; layout_search.py compared 100x80,
+def sn_spec(w: float = 84.0, h: float = 72.0, seed: int = 1) -> dict:
+    """84 x 72 mm since 2026-11-21: the board-practices additions (lamps, EXP_C, test pads, Tag-Connect,
+    mounting holes) and the 0.5 mm hole-to-hole rule left 80 x 70 a few connections short of routing
+    (owner decision). Before that 80 x 70 mm since 2026-11-20 (the first layout was 100 x 80; layout_search.py compared 100x80,
     90x75 and 80x70, see hardware/layout/README.md). Starting positions scale from the 100 x 80
     coordinates below, and the two sockets on each side edge keep SOCKET_PITCH_MM between them."""
     cx = w / 2
@@ -77,9 +79,9 @@ def sn_spec(w: float = 80.0, h: float = 70.0, seed: int = 1) -> dict:
         "J4": (1.0, y_a, 270), "J5": (1.0, y_b, 270),
         "J6": (w - 1.0, y_a, 90), "J7": (w - 1.0, y_b, 90),
         # power entry along the bottom edge
-        "J1": (14.0 * sx, h - 4.0, 0), "J2": (36.0 * sx, h - 5.0, 0), "J3": (w - 14.0, h - 5.0, 0),
+        "J1": (max(14.0 * sx, 13.5), h - 4.0, 0), "J2": (36.0 * sx, h - 5.0, 0), "J3": (w - 14.0, h - 5.0, 0),  # J1 clear of the H3 corner hole
         "U2": (24.0 * sx, h - 10.0, 0), "U3": (36.0 * sx, h - 18.0, 0), "U4": (52.0 * sx, h - 18.0, 0),
-        "U5": (68.0 * sx, h - 18.0, 0),
+        "U5": (68.0 * sx, h - 21.0, 0),  # template clear of the J3 pack connector
         "U14": (cx, 30.0 * sy, 0), "U15": (32.0 * sx, 40.0 * sy, 90), "U16": (68.0 * sx, 40.0 * sy, 90),
         "U17": (cx, 48.0 * sy, 0),
     }
@@ -94,15 +96,40 @@ def sn_spec(w: float = 80.0, h: float = 70.0, seed: int = 1) -> dict:
     near.update({r: "U4" for r in ("C9", "C10", "R16", "R17")})
     near.update({r: "U5" for r in ("C11", "C12", "L1", "R18", "R19", "R20")})
     near.update({"C21": "U14", "C22": "U15", "C23": "U16", "C24": "U17", "R10": "J1", "R11": "J1", "D2": "J2",
-                 "D3": "J2"})
+                 "D3": "J2", "C37": "U18", "C36": "U19"})
+    # Bottom edge, left to right: USB, PV, the lamp strip (M-06: one light pipe), battery.
+    for i, ref in enumerate(("D8", "D1", "D9", "D10", "D11", "D12")):  # PWR, STAT, S0..S3
+        fixed[ref] = (53.0 * sx + 2.6 * i, h - 2.0, 90)
+    fixed["U18"] = (50.0 * sx, 40.0 * sy, 0)
     # Only the parts whose position is set by the enclosure/RF/edge are pinned; every other fixed entry
     # is just a starting point for the placement optimiser (place_opt.py).
-    pinned = {"U1", "J1", "J2", "J3", "J4", "J5", "J6", "J7"}
-    return {"size": (w, h), "layers": 4, "slot_sockets": ["J4", "J5", "J6", "J7"], "fixed": fixed, "keepout_top": 5.2, "near": near, "gap": 1.0,
+    # The power chain (mux, charger, regulator templates) runs along the bottom edge from the inputs.
+    # J9 (tamper loop) is not pinned: the lid/wall switch leads reach anywhere inside the housing.
+    pinned = {"U1", "J1", "J2", "J3", "J4", "J5", "J6", "J7", "D1", "D8", "D9", "D10", "D11", "D12",
+              "U3", "U4", "U5"}
+    # M-01: four M2.5 holes in the corners (unplated, no net: the enclosure decides any chassis tie)
+    holes = [(3.2, 3.2), (w - 3.2, 3.2), (3.5, h - 3.5), (w - 3.5, h - 3.5)]
+    return {"size": (w, h), "layers": 4, "holes": holes, "hole_fp": "MountingHole:MountingHole_2.7mm_M2.5",
+            "macros": SN_MACROS, "slot_sockets": ["J4", "J5", "J6", "J7"], "fixed": fixed, "keepout_top": 5.2, "near": near, "gap": 1.0,
             "pinned": pinned, "optimize": True, "seed": seed,
             "w_group": float(os.environ.get("TALOS_W_GROUP", "1.5")),
             # The 41-pin core rail is a plane: the autorouter could not build that tree as tracks.
             "plane_nets": {pcbnew.In2_Cu: "V3V3_CORE"}}
+
+
+# Rigid block templates (HD-036/HD-037): satellites at fixed offsets in the anchor IC's own frame
+# (rotation 0), so the hot loops come out the same wherever the placer puts the block. The member's
+# rotation is chosen once, at build time, to point its pads at the anchor pins they share a net with.
+# TPS63900 (WSON-10, frame at rot 0): left column top to bottom VIN, GND, CFG1-3; right column bottom to
+# top VOUT, LX2, GND, LX1, VIN. Following TI's layout example: L1 against the LX pins on one layer,
+# VIN cap across the top between the two VIN pins, VOUT cap under the IC, CFG straps beside their pins.
+# BQ25186 (DLH, rot 0): left column top to bottom SYS, VBAT, PG, GND, GND; right bottom to top NTC, SDA,
+# SCL, INT, IN. The new 1 uF sits at the IN pin, the SYS cap at the SYS pin.
+SN_MACROS = {
+    "U5": {"L1": (3.1, 0.0), "C11": (0.0, -2.75), "C12": (-0.2, 2.75),
+           "R18": (-2.85, -0.5), "R19": (-2.85, 0.5), "R20": (-2.85, 1.5)},
+    "U4": {"C35": (1.95, -1.05), "C9": (-2.45, -1.45)},
+}
 
 
 def card_spec(board: str) -> dict:
@@ -130,14 +157,17 @@ def dbg_spec() -> dict:
     w, h = 40.0, 36.0
     fixed = {
         "J2": (w / 2, 1.0, 180), "J1": (w / 2, h - 4.0, 0),
-        "JP1": (4.0, 8.0, 0), "JP2": (w - 4.0, 8.0, 0),
-        "U3": (w / 2, 17.0, 90), "U2": (8.0, h - 8.0, 0), "U1": (w / 2 + 8.0, h - 9.0, 0),
+        "JP1": (4.0, 10.0, 0), "JP2": (w - 4.0, 10.0, 0),
+        "U3": (w / 2, 17.0, 90), "U2": (11.0, h - 9.0, 0), "U1": (w / 2 + 8.0, h - 9.0, 0),
         "U4": (8.0, 12.0, 0), "U5": (w - 8.0, 12.0, 0), "U6": (w / 2 + 7.0, 9.0, 0), "D2": (w / 2 - 7.0, 9.0, 0),
     }
     near = {"C1": "U2", "C2": "U2", "C3": "U3", "C4": "U3", "R3": "U3", "C5": "U4", "R4": "U4", "C6": "U5",
             "R5": "U5", "R6": "U5", "C7": "U6", "R1": "J1", "R2": "J1"}
+    # M-02: M3 holes for standoffs or rubber feet
+    holes = [(3.5, 3.5), (w - 3.5, 3.5), (3.5, h - 3.5), (w - 3.5, h - 3.5)]
     return {"size": (w, h), "layers": 2, "fixed": fixed, "near": near, "gap": 0.8,
-            "pinned": {"J1", "J2", "JP1", "JP2"}, "optimize": True, "slot_sockets": ["J2"]}
+            "pinned": {"J1", "J2", "JP1", "JP2"}, "optimize": True, "slot_sockets": ["J2"],
+            "holes": holes, "hole_fp": "MountingHole:MountingHole_3.2mm_M3"}
 
 
 # Layout experiments (hardware/scripts/layout_search.py) set these; unset, the Rev A board is built.
@@ -358,13 +388,12 @@ def slot_correspondence(parts: dict, groups: dict[str, list[str]], n_slots: int,
 
     def sig(ref: str, n: int) -> tuple:
         pins = parts[ref]["pins"]
-        norm = []
-        for pin, net in sorted(pins.items()):
-            net = net or ""
-            net = re.sub(rf"^SLOT{n}_", "SLOTx_", net)
-            net = re.sub(rf"(?<=[A-Z_]){n}$", "x", net) if re.search(r"(SLOT|AON|SW|ILIM|WAKE|CT|EN)_?\d$", net) else net
-            norm.append((pin, net))
-        value = re.sub(rf"\bslot {n}\b", "slot x", parts[ref]["value"])
+
+        def nn(net):
+            net = re.sub(rf"^SLOT{n}_", "SLOTx_", net or "")
+            return re.sub(rf"(?<=[A-Z_]){n}$", "x", net) if re.search(r"(SLOT|AON|SW|ILIM|WAKE|CT|EN)_?\d$", net) else net
+        norm = [(pin, nn(net)) for pin, net in sorted(pins.items())]
+        value = nn(re.sub(rf"\bslot {n}\b", "slot x", parts[ref]["value"]))  # test pads are valued by net
         return (value, parts[ref]["footprint"], tuple(norm))
 
     base = {}
@@ -395,7 +424,65 @@ def load_groups(board_name: str) -> dict[str, list[str]]:
     return {g["name"]: g["refs"] for g in json.load(open(path))["groups"]}
 
 
-def optimise_placement(spec, parts, fps, w, h, margin, keep_top, keep_bottom, board_name="") -> None:
+def _pads_at(fp, ref, parts, x, y, rot):
+    """Courtyard and (x, y, net) pads of `fp` posed at (x, y, rot), in board mm."""
+    fp.SetOrientationDegrees(rot)
+    fp.SetPosition(pt(x, y))
+    pads = []
+    for pad in fp.Pads():
+        num = PAD_ALIASES.get(pad.GetNumber(), pad.GetNumber())
+        q = pad.GetPosition()
+        pads.append((pcbnew.ToMM(q.x) - ORIGIN[0], pcbnew.ToMM(q.y) - ORIGIN[1], parts[ref]["pins"].get(num) or ""))
+    return bbox(fp), pads
+
+
+def macro_rotations(macros, parts, fps) -> dict[str, int]:
+    """Each template member's rotation in its anchor's rot-0 frame: the one that brings its signal pads
+    nearest the anchor pins on the same net (GND goes to the plane, so it doesn't vote)."""
+    out = {}
+    saved = {r: (fps[r].GetPosition(), fps[r].GetOrientationDegrees())
+             for a, ms in macros.items() for r in [a, *ms]}
+    for anchor, members in sorted(macros.items()):
+        _, apads = _pads_at(fps[anchor], anchor, parts, 0.0, 0.0, 0)
+        for m, (ox, oy) in sorted(members.items()):
+            best = None
+            for rot in place_opt.ROTS:
+                _, mp = _pads_at(fps[m], m, parts, ox, oy, rot)
+                cost = 0.0
+                for x, y, net in mp:
+                    near = [math.hypot(x - ax, y - ay) for ax, ay, an in apads if an == net and net != "GND"]
+                    cost += min(near) if near else 0.0
+                if best is None or cost < best[0] - 1e-6:
+                    best = (cost, rot)
+            out[m] = best[1]
+        # Courtyards must not overlap (a DRC error): slide each member straight out from the anchor in
+        # 0.05 mm steps until it clears the anchor and the members already placed. The offsets in
+        # SN_MACROS are the closest intent; this makes them legal for the actual footprints.
+        taken = [bbox(fps[anchor])]
+        for m, (ox, oy) in sorted(members.items(), key=lambda kv: math.hypot(*kv[1])):
+            d = math.hypot(ox, oy) or 1.0
+            ux, uy = ox / d, oy / d
+            for k in range(200):
+                mb, _ = _pads_at(fps[m], m, parts, ox + ux * 0.05 * k, oy + uy * 0.05 * k, out[m])
+                if not any(min(mb[2], t[2]) > max(mb[0], t[0]) and min(mb[3], t[3]) > max(mb[1], t[1])
+                           for t in taken):
+                    break
+            members[m] = (round(ox + ux * 0.05 * k, 3), round(oy + uy * 0.05 * k, 3))
+            taken.append(mb)
+    for r, (pos, rot) in saved.items():
+        fps[r].SetOrientationDegrees(rot)
+        fps[r].SetPosition(pos)
+    return out
+
+
+def macro_pose(anchor_pose, offset, member_rot0):
+    """Board pose of a template member, given the anchor's pose."""
+    ax, ay, arot = anchor_pose
+    dx, dy = _rot(offset[0], offset[1], arot)
+    return ax + dx, ay + dy, (member_rot0 + arot) % 360
+
+
+def optimise_placement(spec, parts, fps, w, h, margin, keep_top, keep_bottom, board_name="", holes=()) -> None:
     """Refine the rule-based start with the annealing placer; pinned parts stay where the spec put them.
 
     With functional blocks (<board>.groups.json) the placer keeps each block together; with slot
@@ -404,8 +491,31 @@ def optimise_placement(spec, parts, fps, w, h, margin, keep_top, keep_bottom, bo
     pinned = spec.get("pinned", set())
     groups = load_groups(board_name) if spec.get("w_group") else {}
     group_of = {r: g for g, refs in groups.items() for r in refs}
+    macros = spec.get("macros", {})
+    member_of = {m: a for a, ms in macros.items() for m in ms}
+    mrot = macro_rotations(macros, parts, fps) if macros else {}
     probs = {}
     for ref, fp in fps.items():
+        if ref in member_of:
+            continue  # moves rigidly with its anchor
+        if ref in macros:  # one rigid body: the anchor plus its template members
+            x0, y0 = (pcbnew.ToMM(v) - o for v, o in zip((fp.GetPosition().x, fp.GetPosition().y), ORIGIN))
+            rot0 = int(round(fp.GetOrientationDegrees())) % 360
+            shapes = {}
+            for rot in place_opt.ROTS:
+                box, pads = _pads_at(fp, ref, parts, 0.0, 0.0, rot)
+                for m, off in macros[ref].items():
+                    mx, my, mr = macro_pose((0.0, 0.0, rot), off, mrot[m])
+                    mb, mp = _pads_at(fps[m], m, parts, mx, my, mr)
+                    box = (min(box[0], mb[0]), min(box[1], mb[1]), max(box[2], mb[2]), max(box[3], mb[3]))
+                    pads += mp
+                shapes[rot] = (box, pads)
+            fp.SetOrientationDegrees(rot0)
+            fp.SetPosition(pt(x0, y0))
+            probs[ref] = place_opt.Part(ref=ref, movable=ref not in pinned, shapes=shapes, x=x0, y=y0,
+                                        rot=rot0 if rot0 in place_opt.ROTS else 0, halo=0.5,
+                                        anchor=spec.get("near", {}).get(ref), group=group_of.get(ref))
+            continue
         x0, y0 = (pcbnew.ToMM(v) - o for v, o in zip((fp.GetPosition().x, fp.GetPosition().y), ORIGIN))
         rot0 = int(round(fp.GetOrientationDegrees())) % 360
         shapes = {}
@@ -426,6 +536,12 @@ def optimise_placement(spec, parts, fps, w, h, margin, keep_top, keep_bottom, bo
                                     rot=rot0 if rot0 in place_opt.ROTS else 0,
                                     halo=0.8 if is_ic else 0.35, anchor=spec.get("near", {}).get(ref),
                                     group=group_of.get(ref))
+    for i, hfp in enumerate(holes):  # mounting holes: fixed obstacles with no pins
+        hx, hy = (pcbnew.ToMM(v) - o for v, o in zip((hfp.GetPosition().x, hfp.GetPosition().y), ORIGIN))
+        b = bbox(hfp)
+        rel = (b[0] - hx, b[1] - hy, b[2] - hx, b[3] - hy)
+        probs[f"_H{i}"] = place_opt.Part(ref=f"_H{i}", movable=False, shapes={r: (rel, []) for r in place_opt.ROTS},
+                                         x=hx, y=hy, rot=0, halo=0.0)
     # The rotation convention _rot() assumes must be the one pcbnew used for the shapes.
     some = next(p for p in probs.values() if len(p.shapes[0][1]) > 1)
     for rot in place_opt.ROTS:
@@ -491,9 +607,18 @@ def optimise_placement(spec, parts, fps, w, h, margin, keep_top, keep_bottom, bo
                 if r not in pinned:
                     probs[r].movable = True
                     sol[r] = (probs[r].x, probs[r].y, probs[r].rot)
+    for ref in macros:  # a pinned anchor is not in the solution; its template still follows it
+        if ref in probs and ref not in sol:
+            sol[ref] = (probs[ref].x, probs[ref].y, probs[ref].rot)
     for ref, (x, y, rot) in sol.items():
+        if ref.startswith("_H"):
+            continue
         fps[ref].SetOrientationDegrees(rot)
         fps[ref].SetPosition(pt(x, y))
+        for m, off in macros.get(ref, {}).items():
+            mx, my, mr = macro_pose((x, y, rot), off, mrot[m])
+            fps[m].SetOrientationDegrees(mr)
+            fps[m].SetPosition(pt(mx, my))
 
 
 def place_opt_overlap(a, b) -> bool:
@@ -549,6 +674,61 @@ def add_marking(board, name, spec, fps, w, h, copper) -> None:
     silk_text(board, "S/N", x - bw / 2 + 1.0 - size * 1.7, y + size * 1.8, max(0.8, size * 0.8), pcbnew.B_SilkS)
     silk_box(board, x - bw / 2 + 1.0, y + size * 1.8 - bh / 2, x + bw / 2 + 1.0, y + size * 1.8 + bh / 2,
              pcbnew.B_SilkS)
+    back_taken = tht + [area]
+    for f in board.Footprints():
+        if f.GetReference().startswith("H"):
+            back_taken.append(bbox(f))
+    edge_ok = (0.8, (spec.get("keepout_top", 0.0) or 0.0) + 0.8, w - 0.8, h - 0.8 - (spec.get("finger_zone") or 0.0))
+
+    def spot(tw, th, taken, prefer_y):
+        """First (x, y) centre on a 0.5 mm grid, nearest `prefer_y` then the middle, where a tw x th box
+        clears `taken` and the board edge."""
+        cands = [(x0 / 2, y0 / 2) for x0 in range(0, int(w * 2) + 1) for y0 in range(0, int(h * 2) + 1)]
+        cands.sort(key=lambda c: (abs(c[1] - prefer_y), abs(c[0] - w / 2)))
+        for cx, cy in cands:
+            b = (cx - tw / 2, cy - th / 2, cx + tw / 2, cy + th / 2)
+            if b[0] < edge_ok[0] or b[1] < edge_ok[1] or b[2] > edge_ok[2] or b[3] > edge_ok[3]:
+                continue
+            if any(c and min(b[2], c[2]) > max(b[0], c[0]) - 0.3 and min(b[3], c[3]) > max(b[1], c[1]) - 0.3
+                   for c in taken):
+                continue
+            return cx, cy
+        return None
+
+    def back_text(text, sz, prefer_y):
+        tw, th = len(text) * sz * 0.9, sz * 1.4
+        at = spot(tw, th, back_taken, prefer_y)
+        if at is None:
+            print(f"  {name}: no room on the back silk for '{text}'")
+            return
+        silk_text(board, text, at[0], at[1], sz, pcbnew.B_SilkS)
+        back_taken.append((at[0] - tw / 2, at[1] - th / 2, at[0] + tw / 2, at[1] + th / 2))
+
+    # M-04: JLCPCB prints its order number where this text is (order option "specify position")
+    back_text("JLCJLCJLCJLC", size, y + 4.0 if not cards else 6.0)
+    if not cards:
+        back_text("Talos open hardware, Apache-2.0", 0.8, h / 2)  # S-05
+    if name == "TL-SN-001":  # S-05: next to the pack connector
+        back_text("1S Li-ion: protected pack only", 0.8, h - 7.0)
+    if cards:  # S-04: card type and "this side up, fingers into the slot" on the component side
+        kind = {"TL-MOD-001": "MAG", "TL-MOD-002": "PIR", "TL-MOD-003": "VIB", "TL-MOD-004": "T/RH",
+                "TL-TEST-001": "TEST"}.get(name, name)
+        front = [bbox(f) for f in fps.values() if f.GetReference() != "J1"]
+        label = f"{kind} UP"
+        tw = len(label) * 0.8 * 0.9 + 1.6
+        at = spot(tw, 1.4, front, h - (spec.get("finger_zone") or 0.0) - 1.5)
+        if at:
+            silk_text(board, label, at[0] - 0.8, at[1], 0.8)
+            ax, ay = at[0] + tw / 2 - 0.7, at[1]  # arrow pointing at the fingers
+            arrow = pcbnew.PCB_SHAPE(board)
+            arrow.SetShape(pcbnew.SHAPE_T_POLY)
+            arrow.SetPolyPoints([pt(ax - 0.5, ay - 0.5), pt(ax + 0.5, ay - 0.5), pt(ax, ay + 0.6)])
+            arrow.SetFilled(True)
+            arrow.SetLayer(pcbnew.F_SilkS)
+            arrow.SetWidth(mm(0.1))
+            board.Add(arrow)
+        else:
+            print(f"  {name}: no room on the front silk for the card label")
     if name == "TL-SN-001":  # smaller boards rely on the JLCPCB panel-rail fiducials
         # Board-only footprints (no symbol): three corners, clear of the edge ring and the antenna strip.
         top = spec.get("keepout_top", 0.0) + 3.0
@@ -559,12 +739,15 @@ def add_marking(board, name, spec, fps, w, h, copper) -> None:
             fp.SetBoardOnly(True)
             fp.SetExcludedFromBOM(True)
             fp.SetExcludedFromPosFiles(True)
-            taken = [bbox(f) for f in fps.values()]
-            for r in range(0, 40):  # walk in from the corner until the fiducial's courtyard is clear
-                cx = fx + (r * 0.5 if fx < w / 2 else -r * 0.5)
-                cy = fy + (r * 0.5 if fy < h / 2 else -r * 0.5)
+            taken = [bbox(f) for f in board.Footprints() if not f.GetReference().startswith("FID")]
+            # nearest free spot to the corner (a mounting hole may sit in the corner itself)
+            cands = sorted(((fx + dx * 0.5 * (1 if fx < w / 2 else -1), fy + dy * 0.5 * (1 if fy < h / 2 else -1))
+                            for dx in range(0, 30) for dy in range(0, 30)),
+                           key=lambda c: (math.hypot(c[0] - fx, c[1] - fy), c))
+            for cx, cy in cands:
                 fp.SetPosition(pt(cx, cy))
-                if not any(overlaps(bbox(fp), t, 0.3) for t in taken):
+                fb = bbox(fp)
+                if fb[1] >= top - 0.01 and not any(overlaps(fb, t, 0.3) for t in taken):
                     break
             else:
                 raise SystemExit(f"{name}: no room for fiducial {i + 1}")
@@ -655,15 +838,29 @@ def build(board_name: str) -> dict:
 
     for i, c in enumerate(spec.get("cuts", ())):
         placed[f"_cut{i}"] = c  # nothing may be placed where the outline is cut away
+    holes = []
+    for i, (hx, hy) in enumerate(spec.get("holes", ())):  # board-only, no symbol, no net
+        hfp = load_fp(spec["hole_fp"])
+        hfp.SetReference(f"H{i + 1}")
+        hfp.SetValue("mounting hole")
+        hfp.SetBoardOnly(True)
+        hfp.SetExcludedFromBOM(True)
+        hfp.SetExcludedFromPosFiles(True)
+        hfp.SetPosition(pt(hx, hy))
+        board.Add(hfp)
+        holes.append(hfp)
+        placed[f"_hole{i}"] = bbox(hfp)
     margin = 1.0
     keep_top = spec.get("keepout_top", 0.0)
     keep_bottom = spec.get("finger_zone", 0.0)
     parts_bottom = max(keep_bottom, spec.get("parts_clear_bottom", 0.0))
 
+    gap_now = [spec.get("gap", 0.6)]
+
     def free(b) -> bool:
         if b[0] < margin or b[2] > w - margin or b[1] < keep_top + margin or b[3] > h - parts_bottom - margin:
             return False
-        return not any(overlaps(b, o, spec.get("gap", 0.6)) for o in placed.values())
+        return not any(overlaps(b, o, gap_now[0]) for o in placed.values())
 
     # everything else: spiral out from the anchor IC
     hinted = spec.get("near", {})
@@ -696,12 +893,32 @@ def build(board_name: str) -> dict:
                     break
             if done:
                 break
+        if not done and gap_now[0] > 0.0:  # a dense board: the starting spiral packs tighter
+            gap_now[0] = 0.0
+            fp.SetPosition(pt(cx, cy))
+            for ring in range(0, 400):
+                r = 1.0 + ring * 0.5
+                for k in range(max(8, int(2 * math.pi * r / 1.0))):
+                    ang = 2 * math.pi * k / max(8, int(2 * math.pi * r / 1.0))
+                    for rot in (0, 90):
+                        fp.SetOrientationDegrees(rot)
+                        fp.SetPosition(pt(cx + r * math.cos(ang), cy + r * math.sin(ang)))
+                        b = bbox(fp)
+                        if free(b):
+                            placed[ref] = b
+                            done = True
+                            break
+                    if done:
+                        break
+                if done:
+                    break
         if not done:
             raise SystemExit(f"{board_name}: no room for {ref}")
 
     if spec.get("optimize"):
-        optimise_placement(spec, parts, fps, w, h, margin, keep_top, keep_bottom, board_name)
-        keep = set(spec.get("pinned", set()))
+        optimise_placement(spec, parts, fps, w, h, margin, keep_top, keep_bottom, board_name, holes)
+        keep = set(spec.get("pinned", set())) | {m for ms in spec.get("macros", {}).values() for m in ms}
+        keep |= set(spec.get("macros", {}))
         if spec.get("w_group"):  # flipping one slot's resistor would break the four-slot copy
             keep |= {r for g, refs in load_groups(board_name).items() if g.startswith("slot") for r in refs}
         flip_two_pad_parts(fps, keep)
@@ -711,7 +928,7 @@ def build(board_name: str) -> dict:
             fps[ref].SetLocked(True)
 
     if spec.get("parts_clear_bottom"):
-        intruders = [r for r, b in placed.items() if not r.startswith("_cut") and r != "J1"
+        intruders = [r for r, b in placed.items() if not r.startswith(("_cut", "_hole")) and r != "J1"
                      and b[3] > h - spec["parts_clear_bottom"]]
         if intruders:
             raise SystemExit(f"{board_name}: parts on the card tongue (inside the socket): {intruders}")

@@ -12,6 +12,7 @@ import {
   Freshness,
   StateResponseSchema,
 } from "@talos/contracts/talos/api/v1/api_pb";
+import { HealthStatus } from "@talos/contracts/talos/v1/health_pb";
 import type { JournalEntry } from "@talos/contracts/talos/v1/journal_pb";
 import type { Property, Point } from "@talos/contracts/talos/v1/property_pb";
 import { ArmMode } from "@talos/contracts/talos/v1/rule_pb";
@@ -187,12 +188,122 @@ export function portalLabel(st: PortalStatus | undefined): string {
   return `${door}, ${st.locked ? "locked" : "unlocked"}`;
 }
 
-export type DeviceHealth = "fresh" | "stale" | "unknown";
+export type DeviceHealth = "fresh" | "stale" | "unknown" | "fault";
 
+// An open enclosure (tamper) is a fault whatever else the device reports, and
+// stays one while that report is stale: an open lid never ages into "healthy".
 export function deviceHealth(state: StateResponse | undefined, deviceId: string): DeviceHealth {
   const caps = state?.capabilities.filter((c) => c.ref?.deviceId === deviceId) ?? [];
   if (caps.length === 0) return "unknown";
+  if (caps.some((c) => c.value?.kind.case === "tamper" && c.value.kind.value.open)) return "fault";
   return caps.some((c) => c.freshness === Freshness.FRESH) ? "fresh" : "stale";
+}
+
+export const TAMPER_CAPABILITY = "tamper.enclosure";
+
+export type TamperDisplay = "open" | "closed" | "unknown";
+
+export interface TamperStatus {
+  display: TamperDisplay;
+  // Last reported value, when there is one (for "unknown (last: ...)").
+  last: boolean | undefined;
+}
+
+// Enclosure tamper of one device (HD-032), or undefined if the device has no
+// tamper loop. Never reported, or stale, is unknown, never closed. An open lid
+// shows as open even when its report is stale: it is an alarm, not a reading.
+export function tamperStatus(
+  property: Property,
+  state: StateResponse | undefined,
+  deviceId: string,
+): TamperStatus | undefined {
+  const declared = property.devices
+    .find((d) => d.id === deviceId)
+    ?.capabilities.includes(TAMPER_CAPABILITY);
+  const cap = state?.capabilities.find(
+    (c) => c.ref?.deviceId === deviceId && c.ref.capabilityId === TAMPER_CAPABILITY,
+  );
+  if (!declared && !cap) return undefined;
+  const last = cap?.value?.kind.case === "tamper" ? cap.value.kind.value.open : undefined;
+  if (last === undefined) return { display: "unknown", last };
+  if (last) return { display: "open", last };
+  return { display: cap?.freshness === Freshness.FRESH ? "closed" : "unknown", last };
+}
+
+export interface MaintenanceView {
+  untilMs: number;
+  remainingMs: number;
+  principalId: string;
+}
+
+// A node in maintenance (tamper alarm suppressed), or undefined. Uses the
+// hub's window; a window already past `nowMs` is shown as over, even before
+// the hub's next tick journals the end.
+export function maintenanceFor(
+  state: StateResponse | undefined,
+  deviceId: string,
+  nowMs: number,
+): MaintenanceView | undefined {
+  const m = state?.maintenance.find((x) => x.deviceId === deviceId);
+  if (!m) return undefined;
+  const untilMs = Number(m.untilUnixMs);
+  if (untilMs <= nowMs) return undefined;
+  return { untilMs, remainingMs: untilMs - nowMs, principalId: m.principalId };
+}
+
+export function formatRemaining(ms: number): string {
+  if (ms >= 60_000) return `${Math.ceil(ms / 60_000)} min`;
+  return `${Math.ceil(ms / 1000)} s`;
+}
+
+export type HealthTone = "fresh" | "stale" | "unknown" | "fault" | "maintenance";
+
+const HEALTH_LABEL: Record<number, [string, HealthTone]> = {
+  [HealthStatus.HEALTHY]: ["healthy", "fresh"],
+  [HealthStatus.DEGRADED]: ["degraded", "stale"],
+  [HealthStatus.OFFLINE]: ["offline", "unknown"],
+  [HealthStatus.LOW_POWER]: ["low power", "stale"],
+  [HealthStatus.FAULTED]: ["faulted", "fault"],
+  [HealthStatus.MAINTENANCE]: ["maintenance", "maintenance"],
+};
+
+// Label and dot tone for a device row. The hub's projection wins when there is
+// one; otherwise the local fallback. Maintenance covers the tamper alarm only:
+// it replaces a "healthy"/"reporting" tone, never offline, unknown, stale or a
+// fault (ADR 0011: missing data is unknown, never something calmer). Outside
+// maintenance an open enclosure is a fault whatever the rest says.
+export function deviceTone(
+  projected: HealthStatus | undefined,
+  fallback: DeviceHealth,
+  tamperOpen: boolean,
+  inMaintenance: boolean,
+): [string, HealthTone] {
+  const [label, tone]: [string, HealthTone] =
+    projected !== undefined
+      ? (HEALTH_LABEL[projected] ?? ["unknown", "unknown"])
+      : [
+          fallback === "fresh"
+            ? "reporting"
+            : fallback === "stale"
+              ? "stale"
+              : fallback === "fault"
+                ? "faulted"
+                : "no reports",
+          fallback,
+        ];
+  if (inMaintenance) {
+    if (tone === "fresh") return ["maintenance", "maintenance"];
+    if (tone === "maintenance") return [label, tone];
+    return [`${label} (in maintenance)`, tone];
+  }
+  if (tamperOpen && tone !== "fault") return [label, "fault"];
+  return [label, tone];
+}
+
+export function tamperLabel(t: TamperStatus): string {
+  if (t.display === "open") return "TAMPER: enclosure open";
+  if (t.display === "closed") return "enclosure closed";
+  return t.last === undefined ? "enclosure unknown" : "enclosure unknown (last: closed)";
 }
 
 export function armLabel(mode: ArmMode | undefined): string {
@@ -272,6 +383,14 @@ export function describeEntry(e: JournalEntry): string {
       return `${armLabel(e.event.value.mode)} by ${e.event.value.principalId}`;
     case "sourceReset":
       return `sequence state of ${e.event.value.deviceId} reset by ${e.event.value.principalId}`;
+    case "maintenanceChanged": {
+      const m = e.event.value;
+      return m.untilUnixMs !== undefined
+        ? `maintenance of ${m.deviceId} by ${m.principalId} until ${new Date(Number(m.untilUnixMs)).toLocaleTimeString()}`
+        : `maintenance of ${m.deviceId} ${m.reason} (${m.principalId})`;
+    }
+    case "alarmSuppressed":
+      return `tamper alarm for ${e.event.value.deviceId} suppressed (maintenance by ${e.event.value.maintenancePrincipalId})`;
     default:
       return "unknown entry";
   }
@@ -354,6 +473,8 @@ export function capabilityLabel(c: CapabilityView): string {
       return `impact ${v.value.peakMg} mg`;
     case "objectDetected":
       return `${v.value.label} (${(v.value.confidencePermille / 10).toFixed(0)}%)`;
+    case "tamper":
+      return v.value.open ? "TAMPER: open" : "enclosure closed";
     default:
       return "—";
   }

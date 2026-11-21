@@ -63,6 +63,10 @@ class CommandLedger {
   // Closes dispatch deadlines and verification windows that have elapsed.
   std::vector<CommandTransition> tick(Timestamp now) const;
   Result<std::vector<CommandTransition>> cancel(const CommandId& id, Timestamp now) const;
+  // An accepted hub-internal command (OperationSpec::hub_internal) whose effect
+  // the hub has just journaled: dispatched and verified at once.
+  Result<std::vector<CommandTransition>> complete_internal(const CommandId& id, Timestamp now,
+                                                           std::string evidence) const;
 
   void apply(const CommandTransition& t);
   void apply_all(const std::vector<CommandTransition>& ts) {

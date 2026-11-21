@@ -38,6 +38,51 @@ message SlotSpec {
   repeated string rails = 7;
 }
 
+// One pin of an on-board I/O expander (PROVISIONAL until the board is built).
+message ExpanderPinSpec {
+  // "P00".."P07", "P10".."P17".
+  string pin = 1;
+  // Schematic net, e.g. "SLOT_LED0_N", "TAMPER_N". Empty for unconnected pins.
+  string net = 2;
+  // "input", "output", or "unused" (no connection; firmware drives it low).
+  string direction = 3;
+  bool active_low = 4;
+}
+
+// An I/O expander on the root bus.
+message ExpanderSpec {
+  string name = 1;  // e.g. "EXP_C"
+  string part = 2;  // e.g. "TCA9535"
+  uint32 i2c_address = 3;
+  string interrupt_net = 4;  // e.g. "EXP_INT_N" (wired-OR)
+  repeated ExpanderPinSpec pins = 5;
+}
+
+// A deep-sleep wake source at the MCU.
+message WakeLineSpec {
+  string net = 1;       // e.g. "EXP_WAKE"
+  string mcu_pin = 2;   // e.g. "GPIO14"; mirrors the firmware BoardSupport table
+  bool active_high = 3;
+  string note = 4;
+}
+
+// An indicator LED.
+message IndicatorSpec {
+  string name = 1;    // silk label, e.g. "STAT", "S0", "PWR"
+  string net = 2;
+  string driver = 3;  // what drives it: "GPIO8", "EXP_C P00", "hardware"
+  bool active_low = 4;
+  string color = 5;
+}
+
+// A module only some slots of this board may host (e.g. a T/RH card kept away
+// from the charger's heat, B-03). PROVISIONAL like every manifest number.
+message ModuleSlotLimit {
+  string module_id = 1;
+  repeated uint32 allowed_slots = 2;
+  string reason = 3;
+}
+
 message BoardManifest {
   string id = 1;
   string revision = 2;
@@ -57,6 +102,15 @@ message BoardManifest {
   // Board family (e.g. "TL-SN-001") and node transport ("thread", "ip").
   string board_family = 11;
   string transport = 12;
+  // On-board I/O expanders, deep-sleep wake lines and indicators. Documentation
+  // of the provisional wiring; firmware's BoardSupport table must agree.
+  repeated ExpanderSpec expanders = 13;
+  repeated WakeLineSpec wake_lines = 14;
+  repeated IndicatorSpec indicators = 15;
+  // Capabilities of the board itself, independent of slots (e.g.
+  // "tamper.enclosure" for the lid loop). Devices may declare them.
+  repeated string board_capabilities = 16;
+  repeated ModuleSlotLimit module_slot_limits = 17;
 }
 
 message RailLoad {

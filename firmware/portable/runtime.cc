@@ -86,7 +86,9 @@ struct RetainedState {
   std::uint8_t aon_on;
   std::uint8_t wake_masked;
   std::uint8_t ring_free;
-  std::uint8_t flags;  // bit 0 link failing, bit 1 ACKs not yet in NVS
+  // bit 0 link failing, bit 1 ACKs not yet in NVS, bit 2 tamper state known,
+  // bit 3 tamper open, bit 4 EXP_WAKE masked as a wake source.
+  std::uint8_t flags;
   std::uint32_t crc;
 };
 static_assert(std::is_trivially_copyable_v<RetainedState>);
@@ -153,6 +155,11 @@ void NodeRuntime::emit(std::uint8_t slot, EventKind kind, Priority priority, boo
   if (priority == Priority::kP0Critical) {
     persist_critical(e);
     p0_waiting_ = true;
+  }
+  // L-03: a wake event from a slot is a short flash of its LED (when lit at all).
+  if (slot < kSlots &&
+      (kind == EventKind::kMotion || kind == EventKind::kContact || kind == EventKind::kImpact)) {
+    slot_leds_.note_wake(slot, e.at_ms);
   }
 }
 
@@ -283,7 +290,10 @@ void NodeRuntime::save_retained() {
     rs.aon_on = aon_on_;
     rs.wake_masked = wake_masked_;
     rs.ring_free = ring_free_;
-    rs.flags = static_cast<std::uint8_t>((outage_ ? 1u : 0u) | (acks_dirty_ ? 2u : 0u));
+    const auto tamper = tamper_.state();
+    rs.flags = static_cast<std::uint8_t>((outage_ ? 1u : 0u) | (acks_dirty_ ? 2u : 0u) |
+                                         (tamper ? 4u : 0u) | (tamper.value_or(false) ? 8u : 0u) |
+                                         (exp_wake_masked_ ? 16u : 0u));
     rs.crc = retained_crc(rs);
   }
   std::memcpy(sleep_->retained(), &rs, sizeof rs);
@@ -321,6 +331,7 @@ void NodeRuntime::boot() {
   const BootDecision d = ota_.boot();
   restore_pending_critical(warm ? rs.ring_free : 0, warm ? &rs.ring_gen : nullptr);
   const TimeMs t0 = p_.clock.now_ms();
+  boot_ms_ = t0;
   if (warm && (rs.flags & 2u)) {
     acks_dirty_ = true;
     acks_dirty_since_ = t0;
@@ -366,6 +377,18 @@ void NodeRuntime::boot() {
   probe_backoff_ms_ =
       outage_ ? std::clamp(rs.probe_backoff_ms, kProbeMinMs, kProbeMaxMs) : kProbeMinMs;
   next_probe_ms_ = t0;
+  // Indicators: a wake keeps "joined" if the hub was answering before the sleep.
+  hub_heard_ = warm && !outage_;
+  tamper_ = TamperDebouncer{};
+  button_ = ServiceButton{};
+  if (warm && (rs.flags & 4u)) tamper_.restore((rs.flags & 8u) != 0);
+  exp_wake_masked_ = warm && (rs.flags & 16u);
+  exp_wake_high_ = false;
+  next_exp_poll_ = t0;
+  status_ = StatusCode::kOff;
+  status_led_known_ = false;
+  slot_led_shadow_ = 0;
+  slot_leds_known_ = !resumed_cards_;  // begin() wrote every slot LED dark
   mode_ = compute_mode();
   Resume r;
   if (resumed_cards_) {
@@ -375,6 +398,10 @@ void NodeRuntime::boot() {
   }
   discover(r);
   admit_power();
+  refresh_external_power();
+  // EXP_WAKE first: on a wake from it this reads TAMPER_N and releases INT.
+  service_expanders(p_.clock.now_ms());
+  sample_tamper(p_.clock.now_ms());
   arm_wake_lines();
 
   const TimeMs now = p_.clock.now_ms();
@@ -393,6 +420,7 @@ void NodeRuntime::boot() {
          static_cast<std::int32_t>(p_.power.battery_mv()), static_cast<std::uint32_t>(mode_));
     next_heartbeat_ = now + config_.heartbeat_interval_ms;
   }
+  update_indicators(now);
   save_retained();
 }
 
@@ -669,6 +697,162 @@ void NodeRuntime::arm_wake_lines() {
     const bool want = slots_[i].enabled && info && info->needs_wake && !(wake_masked_ & (1u << i));
     sleep_->set_wake_enabled(line, want);
   }
+  // EXP_WAKE (active high, same ext1 ANY_HIGH mask): tamper, power-good and card
+  // lines on the expanders wake the node, unless it is masked as stuck.
+  if (p_.board.expander_wake_line != 0xFF) {
+    sleep_->set_wake_enabled(p_.board.expander_wake_line, !exp_wake_masked_);
+  }
+}
+
+// --- expanders, tamper and indicators ---------------------------------------------------
+
+void NodeRuntime::refresh_external_power() {
+  const PowerSource s = p_.power.source();
+  external_power_ = s == PowerSource::kUsb || s == PowerSource::kSolarBattery;
+}
+
+void NodeRuntime::sample_tamper(TimeMs now) {
+  const bool known = tamper_.state().has_value();
+  if (!tamper_.sample(p_.power.tamper_open(), now)) return;
+  const bool open = *tamper_.state();
+  // Cold boot: a state report (b = 1), so the hub also learns that a lid it saw
+  // open was closed while the node was off. Afterwards, transitions (b = 0).
+  emit(kNoSlot, EventKind::kTamper, open ? Priority::kP0Critical : Priority::kP1State, open, 0,
+       known ? 0 : 1);
+}
+
+// EXP_WAKE high means some expander saw an input change (TAMPER_N, CHG_PG_N,
+// PMUX_ST, PRESENT_N, ALERT_N, SW_FAULT_N). Reading every port releases INT.
+// A line still high after that is held by a fault or a toggling input: after
+// kWakeMaskMs it is masked as a wake source and polled every kMaskedPollMs,
+// exactly like a stuck slot WAKE line.
+void NodeRuntime::service_expanders(TimeMs now) {
+  const std::uint8_t line = p_.board.expander_wake_line;
+  if (line == 0xFF) return;
+  if (p_.gpio.read(line) && (!exp_wake_masked_ || now >= next_exp_poll_)) {
+    next_exp_poll_ = now + kMaskedPollMs;
+    p_.power.service_interrupt();
+    refresh_external_power();
+    sample_tamper(now);
+  }
+  if (!p_.gpio.read(line)) {
+    exp_wake_high_ = false;
+    if (exp_wake_masked_) {
+      exp_wake_masked_ = false;
+      if (sleep_) sleep_->set_wake_enabled(line, true);
+    }
+    return;
+  }
+  if (!exp_wake_high_) {
+    exp_wake_high_ = true;
+    exp_wake_high_since_ = now;
+  }
+  if (!exp_wake_masked_ && now - exp_wake_high_since_ >= kWakeMaskMs) {
+    exp_wake_masked_ = true;
+    if (sleep_) sleep_->set_wake_enabled(line, false);
+    next_exp_poll_ = now + kMaskedPollMs;
+  }
+}
+
+// BOOT is a strap pin: its level matters only while the chip comes out of
+// reset (download mode is entered by the ROM, before any of this runs). After
+// boot it is just a pulled-up input, read here and never driven.
+void NodeRuntime::poll_service_button(TimeMs now) {
+  const std::uint8_t line = p_.board.service_button_line;
+  if (line == 0xFF) return;
+  if (!button_.sample(!p_.gpio.read(line), now)) return;
+  if (service_mode()) {
+    stop_service_mode();
+  } else {
+    start_service_mode();
+  }
+}
+
+void NodeRuntime::start_service_mode() {
+  const TimeMs now = p_.clock.now_ms();
+  slot_leds_.start_service(now);
+  update_indicators(now);  // at once, not at the next step
+}
+
+void NodeRuntime::stop_service_mode() {
+  slot_leds_.stop_service();
+  update_indicators(p_.clock.now_ms());
+}
+
+StatusInputs NodeRuntime::status_inputs(TimeMs now) const {
+  StatusInputs in;
+  in.since_boot_ms = now - boot_ms_;
+  in.cold_boot = !wake_.deep_sleep();
+  in.hub_heard = hub_heard_;
+  in.link_failing = outage_;
+  const OtaState ota = ota_.record().state;
+  in.ota_active = ota == OtaState::kDownloading || ota == OtaState::kPendingVerify;
+  in.low_battery = mode_ != PowerMode::kNormal;
+  in.card_error = quarantined_ != 0;
+  for (const auto& st : slots_) {
+    if (st.fault != ModuleFault::kNone && st.fault != ModuleFault::kDisabledForPower) {
+      in.card_error = true;
+    }
+  }
+  in.fault = !board_ok_ || !epoch_persisted_;
+  in.external_power = external_power_;
+  return in;
+}
+
+std::array<SlotLedMode, kSlots> NodeRuntime::slot_led_modes() const {
+  std::array<SlotLedMode, kSlots> modes{};
+  for (std::uint8_t i = 0; i < kSlots; ++i) {
+    const SlotState& st = slots_[i];
+    if ((quarantined_ & (1u << i)) ||
+        (st.fault != ModuleFault::kNone && st.fault != ModuleFault::kDisabledForPower)) {
+      modes[i] = SlotLedMode::kSlowBlink;
+    } else if (st.enabled) {
+      modes[i] = SlotLedMode::kSolid;
+    }
+  }
+  return modes;
+}
+
+void NodeRuntime::update_indicators(TimeMs now) {
+  led_due_ms_ = kNever;
+  if (const std::uint8_t line = p_.board.status_led_line; line != 0xFF) {
+    const StatusCode c = select_status(status_inputs(now));
+    if (c != status_) {
+      status_ = c;
+      status_since_ = now;
+    }
+    const bool on = status_led_on(status_, now - status_since_);
+    if (!status_led_known_ || on != status_led_level_) {
+      status_led_known_ = p_.gpio.write(line, !on);  // active low
+      status_led_level_ = on;
+    }
+    const TimeMs edge = status_next_edge(status_, now - status_since_);
+    if (edge != kNever) led_due_ms_ = status_since_ + edge;
+  }
+  bool wired = false;
+  for (const auto& led : p_.board.slot_led_n) wired |= led.wired();
+  if (!wired) return;
+  const auto modes = slot_led_modes();
+  if (const TimeMs t = slot_leds_.next_change(modes, now, external_power_); t < led_due_ms_) {
+    led_due_ms_ = t;
+  }
+  std::uint8_t want = 0;
+  for (std::uint8_t i = 0; i < kSlots; ++i) {
+    if (slot_leds_.led_on(i, modes[i], now, external_power_)) {
+      want = static_cast<std::uint8_t>(want | (1u << i));
+    }
+  }
+  if (slot_leds_known_ && want == slot_led_shadow_) return;
+  bool ok = true;
+  for (std::uint8_t i = 0; i < kSlots; ++i) {
+    const auto bit = static_cast<std::uint8_t>(1u << i);
+    if (!p_.board.slot_led_n[i].wired()) continue;
+    if (!slot_leds_known_ || ((want ^ slot_led_shadow_) & bit)) {
+      ok &= p_.power.set_slot_led(i, (want & bit) != 0);
+    }
+  }
+  slot_led_shadow_ = want;
+  slot_leds_known_ = ok;
 }
 
 PowerMode NodeRuntime::compute_mode() {
@@ -902,6 +1086,7 @@ void NodeRuntime::step() {
   }
   downlink_more_ = handled == kMaxDownlinksPerStep;
   if (replied) {
+    hub_heard_ = true;
     unanswered_ = 0;
     last_reply_ms_ = now;
     outage_ = false;
@@ -915,6 +1100,9 @@ void NodeRuntime::step() {
   ota_progress_ = false;
 
   supervise_wake_lines(now);
+  service_expanders(now);
+  if (tamper_.pending() && now >= tamper_.due_ms()) sample_tamper(now);
+  poll_service_button(now);
   const std::uint32_t env_interval = static_cast<std::uint32_t>(
       std::min<TimeMs>(static_cast<TimeMs>(config_.environment_interval_ms) *
                            (mode_ == PowerMode::kNormal ? 1u : 4u),
@@ -951,6 +1139,8 @@ void NodeRuntime::step() {
 
   if (now >= next_heartbeat_) {
     p_.power.service();
+    refresh_external_power();
+    sample_tamper(now);  // belt and braces: a missed INT can't hide an open lid past one heartbeat
     const PowerMode m = compute_mode();
     if (m != mode_) {
       mode_ = m;
@@ -974,6 +1164,7 @@ void NodeRuntime::step() {
   if (acks_dirty_ && now - acks_dirty_since_ >= kAckFlushMs) flush_acks();
 
   send_due(now);
+  update_indicators(now);
   awake_ = false;
   save_retained();
 }
@@ -997,6 +1188,15 @@ TimeMs NodeRuntime::next_wake_ms() const {
       }
     }
   }
+  if (tamper_.pending() && tamper_.due_ms() < next) next = tamper_.due_ms();
+  if (button_.pending() && button_.due_ms() < next) next = button_.due_ms();
+  if (p_.board.expander_wake_line != 0xFF && exp_wake_high_) {
+    const TimeMs t = exp_wake_masked_ ? next_exp_poll_ : exp_wake_high_since_ + kWakeMaskMs;
+    if (t < next) next = t;
+  }
+  // LED edges, computed when the LEDs were last updated (not from `now`, which
+  // would always put the next edge in the future and never step for it).
+  if (led_due_ms_ < next) next = led_due_ms_;
   for (std::uint8_t i = 0; i < kSlots; ++i) {
     const SlotState& st = slots_[i];
     if (!st.enabled) continue;

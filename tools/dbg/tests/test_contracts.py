@@ -65,11 +65,20 @@ class FirmwareBoardTableMatchesSchematic(unittest.TestCase):
     def setUp(self):
         self.header = (ROOT / "firmware/esp_idf/main/board_tl_sn_001.h").read_text()
         parts = json.loads((ROOT / "hardware/kicad/TL-SN-001/intended-netlist.json").read_text())["parts"]
-        consts = {k: int(v, 16) for k, v in re.findall(r"(kExp[AB])\s*=\s*(0x[0-9A-Fa-f]+)", self.header)}
-        # U15 (A0 = GND) is 0x20, U16 (A0 = V3V3) is 0x21.
-        refs = {0x20: "U15", 0x21: "U16"}
-        self.addr = {name: refs[a] for name, a in consts.items()}
+        self.consts = {k: int(v, 16) for k, v in re.findall(r"(kExp[ABC])\s*=\s*(0x[0-9A-Fa-f]+)", self.header)}
+        # Each TCA9535 by its address straps (A0/A1/A2 = PW pins 21/2/3).
         self.parts = parts
+        refs = {a: self.expander_at(a) for a in self.consts.values()}
+        self.addr = {name: refs[a] for name, a in self.consts.items() if refs[a]}
+
+    def expander_at(self, addr):
+        for ref, part in self.parts.items():
+            if part["value"].startswith("TCA9535"):
+                p = part["pins"]
+                bits = [p.get(pin) not in ("GND", None) for pin in ("21", "2", "3")]
+                if 0x20 | bits[0] | (bits[1] << 1) | (bits[2] << 2) == addr:
+                    return ref
+        return None
 
     def net(self, chip: str, pin: int) -> str:
         package_pin = 4 + pin if pin < 8 else 13 + (pin - 8)  # TCA9535 PW: P00-07 pins 4-11, P10-17 13-20
@@ -91,6 +100,54 @@ class FirmwareBoardTableMatchesSchematic(unittest.TestCase):
 
     def test_charger_address(self):
         self.assertRegex(self.header, r"kCharger\s*=\s*0x6A")
+
+    def test_expander_addresses(self):
+        self.assertEqual(self.consts, {"kExpA": 0x20, "kExpB": 0x21, "kExpC": 0x22})
+        self.assertEqual(self.addr.get("kExpA"), "U15")
+        self.assertEqual(self.addr.get("kExpB"), "U16")
+
+    def test_exp_c_pins(self):
+        """Slot LEDs on EXP_C P00-P03, TAMPER_N on P04 (practices review L-03, HD-032)."""
+        m = re.search(r"b\.slot_led_n\[i\]\s*=\s*\{kExpC,\s*i\}", self.header)
+        self.assertIsNotNone(m, "slot_led_n")
+        self.assertRegex(self.header, r"b\.tamper_n\s*=\s*\{kExpC,\s*4\}")
+        self.assertRegex(self.header, r"b\.unused_pins\[0\]\s*=\s*\{kExpC,\s*0xFFE0\}")
+        if "kExpC" not in self.addr:
+            self.skipTest("netlist has no TCA9535 at 0x22 yet (generator change pending)")
+        for slot in range(4):
+            self.assertEqual(self.net("kExpC", slot), f"SLOT_LED{slot}_N")
+        self.assertEqual(self.net("kExpC", 4), "TAMPER_N")
+
+
+class BoardManifestMatchesFirmware(unittest.TestCase):
+    """contracts/manifests/boards/sensor_node_proto_a.yaml documents what board_tl_sn_001.h drives."""
+
+    def setUp(self):
+        self.header = (ROOT / "firmware/esp_idf/main/board_tl_sn_001.h").read_text()
+        self.manifest = (ROOT / "contracts/manifests/boards/sensor_node_proto_a.yaml").read_text()
+
+    def const(self, name):
+        return int(re.search(rf"{name}\s*=\s*(\w+);", self.header).group(1), 0)
+
+    def test_provisional(self):
+        self.assertRegex(self.manifest, r"(?m)^provisional: true$")
+
+    def test_wake_lines_all_active_high_with_exp_wake_on_its_gpio(self):
+        lines = re.findall(r"\{net: (\w+), mcu_pin: GPIO(\d+), active_high: (\w+)", self.manifest)
+        self.assertEqual({net: int(g) for net, g, _ in lines},
+                         {"SLOT_WAKE0": 10, "SLOT_WAKE1": 11, "SLOT_WAKE2": 12, "SLOT_WAKE3": 13,
+                          "EXP_WAKE": self.const("kExpanderWake")})
+        self.assertEqual({hi for _, _, hi in lines}, {"true"})  # one ext1 ANY_HIGH mask (HD-034)
+        wake = re.search(r"kSlotWake\[kSlots\]\s*=\s*\{([^}]*)\}", self.header).group(1)
+        self.assertEqual([int(x) for x in wake.split(",")], [10, 11, 12, 13])
+
+    def test_status_led_and_exp_c_map(self):
+        self.assertRegex(self.manifest, rf"\{{name: STAT, net: LED_K, driver: GPIO{self.const('kStatusLed')}, active_low: true")
+        self.assertRegex(self.manifest, r"i2c_address: 34")
+        for n in range(4):
+            self.assertIn(f"{{pin: P0{n}, net: SLOT_LED{n}_N, direction: output, active_low: true}}", self.manifest)
+        self.assertIn("{pin: P04, net: TAMPER_N, direction: input}", self.manifest)
+        self.assertRegex(self.manifest, r"reserved_i2c_addresses: \[32, 33, 34, 106, 112\]")
 
 
 if __name__ == "__main__":

@@ -100,6 +100,13 @@ extern "C" void app_main(void) {
            static_cast<unsigned>(sleeper.wake_info().cause),
            static_cast<unsigned long>(sleeper.wake_info().lines),
            runtime.resumed_from_sleep() ? 1 : 0);
+  {
+    const auto info = load_board_info(store);  // D-09: written by talos_dbg program-id --node
+    const auto tamper = runtime.tamper_open();
+    ESP_LOGI(kTag, "talos board=%s rev=%s serial=%s tamper=%d", info ? info->board : "-",
+             info ? info->revision : "-", info ? info->serial : "-",
+             tamper ? (*tamper ? 1 : 0) : -1);
+  }
   if (!runtime.boot_epoch_persisted()) {
     // Events are held until the epoch is written (retried every step).
     ESP_LOGE(kTag, "talos boot epoch not persisted: uplink held");

@@ -57,18 +57,33 @@ class Watchdog final : public IWatchdog {
 class Gpio final : public IGpio {
  public:
   bool read(std::uint8_t line) override {
-    return line < lines_.size() && lines_[line] && !force_low[line];
+    if (line >= lines_.size() || force_low[line]) return false;
+    if (live) {
+      if (const auto v = live(line)) return *v;
+    }
+    return lines_[line];
   }
+  // Lines driven by a board model (EXP_WAKE): read live, nullopt = not this line.
+  std::function<std::optional<bool>(std::uint8_t line)> live;
   // Fault: the line never reaches the MCU high (a TVS failed short, an open contact).
   std::array<bool, 32> force_low{};
   void set(std::uint8_t line, bool v) { lines_.at(line) = v; }
-  // Output lines (mux reset): the board model decides what is wired there.
+  // Output lines (mux reset, status LED): the board model decides what is
+  // wired there. Lines the board does not declare as outputs are refused.
   bool write(std::uint8_t line, bool level) override {
-    if (!on_write) return false;
-    on_write(line, level);
+    if (line >= 32 || !(outputs & (1u << line))) return false;
+    driven[line] = level;
+    ++writes[line];
+    if (on_write) on_write(line, level);
     return true;
   }
   std::function<void(std::uint8_t line, bool level)> on_write;
+  std::uint32_t outputs = 0;    // bit n: GPIO n is an output on this board
+  std::array<bool, 32> driven;  // last level written per output line
+  std::array<std::uint32_t, 32> writes{};
+  bool is_output(std::uint8_t line) const { return line < 32 && (outputs & (1u << line)); }
+
+  Gpio() { driven.fill(true); }
 
  private:
   std::array<bool, 32> lines_{};
@@ -159,6 +174,17 @@ class Tca9535Model final : public RegisterDevice {
   std::function<void()> on_write;  // a pin may have changed: update what it drives
   // Every pin that has ever driven a 1 as an output (catches config-before-output).
   std::uint16_t ever_driven_high = 0;
+  // Fault: pins held high from outside (a solder bridge to V3V3) whatever drives them.
+  std::uint16_t bridged_high = 0;
+  // INT (open drain, active low): asserted while an input pin differs from the
+  // value it had when its port was last read; reading the port releases it.
+  bool int_asserted() const;
+
+ protected:
+  void after_read(std::uint8_t reg) override;
+
+ private:
+  std::uint16_t snapshot_ = 0xFFFF;  // input levels at the last read of each port
 };
 
 // BQ25186 (SLUSF69A): reset values, STAT0/STAT1 from the modelled input and
@@ -196,8 +222,15 @@ class RevABoard {
   // A card line (RESET_N / CS_N) was driven high while the slot's AON was not
   // up yet: the card was backfed through its I/O clamps.
   std::array<bool, kSlots> backfed{};
-  Tca9535Model exp_a, exp_b;
+  Tca9535Model exp_a, exp_b, exp_c;
   Bq25186Model charger;
+  bool lid_open = false;       // J9 tamper loop open (lid off, or the wire cut): TAMPER_N high
+  bool exp_int_stuck = false;  // fault: EXP_INT_N held low (a dead expander, a solder bridge)
+  bool exp_wake_dead = false;  // fault: EXP_WAKE never rises (inverter U19 dead or unpowered)
+  // EXP_WAKE at the MCU: the wired-OR INT_N through the SN74AUP1G04, active high.
+  bool exp_wake() const;
+  // Slot LED S0..S3 lit (EXP_C P0n driven low; 2.2k to V3V3_CORE).
+  bool slot_led(std::uint8_t slot) const;
   std::array<bool, kSlots> seated{};       // a card grounds PRESENT_N
   std::array<bool, kSlots> alert_low{};    // a card pulls ALERT_N low
   std::array<bool, kSlots> sw_overload{};  // the card overloads SW: its switch asserts FAULT_N
@@ -428,6 +461,7 @@ class Node {
   // expanders and every powered card kept running. `lines`: the wake lines
   // that fired (bit n = GPIO n); 0 = a timer wake.
   void wake_from_deep_sleep(std::uint32_t lines);
+
   // Advances virtual time in 1 ms ticks, stepping the runtime when it is due
   // or a wake line changed; handles requested reboots.
   void run_for(TimeMs ms);

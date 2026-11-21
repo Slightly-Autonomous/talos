@@ -8,6 +8,13 @@
 		(descr "Talos project symbols (generated)")
 	)
 	(lib
+		(name "74xGxx")
+		(type "KiCad")
+		(uri "${KICAD10_SYMBOL_DIR}/74xGxx.kicad_sym")
+		(options "")
+		(descr "")
+	)
+	(lib
 		(name "Analog_Switch")
 		(type "KiCad")
 		(uri "${KICAD10_SYMBOL_DIR}/Analog_Switch.kicad_sym")

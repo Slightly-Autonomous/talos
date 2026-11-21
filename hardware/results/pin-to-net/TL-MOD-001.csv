@@ -22,8 +22,8 @@ J1,14,NC,sensor_edge_v1 card fingers
 J1,15,NC,sensor_edge_v1 card fingers
 J1,16,NC,sensor_edge_v1 card fingers
 J1,17,NC,sensor_edge_v1 card fingers
-J1,18,GND,sensor_edge_v1 card fingers
-J1,19,NC,sensor_edge_v1 card fingers
+J1,18,NC,sensor_edge_v1 card fingers
+J1,19,GND,sensor_edge_v1 card fingers
 J1,20,GND,sensor_edge_v1 card fingers
 R1,1,V3V3_AON,100k
 R1,2,MAG_INT_N,100k

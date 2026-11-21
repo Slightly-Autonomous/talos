@@ -40,6 +40,13 @@ std::optional<ObservationEnvelope> to_envelope(const DeviceEvent& e, const Devic
       env.event_type = "device.heartbeat";
       env.payload = Heartbeat{static_cast<std::uint32_t>(e.a)};
       break;
+    case EventKind::kTamper:
+      // Device-level, no slot: zones come from the device's placement (ADR 0011).
+      env.source.slot.reset();
+      env.source.capability = CapabilityId("tamper.enclosure");
+      env.event_type = e.b == 1 ? "tamper.state" : (e.flag ? "tamper.opened" : "tamper.closed");
+      env.payload = TamperState{e.flag};
+      break;
     default:
       return std::nullopt;
   }

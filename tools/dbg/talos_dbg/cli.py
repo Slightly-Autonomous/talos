@@ -6,6 +6,8 @@
     python3 -m talos_dbg power aon on | sw on | sw off | aon off | aon cycle | all off
     python3 -m talos_dbg id [--raw]                      # decode the card's ID block (AON must be on)
     python3 -m talos_dbg program-id --card TL-MOD-001    # write a blank card's ID, verify, power-cycle
+    python3 -m talos_dbg program-id --node /dev/cu.usbmodem1101 --unit-serial SN-A-0007
+                                                         # write a node's board/revision/serial (D-09)
     python3 -m talos_dbg scan                            # list I2C addresses that answer
     python3 -m talos_dbg reg rd 0x19 0x0F [n] | reg wr 0x19 0x20 0x44 ...
     python3 -m talos_dbg selftest adapter|tl-test-001|tmag|imu|sht
@@ -24,7 +26,7 @@ import time
 
 import json
 
-from . import id_block, selftest
+from . import id_block, node_id, selftest
 from .adapter import AdapterError, DebugAdapter, Manifest, NotConfigured
 from .mcp2221 import Mcp2221, Mcp2221Error
 from .modules import CARDS
@@ -145,6 +147,19 @@ def cmd_id(args) -> int:
 
 
 def cmd_program_id(args) -> int:
+    if args.node:
+        if not args.unit_serial:
+            raise SystemExit("program-id --node needs --unit-serial (the serial on the board's label)")
+        console = node_id.open_console(args.node)
+        try:
+            rec = node_id.program(console, args.board, args.board_revision, args.unit_serial)
+        except node_id.NodeIdError as e:
+            print(f"error: {e}", file=sys.stderr)
+            return 2
+        finally:
+            console.close()
+        print(f"{args.node}: board {rec['board']} rev {rec['rev']} serial {rec['serial']} programmed and verified")
+        return 0
     with _session(args.serial) as (s, a):
         result = a.program_id(args.card, args.revision, args.expect_current)
         verb = "already programmed" if result.status == "already" else "programmed and verified"
@@ -230,10 +245,16 @@ def main(argv: list[str] | None = None) -> int:
     i = sub.add_parser("id")
     i.add_argument("--raw", action="store_true", help="dump 0x00-0x7F and the EUI-48")
     i.set_defaults(fn=cmd_id)
-    pg = sub.add_parser("program-id", help="write a card's ID block (refuses to overwrite)")
-    pg.add_argument("--card", required=True, choices=sorted(CARDS))
-    pg.add_argument("--revision", type=int, default=1)
+    pg = sub.add_parser("program-id", help="write a card's ID block, or a node's board identity (write-once)")
+    what = pg.add_mutually_exclusive_group(required=True)
+    what.add_argument("--card", choices=sorted(CARDS), help="a card on TL-DBG-001")
+    what.add_argument("--node", metavar="PORT|HOST:PORT",
+                      help="a sensor node's diag console: write board, revision and serial to talos_id")
+    pg.add_argument("--revision", type=int, default=1, help="card ID revision (--card)")
     pg.add_argument("--expect-current", help="the card's current 16-byte block in hex, to overwrite it")
+    pg.add_argument("--board", default=node_id.DEFAULT_BOARD, choices=sorted(node_id.BOARDS), help="(--node)")
+    pg.add_argument("--board-revision", default=node_id.DEFAULT_REVISION, help="(--node)")
+    pg.add_argument("--unit-serial", help="serial printed on the board's label (--node)")
     pg.set_defaults(fn=cmd_program_id)
     sub.add_parser("scan").set_defaults(fn=cmd_scan)
     rg = sub.add_parser("reg")

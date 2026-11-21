@@ -11,6 +11,8 @@ export interface DeviceDef {
   token: string;
   kind: Kind;
   slot?: number;
+  // The node has an enclosure tamper loop (capability tamper.enclosure, no slot).
+  tamper?: boolean;
 }
 
 export interface DevSimOptions {
@@ -100,7 +102,8 @@ export class DevSim {
   ) {
     d.seq += 1;
     const source: Record<string, unknown> = { deviceId: d.id, capabilityId: capability };
-    if (d.slot !== undefined && capability !== "device.health") source.slot = d.slot;
+    const deviceLevel = capability === "device.health" || capability === "tamper.enclosure";
+    if (d.slot !== undefined && !deviceLevel) source.slot = d.slot;
     await this.hub(d, "/v1/devices/observations", {
       schemaVersion: 1,
       propertyId: "house-01",
@@ -129,6 +132,11 @@ export class DevSim {
         // Boot state report, not a transition: rules must not fire on it.
         d.state.open = false;
         await this.observe(d, "contact.state", { contact: { open: false } });
+      }
+      if (d.tamper) {
+        // Boot state report (rules don't fire on it), as the firmware sends after a cold boot.
+        d.state.lidOpen = false;
+        await this.observe(d, "tamper.state", { tamper: { open: false } }, "tamper.enclosure");
       }
       if (d.kind === "lock") {
         d.state.locked = false;
@@ -159,6 +167,19 @@ export class DevSim {
     if (d.kind !== "contact") throw new Error(`${id} is not a contact`);
     d.state.open = open;
     await this.observe(d, open ? "contact.opened" : "contact.closed", { contact: { open } });
+  }
+
+  // The node's enclosure lid opened (or the loop was cut) / closed again.
+  async tamper(id: string, open: boolean) {
+    const d = this.dev(id);
+    if (!d.tamper) throw new Error(`${id} has no tamper loop`);
+    d.state.lidOpen = open;
+    await this.observe(
+      d,
+      open ? "tamper.opened" : "tamper.closed",
+      { tamper: { open } },
+      "tamper.enclosure",
+    );
   }
 
   setFault(id: string, fault: Fault) {
@@ -252,7 +273,7 @@ export class DevSim {
 
 export const DEV_DEVICES: DeviceDef[] = [
   { id: "node-07", token: "dev-node-07-token", kind: "pir", slot: 0 },
-  { id: "node-12", token: "dev-node-12-token", kind: "contact", slot: 0 },
+  { id: "node-12", token: "dev-node-12-token", kind: "contact", slot: 0, tamper: true },
   { id: "patio_speaker", token: "dev-patio-speaker-token", kind: "speaker" },
   { id: "lock-3", token: "dev-lock-3-token", kind: "lock" },
 ];

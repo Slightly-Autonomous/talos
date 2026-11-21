@@ -5,6 +5,7 @@ import {
   Freshness,
   StateResponseSchema,
 } from "@talos/contracts/talos/api/v1/api_pb";
+import { HealthStatus } from "@talos/contracts/talos/v1/health_pb";
 import { JournalEntrySchema } from "@talos/contracts/talos/v1/journal_pb";
 import { PropertySchema } from "@talos/contracts/talos/v1/property_pb";
 import {
@@ -16,9 +17,14 @@ import {
   bounds,
   describeEntry,
   deviceHealth,
+  deviceTone,
   motionHeat,
   outcomeBadge,
   portalStatus,
+  formatRemaining,
+  maintenanceFor,
+  tamperLabel,
+  tamperStatus,
   zoneActivity,
   zoneOf,
 } from "./view";
@@ -320,4 +326,98 @@ test("motion heat counts detections per zone within the window", () => {
 
 test("bounds cover zones and devices", () => {
   expect(bounds(property)).toEqual({ minX: 0, minY: 0, maxX: 12, maxY: 25 });
+});
+
+// HD-032 tamper (ADR 0011): an open enclosure is a fault, never healthy; no report is unknown.
+describe("enclosure tamper", () => {
+  const withTamper = create(PropertySchema, {
+    id: "house-01",
+    devices: [
+      {
+        id: "node-12",
+        zoneId: "hallway",
+        capabilities: ["contact.open_state", "tamper.enclosure"],
+      },
+      { id: "node-07", zoneId: "backyard", capabilities: ["motion.detect"] },
+    ],
+  });
+  const tamperCap = (open: boolean, freshness: Freshness) => ({
+    ref: { deviceId: "node-12", capabilityId: "tamper.enclosure" },
+    freshness,
+    value: { kind: { case: "tamper" as const, value: { open } } },
+  });
+  const heartbeat = {
+    ref: { deviceId: "node-12", capabilityId: "device.health" },
+    freshness: Freshness.FRESH,
+  };
+
+  test("never reported is unknown, not closed; devices without a loop have none", () => {
+    const t = tamperStatus(withTamper, state({ capabilities: [heartbeat] }), "node-12");
+    expect(t).toEqual({ display: "unknown", last: undefined });
+    expect(tamperLabel(t!)).toBe("enclosure unknown");
+    expect(tamperStatus(withTamper, undefined, "node-12")?.display).toBe("unknown");
+    expect(tamperStatus(withTamper, undefined, "node-07")).toBeUndefined();
+  });
+
+  test("open is a fault even next to a fresh heartbeat, and stays one when stale", () => {
+    for (const f of [Freshness.FRESH, Freshness.STALE, Freshness.UNKNOWN]) {
+      const st = state({ capabilities: [heartbeat, tamperCap(true, f)] });
+      expect(tamperStatus(withTamper, st, "node-12")?.display).toBe("open");
+      expect(deviceHealth(st, "node-12")).toBe("fault");
+    }
+    expect(tamperLabel({ display: "open", last: true })).toContain("TAMPER");
+  });
+
+  test("closed only while fresh; a stale closed report is unknown", () => {
+    const fresh = state({ capabilities: [heartbeat, tamperCap(false, Freshness.FRESH)] });
+    expect(tamperStatus(withTamper, fresh, "node-12")?.display).toBe("closed");
+    expect(deviceHealth(fresh, "node-12")).toBe("fresh");
+    const stale = state({ capabilities: [tamperCap(false, Freshness.STALE)] });
+    const t = tamperStatus(withTamper, stale, "node-12")!;
+    expect(t.display).toBe("unknown");
+    expect(tamperLabel(t)).toBe("enclosure unknown (last: closed)");
+  });
+});
+
+describe("maintenance", () => {
+  const st = state({
+    maintenance: [{ deviceId: "node-12", untilUnixMs: BigInt(NOW + 90_000), principalId: "owner" }],
+  });
+  test("remaining time from the hub's window; over once past it", () => {
+    expect(maintenanceFor(st, "node-12", NOW)).toEqual({
+      untilMs: NOW + 90_000,
+      remainingMs: 90_000,
+      principalId: "owner",
+    });
+    expect(formatRemaining(90_000)).toBe("2 min");
+    expect(formatRemaining(45_500)).toBe("46 s");
+    expect(maintenanceFor(st, "node-12", NOW + 90_000)).toBeUndefined();
+    expect(maintenanceFor(st, "node-07", NOW)).toBeUndefined();
+    expect(maintenanceFor(undefined, "node-12", NOW)).toBeUndefined();
+  });
+});
+
+// Red team: the device row let maintenance win over everything, so a node that
+// went offline (or faulted) during maintenance showed a calm "maintenance".
+describe("device tone", () => {
+  test("maintenance replaces healthy only; offline, unknown and faults stay", () => {
+    expect(deviceTone(HealthStatus.HEALTHY, "fresh", false, true)).toEqual([
+      "maintenance",
+      "maintenance",
+    ]);
+    expect(deviceTone(HealthStatus.MAINTENANCE, "fresh", true, true)[1]).toBe("maintenance");
+    expect(deviceTone(HealthStatus.OFFLINE, "stale", true, true)).toEqual([
+      "offline (in maintenance)",
+      "unknown",
+    ]);
+    expect(deviceTone(HealthStatus.FAULTED, "fresh", false, true)[1]).toBe("fault");
+    expect(deviceTone(undefined, "unknown", false, true)[1]).toBe("unknown");
+    expect(deviceTone(undefined, "stale", false, true)[1]).toBe("stale");
+  });
+  test("outside maintenance an open lid is a fault, never healthy", () => {
+    expect(deviceTone(HealthStatus.HEALTHY, "fresh", true, false)[1]).toBe("fault");
+    expect(deviceTone(HealthStatus.OFFLINE, "stale", true, false)[1]).toBe("fault");
+    expect(deviceTone(undefined, "fresh", false, false)).toEqual(["reporting", "fresh"]);
+    expect(deviceTone(999 as HealthStatus, "fresh", false, false)).toEqual(["unknown", "unknown"]);
+  });
 });

@@ -98,6 +98,7 @@ Property build_property(const v1::Site& site, const World& world) {
     if (d.has_lock()) declare("access.lock");
     if (d.has_speaker()) declare("audio.speak");
     if (d.has_notifier()) declare("notify");
+    if (d.has_enclosure()) declare("tamper.enclosure");
     for (const auto& s : d.sensors()) {
       declare(capability_for(s));
       if (s.slot() < kMaxSlots) dev.slots[s.slot()] = ModuleId(s.module_id());
@@ -375,6 +376,13 @@ class Run {
       case v1::Stimulus::kDeviceClockSkew:
         if (auto it = devices_.find(s.device_clock_skew().device_id()); it != devices_.end()) {
           it->second->set_clock_skew(s.device_clock_skew().skew_ms());
+        }
+        break;
+      case v1::Stimulus::kEnclosureSet:
+        if (s.enclosure_set().bounce_ms() > 0) {
+          world_.enclosure_bounce(t, s.enclosure_set().device_id(), s.enclosure_set().bounce_ms());
+        } else {
+          world_.set_enclosure(t, s.enclosure_set().device_id(), s.enclosure_set().open());
         }
         break;
       case v1::Stimulus::kTemperatureSet:

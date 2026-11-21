@@ -2,6 +2,10 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
+#include <string>
+
+#include "codec/codec.h"
 #include "core/manifest/manifest.h"
 #include "talos/v1/manifest.pb.h"
 
@@ -59,7 +63,13 @@ TEST(YamlLoader, SampleDevicesDeclareOnlyWhatTheirModulesProvide) {
   for (const auto* d : {node, property.find_device(DeviceId("node-12"))}) {
     ASSERT_FALSE(d->capabilities.empty());
     for (const auto& cap : d->capabilities) {
-      bool provided = false;
+      // Board-level capabilities (the lid loop) come from the board manifest.
+      bool provided = cap == CapabilityId("tamper.enclosure") &&
+                      d->board == BoardId("universal_controller_v1") &&
+                      load_board_manifest(kDir + "boards/universal_controller_proto_a.yaml")
+                              .value()
+                              .board_capabilities ==
+                          std::vector<CapabilityId>{CapabilityId("tamper.enclosure")};
       for (const auto& slot : d->slots) {
         if (!slot || !catalog.contains(*slot)) continue;
         for (const auto& c : catalog.at(*slot).capabilities) provided |= c == cap;
@@ -116,16 +126,63 @@ TEST(SensorNodeRevA, ManifestsLoadProvisionalWithFamilyAndConnector) {
   EXPECT_EQ(b.transport, "thread");
   EXPECT_EQ(b.connector_standard, "sensor_edge_v1");
   EXPECT_EQ(b.uart_channels, 1u);
-  EXPECT_EQ(b.reserved_i2c_addresses, (std::vector<std::uint8_t>{0x20, 0x21, 0x6A, 0x70}));
+  EXPECT_EQ(b.reserved_i2c_addresses, (std::vector<std::uint8_t>{0x20, 0x21, 0x22, 0x6A, 0x70}));
   for (const auto& [id, m] : load_rev_a_catalog()) EXPECT_TRUE(m.provisional) << id.str();
+}
+
+// Third expander (practices review L-03), tamper (HD-032), EXP_WAKE (HD-034).
+TEST(SensorNodeRevA, ExpandersWakeLinesAndIndicatorsAreDeclared) {
+  auto b = sensor_node();
+  ASSERT_EQ(b.expanders.size(), 3u);
+  for (const auto& e : b.expanders) {
+    EXPECT_EQ(e.pins.size(), 16u) << e.name;
+    EXPECT_EQ(e.interrupt_net, "EXP_INT_N") << e.name;
+    // Every expander's address is reserved: a card must never answer there.
+    EXPECT_NE(
+        std::find(b.reserved_i2c_addresses.begin(), b.reserved_i2c_addresses.end(), e.i2c_address),
+        b.reserved_i2c_addresses.end())
+        << e.name;
+  }
+  const auto& c = b.expanders[2];
+  EXPECT_EQ(c.name, "EXP_C");
+  EXPECT_EQ(c.i2c_address, 0x22);
+  for (int i = 0; i < 4; ++i) {
+    EXPECT_EQ(c.pins[i].net, "SLOT_LED" + std::to_string(i) + "_N");
+    EXPECT_EQ(c.pins[i].direction, "output");
+    EXPECT_TRUE(c.pins[i].active_low);
+  }
+  EXPECT_EQ(c.pins[4].net, "TAMPER_N");
+  EXPECT_EQ(c.pins[4].direction, "input");
+  for (std::size_t i = 5; i < 16; ++i) EXPECT_EQ(c.pins[i].direction, "unused") << c.pins[i].pin;
+  // One ext1 ANY_HIGH mask: every wake line is active high, EXP_WAKE included.
+  ASSERT_EQ(b.wake_lines.size(), 5u);
+  for (const auto& w : b.wake_lines) EXPECT_TRUE(w.active_high) << w.net;
+  EXPECT_EQ(b.wake_lines.back().net, "EXP_WAKE");
+  EXPECT_EQ(b.wake_lines.back().mcu_pin, "GPIO14");
+  ASSERT_EQ(b.indicators.size(), 6u);
+  EXPECT_EQ(b.indicators[1].driver, "GPIO8");
+  EXPECT_TRUE(b.indicators[1].active_low);
+}
+
+TEST(SensorNodeRevA, ExpanderPinDirectionIsChecked) {
+  talos::v1::BoardManifest p;
+  auto* e = p.add_expanders();
+  e->set_name("EXP_X");
+  auto* pin = e->add_pins();
+  pin->set_pin("P00");
+  pin->set_direction("sideways");
+  EXPECT_FALSE(from_proto(p).ok());
+  pin->set_direction("unused");
+  EXPECT_TRUE(from_proto(p).ok());
 }
 
 // HW-MF-001: four reference cards fit on battery, USB and PV.
 TEST(SensorNodeRevA, HW_MF_001_FourReferenceCardsFitEverySource) {
+  // The T/RH card sits in a top slot (B-03).
   std::vector<SlotAssignment> a{{0, ModuleId("tl_mod_002_pir")},
                                 {1, ModuleId("tl_mod_003_imu")},
-                                {2, ModuleId("tl_mod_001_magnetic")},
-                                {3, ModuleId("tl_mod_004_environment")}};
+                                {2, ModuleId("tl_mod_004_environment")},
+                                {3, ModuleId("tl_mod_001_magnetic")}};
   auto catalog = load_rev_a_catalog();
   for (auto src : {PowerSource::kBatteryOnly, PowerSource::kUsb, PowerSource::kSolarBattery}) {
     auto r = validate_configuration(sensor_node(), catalog, a, src);
@@ -137,9 +194,37 @@ TEST(SensorNodeRevA, HW_MF_001_FourReferenceCardsFitEverySource) {
 // HW-MF-002: every card has an ID EEPROM at 0x50; isolated branches make that legal.
 TEST(SensorNodeRevA, HW_MF_002_SameEepromAddressOnEveryBranchIsFine) {
   std::vector<SlotAssignment> a;
-  for (SlotIndex i = 0; i < 4; ++i) a.push_back({i, ModuleId("tl_mod_004_environment")});
+  for (SlotIndex i = 0; i < 4; ++i) a.push_back({i, ModuleId("tl_mod_003_imu")});
   EXPECT_TRUE(
       validate_configuration(sensor_node(), load_rev_a_catalog(), a, PowerSource::kUsb).ok());
+}
+
+// B-03: the T/RH card only in slots 0 and 2 on TL-SN-001; data from the board manifest.
+TEST(SensorNodeRevA, B_03_EnvironmentCardOnlyInTheTopSlots) {
+  auto catalog = load_rev_a_catalog();
+  for (SlotIndex s = 0; s < 4; ++s) {
+    auto r = validate_configuration(sensor_node(), catalog,
+                                    {{s, ModuleId("tl_mod_004_environment")}}, PowerSource::kUsb);
+    if (s == 0 || s == 2) {
+      EXPECT_TRUE(r.ok()) << int(s);
+    } else {
+      ASSERT_TRUE(r.has(ManifestIssueCode::kSlotNotAllowed)) << int(s);
+      EXPECT_EQ(r.issues.front().slot, std::optional<SlotIndex>{s});
+      EXPECT_NE(r.issues.front().message.find("only allowed in slots 0, 2"), std::string::npos)
+          << r.issues.front().message;
+    }
+  }
+  // Other cards are unaffected, and the limit is the board's, not the module's.
+  EXPECT_TRUE(validate_configuration(sensor_node(), catalog, {{1, ModuleId("tl_mod_003_imu")}},
+                                     PowerSource::kUsb)
+                  .ok());
+  auto b = sensor_node();
+  ASSERT_EQ(b.module_slot_limits.size(), 1u);
+  b.module_slot_limits.clear();
+  EXPECT_TRUE(validate_configuration(b, catalog, {{3, ModuleId("tl_mod_004_environment")}},
+                                     PowerSource::kUsb)
+                  .ok());
+  EXPECT_EQ(b.board_capabilities, std::vector<CapabilityId>{CapabilityId("tamper.enclosure")});
 }
 
 // HW-MF-003: unisolated (shared) branch with the same address is rejected.

@@ -55,6 +55,7 @@ cc_test(
     copts = TALOS_PROTO_COPTS,
     data = ["//contracts/manifests"],
     deps = [
+        ":codec",
         ":yaml_loader",
         "//core/manifest",
         "@googletest//:gtest_main",

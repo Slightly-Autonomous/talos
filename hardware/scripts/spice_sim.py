@@ -48,6 +48,34 @@ P = {
     "sw_deglitch": (7.5e-3, "TPS2553 FAULT deglitch 7.5 ms typ (SLVS841G 6.5)"),
     "i2c_r": (4.7e3 / 2, "R5/R6 4.7k on the root bus in parallel with the selected branch's 4.7k (R34-R41)"),
     "i2c_c": (100e-12, "EST: root bus + mux + one branch + card, ~100 pF; kisi can replace with extracted copper"),
+    # lamps (B6)
+    "vbus_min": (4.4, "USB VBUS at the device after cable drop (USB 2.0 allows 4.4 V at the far end, EST)"),
+    "vbus_max": (5.25, "USB 2.0 VBUS maximum 5.25 V"),
+    "v3v3_min": (3.0, "EST: 3.3 V rail low corner incl. TPS63900 accuracy and droop"),
+    "v3v3_max": (3.6, "EST: 3.3 V rail high corner"),
+    "vf_lo": (1.65, "EST: red/yellow-green AlGaInP LED Vf at 0.3-1 mA (datasheets give 1.75-2.4 V at 20 mA)"),
+    "vf_hi": (2.05, "EST: same, high corner"),
+    "led_i_min": (0.2e-3, "EST: dimmest still clearly visible indoors behind a light pipe, 0.2 mA"),
+    "led_i_max": (5e-3, "EST: ceiling: TCA9535 and MCP2221 GP pins, and a sensible indicator budget"),
+    "mcp_voh": (2.6, "EST: MCP2221A GP VOH while sourcing ~0.5 mA (DS20005565E gives VOH at higher currents)"),
+    # tamper loop (B7)
+    "tamper_r": (1e6, "R99 1 MOhm pull-up (gen_schematics.py)"),
+    "tamper_c": (10e-9, "C38 10 nF (gen_schematics.py, changed from 100 nF after this bench)"),
+    "tamper_cable_c": (200e-12, "EST: 2 m of twisted pair to the lid and wall switches, ~100 pF/m"),
+    "tca_vih_frac": (0.7, "TCA9535 VIH = 0.7 x VCC (SCPS201 6.5)"),
+    "tamper_debounce": (50e-3, "firmware tamper debounce 50 ms (firmware/portable/indicators.h)"),
+    "tamper_budget": (100e-3, "bench S-M17: P0 within 100 ms of the lid opening"),
+    # SPI pull-downs (B8)
+    "spi_rpd": (100e3, "R101-R103 100 kOhm pull-downs (HD-027)"),
+    "esp_rpu": (45e3, "ESP32-H2 internal weak pull-up ~45 kOhm typ (ESP32-H2 datasheet DC characteristics, EST)"),
+    "card_vih": (2.31, "card input VIH, 0.7 x 3.3 V (CMOS)"),
+    "card_vil": (0.99, "card input VIL, 0.3 x 3.3 V (CMOS)"),
+    "card_off_r": (100e3, "EST: an unpowered card's rail seen through its clamp diodes, ~100 kOhm of quiescent load"),
+    # AON discharge (B9)
+    "qod_r": (150.0, "EST: TPS22917 QOD resistance ~150 Ohm (SLVSDW8B 6.5 lists RQOD; replace with the bench value)"),
+    "card_idle_r_mod004": (1.65e6, "EST: TL-MOD-004 idle ~2 uA at 3.3 V (SHT40 + EEPROM sleep)"),
+    "card_idle_r_mod003": (66e3, "EST: TL-MOD-003 idle ~50 uA at 3.3 V (LIS2DW12 low-power wake mode)"),
+    "por_v": (0.5, "EST: discharged enough for every card part to see a clean power-on reset"),
 }
 
 
@@ -290,6 +318,101 @@ def priority_divider() -> Bench:
     return b
 
 
+def lamps() -> Bench:
+    """Arithmetic: lamp current at every supply and forward-voltage corner."""
+    b = Bench("B6 Lamp currents", "Does every lamp light (>= 0.2 mA) and stay within its driver's budget at every "
+              "supply and Vf corner?", ["vbus_min", "vbus_max", "v3v3_min", "v3v3_max", "vf_lo", "vf_hi",
+                                        "led_i_min", "led_i_max", "mcp_voh"])
+    lamps_ = [("TL-SN-001 D8 PWR (USB_VBUS, 3.3k)", v("vbus_min"), v("vbus_max"), 3.3e3),
+              ("TL-SN-001 D1 STAT (3V3, 1k, GPIO8 sink)", v("v3v3_min"), v("v3v3_max"), 1e3),
+              ("TL-SN-001 D9-D12 S0-S3 (3V3, 2.2k, EXP_C sink)", v("v3v3_min"), v("v3v3_max"), 2.2e3),
+              ("TL-DBG-001 D3 PWR / D6 FLT (AP2112 3.3 V, 2.2k)", 3.267, 3.333, 2.2e3),
+              ("TL-DBG-001 D4 AON / D5 SW (MCP2221 GP VOH, 2.2k)", v("mcp_voh"), 3.333, 2.2e3),
+              ("TL-TEST-001 D1 SW (slot SW rail, 2.2k)", v("v3v3_min"), v("v3v3_max"), 2.2e3)]
+    for name, vs_lo, vs_hi, r in lamps_:
+        i_lo, i_hi = (vs_lo - v("vf_hi")) / r, (vs_hi - v("vf_lo")) / r
+        ok = i_lo >= v("led_i_min") and i_hi <= v("led_i_max")
+        b.results.append(Result(b.name, name, {"I min (mA)": i_lo * 1e3, "I max (mA)": i_hi * 1e3},
+                                "pass" if ok else ("FAIL (too dim)" if i_lo < v("led_i_min") else "FAIL")))
+    return b
+
+
+def tamper(ng: NgSpice) -> Bench:
+    b = Bench("B7 Tamper loop edge", "How long after the lid opens does TAMPER_N cross the TCA9535 VIH, and does the "
+              "alarm (plus the 50 ms debounce) meet the 100 ms bench budget?",
+              ["tamper_r", "tamper_c", "tamper_cable_c", "tca_vih_frac", "tamper_debounce", "tamper_budget"])
+    for c_label, c in (("100 nF (before)", 100e-9), ("10 nF (fitted)", v("tamper_c"))):
+        for vdd in (v("v3v3_min"), v("v3v3_max")):
+            net = f"""
+* tamper loop: lid switch opens at 1 ms
+Vdd vdd 0 {vdd}
+Rpu vdd t {v('tamper_r')}
+Ct t 0 {c + v('tamper_cable_c')}
+Ssw t 0 ctl 0 swm
+Vctl ctl 0 PWL(0 1 1m 1 1.001m 0)
+.model swm sw vt=0.5 ron=1 roff=1e12
+.ic V(t)=0
+.tran 20u 400m uic
+"""
+            m = ng.run(net, {"tr": f"TRIG V(ctl) VAL=0.5 FALL=1 TARG V(t) VAL={v('tca_vih_frac') * vdd} RISE=1"})
+            total = m["tr"] + v("tamper_debounce")
+            b.results.append(Result(b.name, f"C38 {c_label}, VDD {vdd:.1f} V",
+                                    {"to VIH (ms)": m["tr"] * 1e3, "alarm after (ms)": total * 1e3,
+                                     "loop current shut (uA)": vdd / v("tamper_r") * 1e6},
+                                    "pass" if total <= v("tamper_budget") else "FAIL",
+                                    "a loop shorted to GND reads 'shut': single-ended loop limitation (HD-032)"))
+    return b
+
+
+def spi_pulldowns() -> Bench:
+    """Arithmetic: SCK level with the ESP32's reset-default pull-up against the 100 k pull-down, and the
+    current pushed into an unpowered card's clamp."""
+    b = Bench("B8 SPI pull-downs at reset", "What level does SCK sit at while GPIO4's reset pull-up fights the 100 k "
+              "pull-down, and how much current reaches an unpowered card?",
+              ["spi_rpd", "esp_rpu", "card_vih", "card_vil", "card_off_r"])
+    vdd = v("v3v3")
+    for phase, rpu in (("reset, before firmware (GPIO4 pull-up on)", v("esp_rpu")),
+                       ("deep sleep / firmware driving low (no pull-up)", None)):
+        if rpu is None:
+            vs, i_card = 0.0, 0.0
+        else:
+            rth = rpu * v("spi_rpd") / (rpu + v("spi_rpd"))
+            vth = vdd * v("spi_rpd") / (rpu + v("spi_rpd"))
+            vclamp = 0.4  # clamp diode into a dead rail
+            i_card = max(vth - vclamp, 0) / (rth + v("card_off_r")) if vth > vclamp else 0.0
+            vs = vth - i_card * rth
+        state = "high" if vs >= v("card_vih") else ("low" if vs <= v("card_vil") else "undefined")
+        verdict = "pass" if state == "low" else ("pass (brief, boot only)" if rpu else "FAIL")
+        b.results.append(Result(b.name, phase, {"SCK level (V)": vs, "into unpowered card (uA)": i_card * 1e6},
+                                verdict, "firmware drives SCK/MOSI low at boot (HD-027); the undefined window lasts "
+                                         "from reset until the GPIO init, a few ms"))
+    return b
+
+
+def aon_discharge(ng: NgSpice) -> Bench:
+    b = Bench("B9 Slot AON discharge after switch-off", "How long until a card's AON rail is below 0.5 V, with "
+              "and without the TPS22917 quick discharge (QOD to VOUT, HD-028)?",
+              ["qod_r", "c_slot", "c_mod003", "c_mod004", "card_idle_r_mod003", "card_idle_r_mod004", "por_v"])
+    for card, c_card, r_idle in (("TL-MOD-004", v("c_mod004"), v("card_idle_r_mod004")),
+                                 ("TL-MOD-003", v("c_mod003"), v("card_idle_r_mod003"))):
+        for label, r in (("QOD to VOUT (fitted)", v("qod_r") * r_idle / (v("qod_r") + r_idle)),
+                         ("QOD open (before)", r_idle)):
+            c = v("c_slot") + c_card
+            t_stop = max(5 * r * c, 1e-3)
+            net = f"""
+* aon discharge from 3.3 V
+Caon aon 0 {c}
+Rdis aon 0 {r}
+.ic V(aon)={v('v3v3')}
+.tran {t_stop / 2000} {t_stop} uic
+"""
+            m = ng.run(net, {"t": f"WHEN V(aon)={v('por_v')} FALL=1"})
+            b.results.append(Result(b.name, f"{card}, {label}", {"to 0.5 V (ms)": m["t"] * 1e3},
+                                    "pass" if m["t"] <= 20e-3 else "slow (firmware must wait)",
+                                    "pass = below 0.5 V within a 20 ms off time (EST firmware power-cycle window)"))
+    return b
+
+
 def write(benches: list[Bench], version: str) -> str:
     lines = ["# TL-SN-001 circuit simulation (generated)", "",
              f"Generated by `hardware/scripts/spice_sim.py` with {version} (libngspice). **Behavioural models from "
@@ -315,7 +438,8 @@ def write(benches: list[Bench], version: str) -> str:
 
 def main() -> int:
     ng = NgSpice()
-    benches = [slot_inrush(ng), radio_burst(ng), sw_short(ng), i2c_rise(ng), priority_divider()]
+    benches = [slot_inrush(ng), radio_burst(ng), sw_short(ng), i2c_rise(ng), priority_divider(), lamps(),
+               tamper(ng), spi_pulldowns(), aon_discharge(ng)]
     text = write(benches, ng.version())
     if "--check" in sys.argv:
         # Compare case -> verdict, not the text: ngspice versions differ in the last digits.

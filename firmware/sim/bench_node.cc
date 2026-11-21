@@ -1,6 +1,10 @@
 // The bench console on a virtual TL-SN-001, behaving like the board on its USB port.
 //
 //   bench_node [--slot0=TL-MOD-004] ... [--fault=branch_open2] ... [--provision=node-12:<hex key>]
+//              [--board-id=TL-SN-001:A:SIM-0001 | --no-board-id]
+//
+// The board identity (D-09) is programmed as on a finished board unless
+// --no-board-id leaves it blank (the state before `talos_dbg program-id --node`).
 //
 // stdin/stdout carry exactly what the ESP32's USB-serial-JTAG carries: diag commands in,
 // "@T {json}" replies out, and CoAP datagrams both ways as "@F <base64>" lines (only once the
@@ -8,6 +12,9 @@
 //   sim fault <name>   inject a fault (firmware/sim/sim_faults.h)
 //   sim run <ms>       advance virtual time now
 //   sim boot           reset the MCU (expanders and cards keep their state)
+//   sim deepsleep      the node sleeps, then wakes if an armed ext1 line is high now
+//                      (EXP_WAKE, slot WAKE): a deep-sleep wake with those lines.
+//                      Replies ok with no wake if nothing would have woken it.
 // Virtual time follows wall time in 10 ms steps, so a host bridge sees a live node.
 #include <poll.h>
 #include <unistd.h>
@@ -63,6 +70,24 @@ bool provision_from_arg(IStore& store, const std::string& spec) {
   return save_identity(store, id);
 }
 
+bool board_id_from_arg(IStore& store, const std::string& spec) {
+  const auto a = spec.find(':');
+  const auto b = a == std::string::npos ? a : spec.find(':', a + 1);
+  if (b == std::string::npos) return false;
+  const std::string board = spec.substr(0, a), rev = spec.substr(a + 1, b - a - 1),
+                    serial = spec.substr(b + 1);
+  BoardInfo info;
+  if (board.empty() || board.size() > BoardInfo::kMaxName || rev.empty() ||
+      rev.size() > BoardInfo::kMaxRevision || serial.empty() ||
+      serial.size() > BoardInfo::kMaxSerial) {
+    return false;
+  }
+  std::memcpy(info.board, board.data(), board.size());
+  std::memcpy(info.revision, rev.data(), rev.size());
+  std::memcpy(info.serial, serial.data(), serial.size());
+  return save_board_info(store, info);
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -71,6 +96,7 @@ int main(int argc, char** argv) {
   RebuildableLink link;
   sim::Node node(sim::tl_sn_001_board(), 64 * 1024, &link);
   node.poll_link = true;
+  std::string board_id = "TL-SN-001:A:SIM-0001";
   for (int i = 1; i < argc; ++i) {
     const std::string arg = argv[i];
     if (arg.rfind("--slot", 0) == 0 && arg.size() > 8 && arg[7] == '=') {
@@ -85,7 +111,16 @@ int main(int argc, char** argv) {
                !provision_from_arg(node.store, arg.substr(12))) {
       std::fprintf(stderr, "bad %s (want <device_id>:<16-32 byte hex key>)\n", arg.c_str());
       return 2;
+    } else if (arg.rfind("--board-id=", 0) == 0) {
+      board_id = arg.substr(11);
+    } else if (arg == "--no-board-id") {
+      board_id.clear();
     }
+  }
+  if (!board_id.empty() && !board_id_from_arg(node.store, board_id)) {
+    std::fprintf(stderr, "bad --board-id=%s (want <board>:<revision>:<serial>)\n",
+                 board_id.c_str());
+    return 2;
   }
   for (int i = 1; i < argc; ++i) {  // faults after the cards exist
     const std::string arg = argv[i];
@@ -130,6 +165,19 @@ int main(int argc, char** argv) {
           sim_done(true);
         } else if (rest == "boot") {
           boot();
+          sim_done(true);
+        } else if (rest == "deepsleep") {
+          // The ext1 mask: slot WAKE lines and EXP_WAKE, as armed by the runtime.
+          std::uint32_t lines = 0;
+          auto consider = [&](std::uint8_t l) {
+            if (l < 32 && node.gpio.read(l) && node.sleep.wake_enabled(l)) lines |= 1u << l;
+          };
+          for (const auto& w : node.board.slots) consider(w.wake_line);
+          consider(node.board.expander_wake_line);
+          if (lines != 0) {
+            link.link = std::make_unique<ProvisionedLink>(net, node.store);
+            node.wake_from_deep_sleep(lines);
+          }
           sim_done(true);
         } else {
           sim_done(false, "unknown sim command");

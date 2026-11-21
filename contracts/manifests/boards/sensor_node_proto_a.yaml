@@ -1,6 +1,9 @@
 # PROVISIONAL. TL-SN-001 Rev A Sensor Node (hardware/architecture/hardware-overview.md).
-# Resource shape follows the H3 schematic (hardware/kicad/TL-SN-001); no pin numbers
-# here by design (HW-0001/HWR-015): pins live only in the firmware BoardSupport table.
+# Resource shape follows the H3 schematic (hardware/kicad/TL-SN-001). The expander
+# map, wake lines and indicators below document the wiring the firmware drives; the
+# firmware BoardSupport table (firmware/esp_idf/main/board_tl_sn_001.h) stays the
+# source the code uses, and tools/dbg/tests/test_contracts.py holds the two together.
+# Nothing here is datasheet- or bench-verified.
 id: sensor_node_proto_a
 revision: rev-a
 provisional: true
@@ -8,12 +11,17 @@ board_family: TL-SN-001
 transport: thread
 connector_standard: sensor_edge_v1
 uart_channels: 1                            # UART1 + TS3A5017 dual 4:1 mux
-reserved_i2c_addresses: [32, 33, 106, 112]  # 0x20, 0x21 TCA9535; 0x6A BQ25186; 0x70 TCA9546A
+reserved_i2c_addresses: [32, 33, 34, 106, 112]  # 0x20-0x22 TCA9535; 0x6A BQ25186; 0x70 TCA9546A
 notes:
   - "Rail limits are estimates (TPS63900 >400 mA at 3.3 V); not measured. AON: TPS22917, no current limit, default off; firmware powers seated slots one at a time and quarantines a slot that reset the node."
   - "SW: TPS2553-1 per slot, latch-off at 155-207 mA (RILIM 150k), wired-OR FAULT_N to EXP_B P17."
   - "Battery-only sustained budget is for card draw only; board baseline is in hardware/results/power-budget.md."
   - "No 5 V rail in Rev A (HW-0003); no slot ADC (HD-003)."
+  - "sensor_edge_v1: PRESENT_N on contact 19, contact 18 reserved (ANALOG_RSVD) (HD-025)."
+  - "EXP_INT_N (wired-OR INT of EXP_A/B/C, 47k pull-up) reaches the MCU inverted by an SN74AUP1G04 as EXP_WAKE, active high, so it shares the slot WAKE lines' ext1 ANY_HIGH mask (HD-034)."
+  - "Tamper (HD-032): J9 lid loop to GND on TAMPER_N (EXP_C P04), 1M pull-up + 10 nF (tau 10 ms, about 12 ms to VIH); high = lid open or loop cut. An optional wall-removal switch goes in series with the lid switch. A short to GND defeats it (single-ended loop)."
+  - "Slot LEDs dark on battery; lit only on USB/PV power or for 10 min of service mode (practices review L-03)."
+  - "Debug: Tag-Connect TC2030-NL J10 (1 V3V3_CORE, 2 CHIP_EN, 3 GND, 4 U0TXD, 5 BOOT_N, 6 U0RXD) replaces the DNP UART0 header J8."
 slots:
   - {index: 0, wake: true, i2c_branch: 0, spi: true, uart: true, analog: false, rails: [v3v3_aon, v3v3_sw]}
   - {index: 1, wake: true, i2c_branch: 1, spi: true, uart: true, analog: false, rails: [v3v3_aon, v3v3_sw]}
@@ -26,3 +34,86 @@ power_sources:
   - {source: POWER_SOURCE_BATTERY_ONLY, sustained_mw: 0, sustained_uw: 100, peak_mw: 800}
   - {source: POWER_SOURCE_USB, sustained_mw: 800, peak_mw: 800}  # firmware usb_sustained_mw (TPS63900 budget minus radio TX)
   - {source: POWER_SOURCE_SOLAR_BATTERY, sustained_mw: 0, sustained_uw: 300, peak_mw: 800}
+# The board's own lid loop (HD-032): devices on this board may declare it.
+board_capabilities: [tamper.enclosure]
+# B-03: the T/RH card only in the top slots, farthest from the charger's heat. PROVISIONAL
+# until a thermal measurement of the populated board (bench) confirms which slots stay cool.
+module_slot_limits:
+  - {module_id: tl_mod_004_environment, allowed_slots: [0, 2], reason: "top slots, farthest from the charger's heat (B-03)"}
+expanders:
+  - name: EXP_A
+    part: TCA9535
+    i2c_address: 32
+    interrupt_net: EXP_INT_N
+    pins:
+      - {pin: P00, net: SLOT_SW_EN0, direction: output}
+      - {pin: P01, net: SLOT_SW_EN1, direction: output}
+      - {pin: P02, net: SLOT_SW_EN2, direction: output}
+      - {pin: P03, net: SLOT_SW_EN3, direction: output}
+      - {pin: P04, net: SLOT_AON_EN0, direction: output}
+      - {pin: P05, net: SLOT_AON_EN1, direction: output}
+      - {pin: P06, net: SLOT_AON_EN2, direction: output}
+      - {pin: P07, net: SLOT_AON_EN3, direction: output}
+      - {pin: P10, net: SLOT0_RESET_N, direction: output, active_low: true}
+      - {pin: P11, net: SLOT1_RESET_N, direction: output, active_low: true}
+      - {pin: P12, net: SLOT2_RESET_N, direction: output, active_low: true}
+      - {pin: P13, net: SLOT3_RESET_N, direction: output, active_low: true}
+      - {pin: P14, net: SLOT0_CS_N, direction: output, active_low: true}
+      - {pin: P15, net: SLOT1_CS_N, direction: output, active_low: true}
+      - {pin: P16, net: SLOT2_CS_N, direction: output, active_low: true}
+      - {pin: P17, net: SLOT3_CS_N, direction: output, active_low: true}
+  - name: EXP_B
+    part: TCA9535
+    i2c_address: 33
+    interrupt_net: EXP_INT_N
+    pins:
+      - {pin: P00, net: SLOT0_PRESENT_N, direction: input, active_low: true}
+      - {pin: P01, net: SLOT1_PRESENT_N, direction: input, active_low: true}
+      - {pin: P02, net: SLOT2_PRESENT_N, direction: input, active_low: true}
+      - {pin: P03, net: SLOT3_PRESENT_N, direction: input, active_low: true}
+      - {pin: P04, net: SLOT0_ALERT_N, direction: input, active_low: true}
+      - {pin: P05, net: SLOT1_ALERT_N, direction: input, active_low: true}
+      - {pin: P06, net: SLOT2_ALERT_N, direction: input, active_low: true}
+      - {pin: P07, net: SLOT3_ALERT_N, direction: input, active_low: true}
+      - {pin: P10, net: UART_SEL0, direction: output}
+      - {pin: P11, net: UART_SEL1, direction: output}
+      - {pin: P12, net: UART_MUX_EN_N, direction: output, active_low: true}
+      - {pin: P13, net: PRESENT_PROBE, direction: output}
+      - {pin: P14, net: CHG_INT_N, direction: input, active_low: true}
+      - {pin: P15, net: CHG_PG_N, direction: input, active_low: true}
+      - {pin: P16, net: PMUX_ST, direction: input}
+      - {pin: P17, net: SW_FAULT_N, direction: input, active_low: true}
+  - name: EXP_C
+    part: TCA9535
+    i2c_address: 34  # A0 = GND, A1 = V3V3_CORE, A2 = GND
+    interrupt_net: EXP_INT_N
+    pins:
+      - {pin: P00, net: SLOT_LED0_N, direction: output, active_low: true}
+      - {pin: P01, net: SLOT_LED1_N, direction: output, active_low: true}
+      - {pin: P02, net: SLOT_LED2_N, direction: output, active_low: true}
+      - {pin: P03, net: SLOT_LED3_N, direction: output, active_low: true}
+      - {pin: P04, net: TAMPER_N, direction: input}  # high = lid open or loop cut
+      - {pin: P05, direction: unused}
+      - {pin: P06, direction: unused}
+      - {pin: P07, direction: unused}
+      - {pin: P10, direction: unused}
+      - {pin: P11, direction: unused}
+      - {pin: P12, direction: unused}
+      - {pin: P13, direction: unused}
+      - {pin: P14, direction: unused}
+      - {pin: P15, direction: unused}
+      - {pin: P16, direction: unused}
+      - {pin: P17, direction: unused}
+wake_lines:
+  - {net: SLOT_WAKE0, mcu_pin: GPIO10, active_high: true}
+  - {net: SLOT_WAKE1, mcu_pin: GPIO11, active_high: true}
+  - {net: SLOT_WAKE2, mcu_pin: GPIO12, active_high: true}
+  - {net: SLOT_WAKE3, mcu_pin: GPIO13, active_high: true}
+  - {net: EXP_WAKE, mcu_pin: GPIO14, active_high: true, note: "EXP_INT_N through SN74AUP1G04"}
+indicators:
+  - {name: PWR, net: USB_VBUS, driver: hardware, color: green}  # D8, USB present; no GPIO
+  - {name: STAT, net: LED_K, driver: GPIO8, active_low: true, color: red}  # D1, blink codes; strap pin
+  - {name: S0, net: SLOT_LED0_N, driver: EXP_C P00, active_low: true, color: green}
+  - {name: S1, net: SLOT_LED1_N, driver: EXP_C P01, active_low: true, color: green}
+  - {name: S2, net: SLOT_LED2_N, driver: EXP_C P02, active_low: true, color: green}
+  - {name: S3, net: SLOT_LED3_N, driver: EXP_C P03, active_low: true, color: green}

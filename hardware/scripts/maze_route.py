@@ -102,7 +102,7 @@ def connect(board, a, b, window_mm: float = 12.0, rip: bool = False) -> bool:
     width = max(F(0.1), min(nc.GetTrackWidth(), F(0.2)))
     clear = max(F(0.15), nc.GetClearance()) + F(0.02)
     ds = board.GetDesignSettings()
-    via_d, via_drill = max(ds.m_ViasMinSize, F(0.5)), max(ds.m_MinThroughDrill, F(0.3))
+    via_d, via_drill = max(ds.m_ViasMinSize, F(0.65)), max(ds.m_MinThroughDrill, F(0.3))  # as the netclass
     ba, bb = a.GetBoundingBox(), b.GetBoundingBox()
     ba.Merge(bb)
     ba.Inflate(F(window_mm))
@@ -113,7 +113,7 @@ def connect(board, a, b, window_mm: float = 12.0, rip: bool = False) -> bool:
     viab = {L: _blocked(board, win, net, L, via_r) for L in LAYERS}
     no_via = bytearray(win.nx * win.ny)
     same_via = bytearray(win.nx * win.ny)  # inside a via of this net: change layer there for free
-    hole_gap = via_drill + F(0.3)  # drill-to-drill centre spacing (hole_to_hole rule plus margin)
+    hole_gap = via_drill + F(0.52)  # drill-to-drill centre spacing: 0.5 mm hole_to_hole (HD-039) plus margin
     drilled = [t for t in board.GetTracks() if t.GetClass() == "PCB_VIA"]
     drilled += [q for q in board.GetPads() if q.GetDrillSize().x > 0]
     for d in drilled:

@@ -1,0 +1,4 @@
+ref,net,x_mm,y_mm,side
+TP2,GND,4.049,4.718,top
+TP1,V3V3_AON,2.460,4.803,top
+TP3,WAKE,0.968,4.319,top

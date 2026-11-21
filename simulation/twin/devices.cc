@@ -80,6 +80,7 @@ VirtualDevice::VirtualDevice(const v1::SiteDevice& spec, PropertyId property, st
   if (spec.has_speaker()) speaker_ = spec.speaker();
   if (spec.has_lock()) lock_ = spec.lock();
   if (spec.has_notifier()) notifier_ = spec.notifier();
+  if (spec.has_enclosure()) enclosure_ = spec.enclosure();
 }
 
 ObservationEnvelope VirtualDevice::envelope(Timestamp now, std::optional<std::uint8_t> slot,
@@ -106,6 +107,12 @@ void VirtualDevice::report_initial_state(Timestamp now, const World& world,
       emit(out,
            envelope(now, c.slot, "contact.open_state", "contact.state", ContactState{p->open}));
     }
+  }
+  if (enclosure_) {
+    // Boot state report (b = 1 on the wire): rules don't fire on it.
+    enclosure_last_ = world.enclosure_open(id_);
+    emit(out, envelope(now, std::nullopt, "tamper.enclosure", "tamper.state",
+                       TamperState{enclosure_last_}));
   }
   if (lock_) {
     if (const Portal* p = world.portal(lock_->portal_id())) {
@@ -162,6 +169,24 @@ void VirtualDevice::sample(std::int64_t t_ms, Timestamp now, World& world,
     c.last = p->open;
     emit(out, envelope(now, c.slot, "contact.open_state",
                        p->open ? "contact.opened" : "contact.closed", ContactState{p->open}));
+  }
+
+  if (enclosure_) {
+    // A loop change that lasts a tick (100 ms) is past any debounce; a bounce counts only
+    // if it outlasts the debounce, and then reads as an opening and a closing.
+    const std::uint32_t debounce = enclosure_->debounce_ms() ? enclosure_->debounce_ms() : 50;
+    for (const std::uint32_t ms : world.take_enclosure_bounces(id_)) {
+      if (ms < debounce || enclosure_last_) continue;
+      emit(out,
+           envelope(now, std::nullopt, "tamper.enclosure", "tamper.opened", TamperState{true}));
+      emit(out,
+           envelope(now, std::nullopt, "tamper.enclosure", "tamper.closed", TamperState{false}));
+    }
+    if (const bool open = world.enclosure_open(id_); open != enclosure_last_) {
+      enclosure_last_ = open;
+      emit(out, envelope(now, std::nullopt, "tamper.enclosure",
+                         open ? "tamper.opened" : "tamper.closed", TamperState{open}));
+    }
   }
 
   for (const auto& imp : impacts_) {

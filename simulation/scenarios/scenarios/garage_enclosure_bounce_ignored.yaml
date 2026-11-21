@@ -1,0 +1,35 @@
+name: garage_enclosure_bounce_ignored
+description: >-
+  Armed away, a knock on node_garage's lid opens the loop for 20 ms, under the 50 ms debounce: nothing is reported and nothing alarms.
+site: sites/garage_driveway.yaml
+seed: 42
+start_unix_ms: 1794740400000
+duration_ms: 15000
+principals:
+  - {id: owner, kind: PRINCIPAL_KIND_HUMAN, max_risk: RISK_CLASS_SECURITY_CRITICAL}
+rules:
+  - id: enclosure_tamper_alarm
+    revision: 1
+    property_id: garage-01
+    principal_id: "rule:enclosure_tamper_alarm"
+    enabled: true
+    # Tamper is a 24-hour condition (ADR 0007 amendment): no armed_modes.
+    trigger_event_type: tamper.opened
+    actions:
+      - operation: notify
+        target: {device_id: notifier, capability_id: notify}
+        args: {notify: {recipient_role: owner, text: "Tamper: node_garage enclosure opened"}}
+        ttl_ms: 5000
+        verification: VERIFICATION_MODE_ACK_ONLY
+        verification_window_ms: 3000
+stimuli:
+  - {at_ms: 0, arm_mode_set: {principal_id: owner, mode: ARM_MODE_ARMED_AWAY}}
+  - {at_ms: 5000, enclosure_set: {device_id: node_garage, bounce_ms: 20}}
+  - {at_ms: 8000, enclosure_set: {device_id: node_garage, bounce_ms: 30}}
+expect:
+  - name: no opening reported
+    observation: {event_type: tamper.opened, device_id: node_garage, min_count: 0, max_count: 0}
+  - name: no closing reported
+    observation: {event_type: tamper.closed, device_id: node_garage, min_count: 0, max_count: 0}
+  - name: no alarm
+    command: {operation: notify, count: 0}

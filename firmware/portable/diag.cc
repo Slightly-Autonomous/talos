@@ -180,7 +180,8 @@ void Diag::handle_line(const char* line, IDiagOut& out) {
     JsonLine()
         .str("t", "help")
         .str("cmds",
-             "id slots power i2c mux exp rail uart rescan selftest provision identity reboot")
+             "id slots power i2c mux exp rail uart rescan selftest provision identity board-id led "
+             "reboot")
         .emit(out);
     ok = true;
   } else if (is("id")) {
@@ -203,6 +204,10 @@ void Diag::handle_line(const char* line, IDiagOut& out) {
     ok = cmd_provision(a, out, err);
   } else if (is("identity")) {
     ok = cmd_identity(out);
+  } else if (is("board-id")) {
+    ok = cmd_board_id(a, out, err);
+  } else if (is("led")) {
+    ok = cmd_led(a, out, err);
   } else if (is("reboot")) {
     reboot_ = true;
     ok = true;
@@ -238,6 +243,8 @@ void Diag::handle_line(const char* line, IDiagOut& out) {
 // --- information ------------------------------------------------------------------------
 
 bool Diag::cmd_id(IDiagOut& out) {
+  const auto info = load_board_info(p_.store);
+  const auto tamper = rt_.tamper_open();
   JsonLine()
       .str("t", "id")
       .num("fw", rt_.running_version())
@@ -245,6 +252,14 @@ bool Diag::cmd_id(IDiagOut& out) {
       .boolean("board_ok", rt_.board_ok())
       .num("queued", static_cast<std::int64_t>(rt_.queued()))
       .num("mode", static_cast<std::int64_t>(rt_.power_mode()))
+      .str("board", info ? info->board : "")
+      .str("rev", info ? info->revision : "")
+      .str("serial", info ? info->serial : "")
+      .num("tamper", tamper ? (*tamper ? 1 : 0) : -1)
+      .num("wake_cause", static_cast<std::int64_t>(rt_.wake_info().cause))
+      .hex("wake_lines", rt_.wake_info().lines)
+      .boolean("resumed", rt_.resumed_from_sleep())
+      .boolean("exp_wake_masked", rt_.expander_wake_masked())
       .emit(out);
   return true;
 }
@@ -357,6 +372,100 @@ bool Diag::cmd_identity(IDiagOut& out) {
     line.str("device_id", id->device_id).hex("key_fingerprint", fingerprint(id->key, id->key_len));
   line.emit(out);
   return true;
+}
+
+// --- board identity (D-09) --------------------------------------------------------------
+
+std::optional<BoardInfo> load_board_info(IStore& store) {
+  BoardInfo info;
+  const auto n =
+      store.get(StoreKey::kBoardInfo, reinterpret_cast<std::uint8_t*>(&info), sizeof info);
+  if (!n || *n != sizeof info) return std::nullopt;
+  info.board[BoardInfo::kMaxName] = 0;
+  info.revision[BoardInfo::kMaxRevision] = 0;
+  info.serial[BoardInfo::kMaxSerial] = 0;
+  if (!info.valid()) return std::nullopt;
+  return info;
+}
+
+bool save_board_info(IStore& store, const BoardInfo& info) {
+  if (!info.valid()) return false;
+  return store.put(StoreKey::kBoardInfo, reinterpret_cast<const std::uint8_t*>(&info), sizeof info);
+}
+
+namespace {
+// Label-safe text: letters, digits, '-', '_', '.'; 1..max characters.
+bool copy_field(const char* in, char* out, std::size_t max) {
+  const std::size_t n = std::strlen(in);
+  if (n == 0 || n > max) return false;
+  for (std::size_t i = 0; i < n; ++i) {
+    const char c = in[i];
+    const bool ok = (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') ||
+                    c == '-' || c == '_' || c == '.';
+    if (!ok) return false;
+  }
+  std::memcpy(out, in, n);
+  out[n] = 0;
+  return true;
+}
+}  // namespace
+
+// Written once at program time (tools/dbg program-id --node). Re-sending the
+// same values is fine; changing them is refused: the label and the hub's
+// records would no longer match the board.
+bool Diag::cmd_board_id(const Args& a, IDiagOut& out, const char*& err) {
+  const auto have = load_board_info(p_.store);
+  if (a.n == 4) {
+    BoardInfo want;
+    if (!copy_field(a.v[1], want.board, BoardInfo::kMaxName) ||
+        !copy_field(a.v[2], want.revision, BoardInfo::kMaxRevision) ||
+        !copy_field(a.v[3], want.serial, BoardInfo::kMaxSerial)) {
+      err = "usage: board-id <board, 1-15> <revision, 1-3> <serial, 1-23> ([A-Za-z0-9._-])";
+      return false;
+    }
+    const bool same = have && std::strcmp(have->board, want.board) == 0 &&
+                      std::strcmp(have->revision, want.revision) == 0 &&
+                      std::strcmp(have->serial, want.serial) == 0;
+    if (have && !same) {
+      err = "board-id already programmed (write-once)";
+    } else if (!have && !save_board_info(p_.store, want)) {
+      err = "store write failed";
+    }
+  } else if (a.n != 1) {
+    err = "usage: board-id [<board> <revision> <serial>]";
+  }
+  const auto now = load_board_info(p_.store);
+  JsonLine line;
+  line.str("t", "board_id").boolean("programmed", now.has_value());
+  if (now) line.str("board", now->board).str("rev", now->revision).str("serial", now->serial);
+  line.emit(out);
+  return err == nullptr;
+}
+
+// --- indicators -------------------------------------------------------------------------
+
+bool Diag::cmd_led(const Args& a, IDiagOut& out, const char*& err) {
+  if (a.n == 3 && std::strcmp(a.v[1], "service") == 0) {
+    if (std::strcmp(a.v[2], "on") == 0) {
+      rt_.start_service_mode();
+    } else if (std::strcmp(a.v[2], "off") == 0) {
+      rt_.stop_service_mode();
+    } else {
+      err = "usage: led | led service on|off";
+    }
+  } else if (a.n != 1) {
+    err = "usage: led | led service on|off";
+  }
+  JsonLine line;
+  line.str("t", "led")
+      .num("status_code", static_cast<std::int64_t>(rt_.status_code()))
+      .boolean("status_lit", rt_.status_led_lit())
+      .boolean("service", rt_.service_mode())
+      .boolean("external_power", rt_.external_power());
+  std::int32_t lit[kSlots];
+  for (std::uint8_t i = 0; i < kSlots; ++i) lit[i] = rt_.slot_led_lit(i) ? 1 : 0;
+  line.nums("slot_lit", lit, kSlots).emit(out);
+  return err == nullptr;
 }
 
 // --- raw bus access ---------------------------------------------------------------------
@@ -564,6 +673,8 @@ bool Diag::selftest_i2c(IDiagOut& out) {
     add(s.aon_enable.address);
     add(s.present_n.address);
   }
+  add(p_.board.tamper_n.address);  // EXP_C: slot LEDs and the tamper loop
+  for (const auto& led : p_.board.slot_led_n) add(led.address);
   add(p_.board.charger_address);
   for (std::size_t i = 1; i < nwant; ++i) {  // sort for a stable comparison
     for (std::size_t j = i; j > 0 && want[j - 1] > want[j]; --j) {

@@ -35,12 +35,23 @@ struct CapabilityState {
 };
 
 // Doubles as a snapshot: `through_seq` is the last journal entry it covers.
+struct MaintenanceWindow {
+  Timestamp until;
+  PrincipalId principal;
+  // Start of this run of back-to-back windows: a restart while one is open
+  // keeps it (the chain is capped at kMaxMaintenance).
+  Timestamp since;
+  bool operator==(const MaintenanceWindow&) const = default;
+};
+
 struct PropertyState {
   std::uint64_t through_seq = 0;
   std::map<CapabilityRef, CapabilityState> capabilities;
   CommandLedger commands;
   ArmMode arm_mode = ArmMode::kDisarmed;
   std::uint32_t config_revision = 0;  // 0: none journaled yet
+  // Nodes in maintenance (tamper alarm suppressed), from MaintenanceChanged.
+  std::map<DeviceId, MaintenanceWindow> maintenance;
   bool operator==(const PropertyState&) const = default;
 };
 

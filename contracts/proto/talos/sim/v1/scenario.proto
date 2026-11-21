@@ -105,6 +105,14 @@ message UserCommand {
 
 message HubRestart {}
 
+// A device's enclosure tamper loop. With bounce_ms > 0 the loop opens for that
+// long and closes again (a knock on the lid), and `open` is ignored.
+message EnclosureSet {
+  string device_id = 1;
+  bool open = 2;
+  uint32 bounce_ms = 3;
+}
+
 message ActuatorFaultSet {
   string device_id = 1;
   ActuatorFault fault = 2;
@@ -126,6 +134,7 @@ message Stimulus {
     UserCommand user_command = 12;
     HubRestart hub_restart = 13;
     ActuatorFaultSet actuator_fault = 14;
+    EnclosureSet enclosure_set = 15;
   }
 }
 

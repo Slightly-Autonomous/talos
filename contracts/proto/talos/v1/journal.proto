@@ -41,6 +41,26 @@ message SourceReset {
   string principal_id = 2;
 }
 
+// A node's maintenance window started (until set) or ended: while it lasts,
+// that node's tamper alarm is suppressed (device.maintenance).
+message MaintenanceChanged {
+  string device_id = 1;
+  optional int64 until_unix_ms = 2;
+  string principal_id = 3;
+  // "started", "cancelled", "expired".
+  string reason = 4;
+  optional string command_id = 5;
+}
+
+// A tamper alarm a rule would have raised was suppressed by maintenance.
+message AlarmSuppressed {
+  string device_id = 1;
+  string rule_id = 2;
+  string causation_event_id = 3;
+  int64 maintenance_until_unix_ms = 4;
+  string maintenance_principal_id = 5;
+}
+
 // Journal entry (ADR 0008). journal_seq is the only cross-device ordering
 // authority. received_at is non-decreasing in journal order.
 message JournalEntry {
@@ -53,5 +73,7 @@ message JournalEntry {
     ArmModeChanged arm_mode_changed = 6;
     ConfigRevisionApplied config_revision_applied = 7;
     SourceReset source_reset = 8;
+    MaintenanceChanged maintenance_changed = 9;
+    AlarmSuppressed alarm_suppressed = 10;
   }
 }

@@ -90,6 +90,22 @@ export function Simulation() {
         >
           Close front door
         </button>
+        <button
+          data-testid="sim-node-12-lid-open"
+          onClick={act("Open node-12 enclosure", () =>
+            sim("/v1/sim/tamper", { device_id: "node-12", open: true }),
+          )}
+        >
+          Open node-12 enclosure
+        </button>
+        <button
+          data-testid="sim-node-12-lid-close"
+          onClick={act("Close node-12 enclosure", () =>
+            sim("/v1/sim/tamper", { device_id: "node-12", open: false }),
+          )}
+        >
+          Close node-12 enclosure
+        </button>
         <button onClick={act("Lock front door", () => lockDoor(true))}>Lock front door</button>
         <button onClick={act("Unlock front door", () => lockDoor(false))}>Unlock front door</button>
       </div>

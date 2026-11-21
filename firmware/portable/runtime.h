@@ -14,6 +14,7 @@
 
 #include "firmware/portable/event_queue.h"
 #include "firmware/portable/hal.h"
+#include "firmware/portable/indicators.h"
 #include "firmware/portable/modules.h"
 #include "firmware/portable/ota.h"
 
@@ -106,6 +107,8 @@ class NodeRuntime final : public IEventSink {
   std::uint8_t wake_masked_slots() const { return wake_masked_; }
   // True if this boot resumed from deep sleep with the cards still powered.
   bool resumed_from_sleep() const { return resumed_cards_; }
+  // Why this boot happened and which wake lines fired (bench S-M19).
+  const WakeInfo& wake_info() const { return wake_; }
   // Re-run discovery and driver init for one slot, or all (bench: after a rail
   // change or a self-test that reconfigured a sensor).
   void rescan(std::optional<std::uint8_t> slot = std::nullopt);
@@ -119,6 +122,21 @@ class NodeRuntime final : public IEventSink {
   void clear_quarantine(std::uint8_t slot);
   // Consecutive resets seen while powering the slot (cleared once it powers up).
   std::uint8_t power_strikes(std::uint8_t slot) const { return strikes_[slot]; }
+
+  // Indicators (indicators.h). Service mode lights the slot LEDs on battery
+  // for SlotLedPolicy::kServiceMs (diag `led service`).
+  void start_service_mode();
+  void stop_service_mode();
+  bool service_mode() const { return slot_leds_.service_active(p_.clock.now_ms()); }
+  StatusCode status_code() const { return status_; }
+  bool status_led_lit() const { return status_led_level_; }
+  bool slot_led_lit(std::uint8_t slot) const { return (slot_led_shadow_ >> slot) & 1u; }
+  // USB or PV present (CHG_PG_N low), as last read.
+  bool external_power() const { return external_power_; }
+  // Debounced enclosure tamper loop: true = open or cut, nullopt = not known yet.
+  std::optional<bool> tamper_open() const { return tamper_.state(); }
+  // EXP_WAKE held high after servicing every expander: masked as a wake source.
+  bool expander_wake_masked() const { return exp_wake_masked_; }
 
  private:
   struct Resume {
@@ -152,6 +170,14 @@ class NodeRuntime final : public IEventSink {
   void save_retained();
   void supervise_slots(TimeMs now);
   void supervise_wake_lines(TimeMs now);
+  // EXP_WAKE: service the expanders' INT, sample the tamper loop, re-read the source.
+  void service_expanders(TimeMs now);
+  void sample_tamper(TimeMs now);
+  void refresh_external_power();
+  void update_indicators(TimeMs now);
+  void poll_service_button(TimeMs now);
+  std::array<SlotLedMode, kSlots> slot_led_modes() const;
+  StatusInputs status_inputs(TimeMs now) const;
   void arm_wake_lines();
   void send_due(TimeMs now);
   TimeMs send_gate_ms(TimeMs now) const;
@@ -204,6 +230,25 @@ class NodeRuntime final : public IEventSink {
   std::uint32_t tokens_ = kSendBurst;
   TimeMs last_refill_ms_ = 0;
   bool downlink_more_ = false;
+
+  // Indicators and tamper.
+  TamperDebouncer tamper_;
+  ServiceButton button_;
+  SlotLedPolicy slot_leds_;
+  bool external_power_ = false;
+  bool hub_heard_ = false;
+  TimeMs boot_ms_ = 0;
+  StatusCode status_ = StatusCode::kOff;
+  TimeMs status_since_ = 0;
+  bool status_led_level_ = false;
+  bool status_led_known_ = false;  // the GPIO matches status_led_level_
+  std::uint8_t slot_led_shadow_ = 0;
+  bool slot_leds_known_ = false;    // the expander matches slot_led_shadow_
+  TimeMs led_due_ms_ = ~TimeMs{0};  // next status or slot LED edge
+  TimeMs exp_wake_high_since_ = 0;
+  bool exp_wake_high_ = false;
+  bool exp_wake_masked_ = false;
+  TimeMs next_exp_poll_ = 0;
 
   // Wake-line supervision.
   std::array<TimeMs, kSlots> wake_high_since_{};

@@ -50,3 +50,33 @@ export async function requestLock(
     return client.requestCommand(lockCommandRequest(deviceId, locked, makeId()));
   }
 }
+
+export const DEFAULT_MAINTENANCE_MS = 30 * 60 * 1000;
+
+// device.maintenance (hub-internal): suppresses this node's tamper alarm for a
+// bounded time. Humans only; the hub refuses agents and out-of-range durations.
+export function maintenanceCommandRequest(
+  deviceId: string,
+  durationMs: number = DEFAULT_MAINTENANCE_MS,
+  commandId: string = newCommandId("ui-maint"),
+): CommandRequest {
+  return create(CommandRequestSchema, {
+    commandId,
+    operation: "device.maintenance",
+    target: { deviceId, capabilityId: "device.health" },
+    args: { kind: { case: "setMaintenance", value: { durationMs } } },
+    ttlMs: 10_000,
+  });
+}
+
+export function endMaintenanceCommandRequest(
+  deviceId: string,
+  commandId: string = newCommandId("ui-maint-end"),
+): CommandRequest {
+  return create(CommandRequestSchema, {
+    commandId,
+    operation: "device.maintenance_end",
+    target: { deviceId, capabilityId: "device.health" },
+    ttlMs: 10_000,
+  });
+}

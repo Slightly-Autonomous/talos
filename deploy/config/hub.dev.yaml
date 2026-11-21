@@ -54,3 +54,18 @@ rules:
         ttl_ms: 5000
         verification_window_ms: 3000
         expect: {source: {device_id: patio_speaker, capability_id: audio.speak}, payload: {audio_playback: {playing: true}}}
+  # Enclosure tamper is a 24-hour condition (ADR 0007 amendment): no armed_modes,
+  # so it alarms in every mode, disarmed included.
+  - id: enclosure_tamper_alarm
+    revision: 1
+    property_id: house-01
+    principal_id: "rule:enclosure_tamper_alarm"
+    enabled: true
+    trigger_event_type: tamper.opened
+    actions:
+      - operation: audio.speak
+        target: {device_id: patio_speaker, capability_id: audio.speak}
+        args: {audio_speak: {text: "Tamper alarm. A sensor enclosure was opened.", volume_percent: 80}}
+        ttl_ms: 5000
+        verification_window_ms: 3000
+        expect: {source: {device_id: patio_speaker, capability_id: audio.speak}, payload: {audio_playback: {playing: true}}}

@@ -13,6 +13,8 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <optional>
+#include <string>
 #include <variant>
 #include <vector>
 
@@ -66,8 +68,32 @@ struct SourceReset {
   bool operator==(const SourceReset&) const = default;
 };
 
-using DomainEvent = std::variant<ObservationRecorded, CommandTransition, ArmModeChanged,
-                                 ConfigRevisionApplied, SourceReset>;
+// A node's maintenance window started (until set) or ended (until empty):
+// while it lasts, that node's tamper alarm is suppressed (device.maintenance).
+struct MaintenanceChanged {
+  DeviceId device;
+  std::optional<Timestamp> until;
+  PrincipalId principal;  // who started or cancelled it; kMaintenanceExpiry on expiry
+  std::string reason;     // "started", "cancelled", "expired"
+  std::optional<CommandId> command;
+  bool operator==(const MaintenanceChanged&) const = default;
+};
+
+// A rule that a tamper opening would have fired was suppressed by maintenance.
+struct AlarmSuppressed {
+  DeviceId device;
+  RuleId rule;
+  EventId causation;
+  Timestamp maintenance_until;
+  PrincipalId maintenance_by;
+  bool operator==(const AlarmSuppressed&) const = default;
+};
+
+inline const PrincipalId kMaintenanceExpiry{"system:maintenance_expiry"};
+
+using DomainEvent =
+    std::variant<ObservationRecorded, CommandTransition, ArmModeChanged, ConfigRevisionApplied,
+                 SourceReset, MaintenanceChanged, AlarmSuppressed>;
 
 struct JournalEntry {
   std::uint64_t journal_seq = 0;  // 1-based, strictly increasing

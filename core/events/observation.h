@@ -48,6 +48,12 @@ struct ObjectDetected {
   std::uint16_t confidence_permille = 0;
   auto operator<=>(const ObjectDetected&) const = default;
 };
+// Enclosure tamper loop (capability "tamper.enclosure"): open = lid open or
+// loop cut. A security event in every arm mode (ADR 0007 amendment).
+struct TamperState {
+  bool open = false;
+  auto operator<=>(const TamperState&) const = default;
+};
 // Periodic device supervision report.
 struct Heartbeat {
   std::uint32_t battery_mv = 0;
@@ -56,7 +62,7 @@ struct Heartbeat {
 
 using ObservationPayload =
     std::variant<std::monostate, ContactState, MotionState, ImpactDetected, TemperatureHumidity,
-                 LockState, AudioPlayback, ObjectDetected, Heartbeat>;
+                 LockState, AudioPlayback, ObjectDetected, Heartbeat, TamperState>;
 
 // Per-device source position. `boot_epoch` is a persistent counter the device
 // increments on every boot; `sequence` restarts at each boot. Together they

@@ -33,6 +33,22 @@
    },
    "value": "100n"
   },
+  "D1": {
+   "datasheet": "~",
+   "dnp": false,
+   "footprint": "LED_SMD:LED_0603_1608Metric",
+   "lib_id": "Device:LED",
+   "note": "SW: slot switched rail on",
+   "pin_names": {
+    "1": "K",
+    "2": "A"
+   },
+   "pins": {
+    "1": "SW_LED_K",
+    "2": "V3V3_SW"
+   },
+   "value": "LED_GREEN"
+  },
   "J1": {
    "datasheet": "~",
    "dnp": false,
@@ -71,8 +87,8 @@
     "15": "UART_TX",
     "16": "UART_RX",
     "17": "RESET_N",
-    "18": "GND",
-    "19": null,
+    "18": null,
+    "19": "GND",
     "2": "GND",
     "20": "GND",
     "3": "V3V3_AON",
@@ -276,6 +292,22 @@
     "2": "ALERT_N"
    },
    "value": "1k"
+  },
+  "R20": {
+   "datasheet": "~",
+   "dnp": false,
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "SW LED current",
+   "pin_names": {
+    "1": "",
+    "2": ""
+   },
+   "pins": {
+    "1": "SW_LED_K",
+    "2": "GND"
+   },
+   "value": "2.2k"
   },
   "R3": {
    "datasheet": "~",

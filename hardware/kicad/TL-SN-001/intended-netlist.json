@@ -449,6 +449,70 @@
    },
    "value": "100n"
   },
+  "C35": {
+   "datasheet": "~",
+   "dnp": false,
+   "footprint": "Capacitor_SMD:C_0402_1005Metric",
+   "lib_id": "Device:C",
+   "note": "BQ25186 IN local decoupling, at the pin (HD-037)",
+   "pin_names": {
+    "1": "",
+    "2": ""
+   },
+   "pins": {
+    "1": "CHG_IN",
+    "2": "GND"
+   },
+   "value": "1u/25V"
+  },
+  "C36": {
+   "datasheet": "~",
+   "dnp": false,
+   "footprint": "Capacitor_SMD:C_0402_1005Metric",
+   "lib_id": "Device:C",
+   "note": "",
+   "pin_names": {
+    "1": "",
+    "2": ""
+   },
+   "pins": {
+    "1": "V3V3_CORE",
+    "2": "GND"
+   },
+   "value": "100n"
+  },
+  "C37": {
+   "datasheet": "~",
+   "dnp": false,
+   "footprint": "Capacitor_SMD:C_0402_1005Metric",
+   "lib_id": "Device:C",
+   "note": "",
+   "pin_names": {
+    "1": "",
+    "2": ""
+   },
+   "pins": {
+    "1": "V3V3_CORE",
+    "2": "GND"
+   },
+   "value": "100n"
+  },
+  "C38": {
+   "datasheet": "~",
+   "dnp": false,
+   "footprint": "Capacitor_SMD:C_0402_1005Metric",
+   "lib_id": "Device:C",
+   "note": "tamper RC: ESD and contact-bounce filter, tau 10 ms",
+   "pin_names": {
+    "1": "",
+    "2": ""
+   },
+   "pins": {
+    "1": "TAMPER_N",
+    "2": "GND"
+   },
+   "value": "10n"
+  },
   "C4": {
    "datasheet": "~",
    "dnp": false,
@@ -550,7 +614,7 @@
    "dnp": false,
    "footprint": "LED_SMD:LED_0603_1608Metric",
    "lib_id": "Device:LED",
-   "note": "",
+   "note": "STAT: firmware blink codes (L-01)",
    "pin_names": {
     "1": "K",
     "2": "A"
@@ -560,6 +624,54 @@
     "2": "V3V3_CORE"
    },
    "value": "STATUS"
+  },
+  "D10": {
+   "datasheet": "~",
+   "dnp": false,
+   "footprint": "LED_SMD:LED_0603_1608Metric",
+   "lib_id": "Device:LED",
+   "note": "S1: slot 1 state, firmware-driven, dark on battery (L-03)",
+   "pin_names": {
+    "1": "K",
+    "2": "A"
+   },
+   "pins": {
+    "1": "S1_LED_K",
+    "2": "V3V3_CORE"
+   },
+   "value": "LED_GREEN"
+  },
+  "D11": {
+   "datasheet": "~",
+   "dnp": false,
+   "footprint": "LED_SMD:LED_0603_1608Metric",
+   "lib_id": "Device:LED",
+   "note": "S2: slot 2 state, firmware-driven, dark on battery (L-03)",
+   "pin_names": {
+    "1": "K",
+    "2": "A"
+   },
+   "pins": {
+    "1": "S2_LED_K",
+    "2": "V3V3_CORE"
+   },
+   "value": "LED_GREEN"
+  },
+  "D12": {
+   "datasheet": "~",
+   "dnp": false,
+   "footprint": "LED_SMD:LED_0603_1608Metric",
+   "lib_id": "Device:LED",
+   "note": "S3: slot 3 state, firmware-driven, dark on battery (L-03)",
+   "pin_names": {
+    "1": "K",
+    "2": "A"
+   },
+   "pins": {
+    "1": "S3_LED_K",
+    "2": "V3V3_CORE"
+   },
+   "value": "LED_GREEN"
   },
   "D2": {
    "datasheet": "https://www.vishay.com/docs/88751/ss32.pdf",
@@ -689,6 +801,38 @@
    },
    "value": "PESD5V0L5UV"
   },
+  "D8": {
+   "datasheet": "~",
+   "dnp": false,
+   "footprint": "LED_SMD:LED_0603_1608Metric",
+   "lib_id": "Device:LED",
+   "note": "PWR: USB present (hardware, ~0.9 mA from VBUS)",
+   "pin_names": {
+    "1": "K",
+    "2": "A"
+   },
+   "pins": {
+    "1": "PWR_LED_K",
+    "2": "USB_VBUS"
+   },
+   "value": "LED_GREEN"
+  },
+  "D9": {
+   "datasheet": "~",
+   "dnp": false,
+   "footprint": "LED_SMD:LED_0603_1608Metric",
+   "lib_id": "Device:LED",
+   "note": "S0: slot 0 state, firmware-driven, dark on battery (L-03)",
+   "pin_names": {
+    "1": "K",
+    "2": "A"
+   },
+   "pins": {
+    "1": "S0_LED_K",
+    "2": "V3V3_CORE"
+   },
+   "value": "LED_GREEN"
+  },
   "J1": {
    "datasheet": "https://www.usb.org/sites/default/files/documents/usb_type-c.zip",
    "dnp": false,
@@ -734,6 +878,30 @@
     "SH": "GND"
    },
    "value": "USB-C sink"
+  },
+  "J10": {
+   "datasheet": "~",
+   "dnp": false,
+   "footprint": "Connector:Tag-Connect_TC2030-IDC-NL_2x03_P1.27mm_Vertical",
+   "lib_id": "Connector_Generic:Conn_01x06",
+   "note": "Tag-Connect TC2030-NL: 1 3V3, 2 EN, 3 GND, 4 U0TXD, 5 BOOT (GPIO9), 6 U0RXD",
+   "pin_names": {
+    "1": "Pin_1",
+    "2": "Pin_2",
+    "3": "Pin_3",
+    "4": "Pin_4",
+    "5": "Pin_5",
+    "6": "Pin_6"
+   },
+   "pins": {
+    "1": "V3V3_CORE",
+    "2": "CHIP_EN",
+    "3": "GND",
+    "4": "U0TXD",
+    "5": "BOOT_N",
+    "6": "U0RXD"
+   },
+   "value": "TC2030 PROG"
   },
   "J2": {
    "datasheet": "~",
@@ -807,8 +975,8 @@
     "15": "SLOT0_UART_TX",
     "16": "SLOT0_UART_RX",
     "17": "SLOT0_RESET_N",
-    "18": "SLOT0_PRESENT_N",
-    "19": null,
+    "18": null,
+    "19": "SLOT0_PRESENT_N",
     "2": "GND",
     "20": "GND",
     "3": "V3V3_AON_0",
@@ -859,8 +1027,8 @@
     "15": "SLOT1_UART_TX",
     "16": "SLOT1_UART_RX",
     "17": "SLOT1_RESET_N",
-    "18": "SLOT1_PRESENT_N",
-    "19": null,
+    "18": null,
+    "19": "SLOT1_PRESENT_N",
     "2": "GND",
     "20": "GND",
     "3": "V3V3_AON_1",
@@ -911,8 +1079,8 @@
     "15": "SLOT2_UART_TX",
     "16": "SLOT2_UART_RX",
     "17": "SLOT2_RESET_N",
-    "18": "SLOT2_PRESENT_N",
-    "19": null,
+    "18": null,
+    "19": "SLOT2_PRESENT_N",
     "2": "GND",
     "20": "GND",
     "3": "V3V3_AON_2",
@@ -963,8 +1131,8 @@
     "15": "SLOT3_UART_TX",
     "16": "SLOT3_UART_RX",
     "17": "SLOT3_RESET_N",
-    "18": "SLOT3_PRESENT_N",
-    "19": null,
+    "18": null,
+    "19": "SLOT3_PRESENT_N",
     "2": "GND",
     "20": "GND",
     "3": "V3V3_AON_3",
@@ -977,29 +1145,21 @@
    },
    "value": "sensor_edge_v1 slot 3"
   },
-  "J8": {
+  "J9": {
    "datasheet": "~",
-   "dnp": true,
-   "footprint": "Connector_PinHeader_2.54mm:PinHeader_1x06_P2.54mm_Vertical",
-   "lib_id": "Connector_Generic:Conn_01x06",
-   "note": "bench console/flash header; lift R65 before driving RX",
+   "dnp": false,
+   "footprint": "Connector_JST:JST_PH_S2B-PH-SM4-TB_1x02-1MP_P2.00mm_Horizontal",
+   "lib_id": "Connector_Generic:Conn_01x02",
+   "note": "enclosure lid switch, closed when the lid is shut (HD-032)",
    "pin_names": {
     "1": "Pin_1",
-    "2": "Pin_2",
-    "3": "Pin_3",
-    "4": "Pin_4",
-    "5": "Pin_5",
-    "6": "Pin_6"
+    "2": "Pin_2"
    },
    "pins": {
-    "1": "GND",
-    "2": "V3V3_CORE",
-    "3": "U0TXD",
-    "4": "U0RXD",
-    "5": "CHIP_EN",
-    "6": "BOOT_N"
+    "1": "TAMPER_N",
+    "2": "GND"
    },
-   "value": "DNP UART0"
+   "value": "TAMPER loop"
   },
   "JP1": {
    "datasheet": "~",
@@ -1098,6 +1258,70 @@
     "2": "GND"
    },
    "value": "5.1k"
+  },
+  "R100": {
+   "datasheet": "~",
+   "dnp": true,
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "fit only for an NTC-less pack (HD-029)",
+   "pin_names": {
+    "1": "",
+    "2": ""
+   },
+   "pins": {
+    "1": "BAT_NTC",
+    "2": "GND"
+   },
+   "value": "10k"
+  },
+  "R101": {
+   "datasheet": "~",
+   "dnp": false,
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "HD-027",
+   "pin_names": {
+    "1": "",
+    "2": ""
+   },
+   "pins": {
+    "1": "SPI_SCK",
+    "2": "GND"
+   },
+   "value": "100k"
+  },
+  "R102": {
+   "datasheet": "~",
+   "dnp": false,
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "HD-027",
+   "pin_names": {
+    "1": "",
+    "2": ""
+   },
+   "pins": {
+    "1": "SPI_MOSI",
+    "2": "GND"
+   },
+   "value": "100k"
+  },
+  "R103": {
+   "datasheet": "~",
+   "dnp": false,
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "HD-027",
+   "pin_names": {
+    "1": "",
+    "2": ""
+   },
+   "pins": {
+    "1": "SPI_MISO",
+    "2": "GND"
+   },
+   "value": "100k"
   },
   "R11": {
    "datasheet": "~",
@@ -2048,7 +2272,7 @@
    "dnp": false,
    "footprint": "Resistor_SMD:R_0402_1005Metric",
    "lib_id": "Device:R",
-   "note": "GPIO23 -> TCA9546A RESET_N; lift for UART0 RX",
+   "note": "GPIO23 -> TCA9546A RESET_N; lift for UART0 RX on J10",
    "pin_names": {
     "1": "",
     "2": ""
@@ -2555,6 +2779,102 @@
    },
    "value": "100k"
   },
+  "R94": {
+   "datasheet": "~",
+   "dnp": false,
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "PWR LED current",
+   "pin_names": {
+    "1": "",
+    "2": ""
+   },
+   "pins": {
+    "1": "PWR_LED_K",
+    "2": "GND"
+   },
+   "value": "3.3k"
+  },
+  "R95": {
+   "datasheet": "~",
+   "dnp": false,
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "S0 LED current",
+   "pin_names": {
+    "1": "",
+    "2": ""
+   },
+   "pins": {
+    "1": "S0_LED_K",
+    "2": "SLOT_LED0_N"
+   },
+   "value": "2.2k"
+  },
+  "R96": {
+   "datasheet": "~",
+   "dnp": false,
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "S1 LED current",
+   "pin_names": {
+    "1": "",
+    "2": ""
+   },
+   "pins": {
+    "1": "S1_LED_K",
+    "2": "SLOT_LED1_N"
+   },
+   "value": "2.2k"
+  },
+  "R97": {
+   "datasheet": "~",
+   "dnp": false,
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "S2 LED current",
+   "pin_names": {
+    "1": "",
+    "2": ""
+   },
+   "pins": {
+    "1": "S2_LED_K",
+    "2": "SLOT_LED2_N"
+   },
+   "value": "2.2k"
+  },
+  "R98": {
+   "datasheet": "~",
+   "dnp": false,
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "S3 LED current",
+   "pin_names": {
+    "1": "",
+    "2": ""
+   },
+   "pins": {
+    "1": "S3_LED_K",
+    "2": "SLOT_LED3_N"
+   },
+   "value": "2.2k"
+  },
+  "R99": {
+   "datasheet": "~",
+   "dnp": false,
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "tamper loop pull-up: 3.3 uA while the lid is shut",
+   "pin_names": {
+    "1": "",
+    "2": ""
+   },
+   "pins": {
+    "1": "V3V3_CORE",
+    "2": "TAMPER_N"
+   },
+   "value": "1M"
+  },
   "SW1": {
    "datasheet": "~",
    "dnp": false,
@@ -2867,6 +3187,34 @@
    },
    "value": "GND"
   },
+  "TP28": {
+   "datasheet": "~",
+   "dnp": false,
+   "footprint": "TestPoint:TestPoint_Pad_D1.0mm",
+   "lib_id": "Connector:TestPoint",
+   "note": "",
+   "pin_names": {
+    "1": "1"
+   },
+   "pins": {
+    "1": "V3V3_AON_0"
+   },
+   "value": "V3V3_AON_0"
+  },
+  "TP29": {
+   "datasheet": "~",
+   "dnp": false,
+   "footprint": "TestPoint:TestPoint_Pad_D1.0mm",
+   "lib_id": "Connector:TestPoint",
+   "note": "",
+   "pin_names": {
+    "1": "1"
+   },
+   "pins": {
+    "1": "V3V3_AON_1"
+   },
+   "value": "V3V3_AON_1"
+  },
   "TP3": {
    "datasheet": "~",
    "dnp": false,
@@ -2881,6 +3229,146 @@
    },
    "value": "CHIP_EN"
   },
+  "TP30": {
+   "datasheet": "~",
+   "dnp": false,
+   "footprint": "TestPoint:TestPoint_Pad_D1.0mm",
+   "lib_id": "Connector:TestPoint",
+   "note": "",
+   "pin_names": {
+    "1": "1"
+   },
+   "pins": {
+    "1": "V3V3_AON_2"
+   },
+   "value": "V3V3_AON_2"
+  },
+  "TP31": {
+   "datasheet": "~",
+   "dnp": false,
+   "footprint": "TestPoint:TestPoint_Pad_D1.0mm",
+   "lib_id": "Connector:TestPoint",
+   "note": "",
+   "pin_names": {
+    "1": "1"
+   },
+   "pins": {
+    "1": "V3V3_AON_3"
+   },
+   "value": "V3V3_AON_3"
+  },
+  "TP32": {
+   "datasheet": "~",
+   "dnp": false,
+   "footprint": "TestPoint:TestPoint_Pad_D1.0mm",
+   "lib_id": "Connector:TestPoint",
+   "note": "",
+   "pin_names": {
+    "1": "1"
+   },
+   "pins": {
+    "1": "V3V3_SW_0"
+   },
+   "value": "V3V3_SW_0"
+  },
+  "TP33": {
+   "datasheet": "~",
+   "dnp": false,
+   "footprint": "TestPoint:TestPoint_Pad_D1.0mm",
+   "lib_id": "Connector:TestPoint",
+   "note": "",
+   "pin_names": {
+    "1": "1"
+   },
+   "pins": {
+    "1": "V3V3_SW_1"
+   },
+   "value": "V3V3_SW_1"
+  },
+  "TP34": {
+   "datasheet": "~",
+   "dnp": false,
+   "footprint": "TestPoint:TestPoint_Pad_D1.0mm",
+   "lib_id": "Connector:TestPoint",
+   "note": "",
+   "pin_names": {
+    "1": "1"
+   },
+   "pins": {
+    "1": "V3V3_SW_2"
+   },
+   "value": "V3V3_SW_2"
+  },
+  "TP35": {
+   "datasheet": "~",
+   "dnp": false,
+   "footprint": "TestPoint:TestPoint_Pad_D1.0mm",
+   "lib_id": "Connector:TestPoint",
+   "note": "",
+   "pin_names": {
+    "1": "1"
+   },
+   "pins": {
+    "1": "V3V3_SW_3"
+   },
+   "value": "V3V3_SW_3"
+  },
+  "TP36": {
+   "datasheet": "~",
+   "dnp": false,
+   "footprint": "TestPoint:TestPoint_Pad_D1.0mm",
+   "lib_id": "Connector:TestPoint",
+   "note": "",
+   "pin_names": {
+    "1": "1"
+   },
+   "pins": {
+    "1": "SLOT_WAKE0"
+   },
+   "value": "SLOT_WAKE0"
+  },
+  "TP37": {
+   "datasheet": "~",
+   "dnp": false,
+   "footprint": "TestPoint:TestPoint_Pad_D1.0mm",
+   "lib_id": "Connector:TestPoint",
+   "note": "",
+   "pin_names": {
+    "1": "1"
+   },
+   "pins": {
+    "1": "SLOT_WAKE1"
+   },
+   "value": "SLOT_WAKE1"
+  },
+  "TP38": {
+   "datasheet": "~",
+   "dnp": false,
+   "footprint": "TestPoint:TestPoint_Pad_D1.0mm",
+   "lib_id": "Connector:TestPoint",
+   "note": "",
+   "pin_names": {
+    "1": "1"
+   },
+   "pins": {
+    "1": "SLOT_WAKE2"
+   },
+   "value": "SLOT_WAKE2"
+  },
+  "TP39": {
+   "datasheet": "~",
+   "dnp": false,
+   "footprint": "TestPoint:TestPoint_Pad_D1.0mm",
+   "lib_id": "Connector:TestPoint",
+   "note": "",
+   "pin_names": {
+    "1": "1"
+   },
+   "pins": {
+    "1": "SLOT_WAKE3"
+   },
+   "value": "SLOT_WAKE3"
+  },
   "TP4": {
    "datasheet": "~",
    "dnp": false,
@@ -2894,6 +3382,90 @@
     "1": "BOOT_N"
    },
    "value": "BOOT_N"
+  },
+  "TP40": {
+   "datasheet": "~",
+   "dnp": false,
+   "footprint": "TestPoint:TestPoint_Pad_D1.0mm",
+   "lib_id": "Connector:TestPoint",
+   "note": "",
+   "pin_names": {
+    "1": "1"
+   },
+   "pins": {
+    "1": "SPI_SCK"
+   },
+   "value": "SPI_SCK"
+  },
+  "TP41": {
+   "datasheet": "~",
+   "dnp": false,
+   "footprint": "TestPoint:TestPoint_Pad_D1.0mm",
+   "lib_id": "Connector:TestPoint",
+   "note": "",
+   "pin_names": {
+    "1": "1"
+   },
+   "pins": {
+    "1": "SPI_MOSI"
+   },
+   "value": "SPI_MOSI"
+  },
+  "TP42": {
+   "datasheet": "~",
+   "dnp": false,
+   "footprint": "TestPoint:TestPoint_Pad_D1.0mm",
+   "lib_id": "Connector:TestPoint",
+   "note": "",
+   "pin_names": {
+    "1": "1"
+   },
+   "pins": {
+    "1": "SPI_MISO"
+   },
+   "value": "SPI_MISO"
+  },
+  "TP43": {
+   "datasheet": "~",
+   "dnp": false,
+   "footprint": "TestPoint:TestPoint_Pad_D1.0mm",
+   "lib_id": "Connector:TestPoint",
+   "note": "",
+   "pin_names": {
+    "1": "1"
+   },
+   "pins": {
+    "1": "VBAT_SENSE"
+   },
+   "value": "VBAT_SENSE"
+  },
+  "TP44": {
+   "datasheet": "~",
+   "dnp": false,
+   "footprint": "TestPoint:TestPoint_Pad_D1.0mm",
+   "lib_id": "Connector:TestPoint",
+   "note": "",
+   "pin_names": {
+    "1": "1"
+   },
+   "pins": {
+    "1": "TAMPER_N"
+   },
+   "value": "TAMPER_N"
+  },
+  "TP45": {
+   "datasheet": "~",
+   "dnp": false,
+   "footprint": "TestPoint:TestPoint_Pad_D1.0mm",
+   "lib_id": "Connector:TestPoint",
+   "note": "",
+   "pin_names": {
+    "1": "1"
+   },
+   "pins": {
+    "1": "EXP_WAKE"
+   },
+   "value": "EXP_WAKE"
   },
   "TP5": {
    "datasheet": "~",
@@ -3031,7 +3603,7 @@
     "10": "VBAT_SENSE",
     "11": "GND",
     "12": "SLOT_WAKE3",
-    "13": "EXP_INT_N",
+    "13": "EXP_WAKE",
     "14": "GND",
     "15": "V3V3_CORE",
     "16": "SLOT_WAKE2",
@@ -3387,6 +3959,88 @@
    },
    "value": "TS3A5017RSVR"
   },
+  "U18": {
+   "datasheet": "http://www.ti.com/lit/ds/symlink/tca9535.pdf",
+   "dnp": false,
+   "footprint": "Package_SO:TSSOP-24_4.4x7.8mm_P0.65mm",
+   "lib_id": "Interface_Expansion:TCA9535PWR",
+   "note": "EXP_C root 0x22: P00-P03 slot LEDs (active low), P04 TAMPER_N, rest unused (driven low)",
+   "pin_names": {
+    "1": "~{INT}",
+    "10": "P06",
+    "11": "P07",
+    "12": "GND",
+    "13": "P10",
+    "14": "P11",
+    "15": "P12",
+    "16": "P13",
+    "17": "P14",
+    "18": "P15",
+    "19": "P16",
+    "2": "A1",
+    "20": "P17",
+    "21": "A0",
+    "22": "SCL",
+    "23": "SDA",
+    "24": "VCC",
+    "3": "A2",
+    "4": "P00",
+    "5": "P01",
+    "6": "P02",
+    "7": "P03",
+    "8": "P04",
+    "9": "P05"
+   },
+   "pins": {
+    "1": "EXP_INT_N",
+    "10": null,
+    "11": null,
+    "12": "GND",
+    "13": null,
+    "14": null,
+    "15": null,
+    "16": null,
+    "17": null,
+    "18": null,
+    "19": null,
+    "2": "V3V3_CORE",
+    "20": null,
+    "21": "GND",
+    "22": "I2C_SCL",
+    "23": "I2C_SDA",
+    "24": "V3V3_CORE",
+    "3": "GND",
+    "4": "SLOT_LED0_N",
+    "5": "SLOT_LED1_N",
+    "6": "SLOT_LED2_N",
+    "7": "SLOT_LED3_N",
+    "8": "TAMPER_N",
+    "9": null
+   },
+   "value": "TCA9535PWR"
+  },
+  "U19": {
+   "datasheet": "https://www.ti.com/lit/ds/symlink/sn74aup1g04.pdf",
+   "dnp": false,
+   "footprint": "Package_TO_SOT_SMD:SOT-23-5",
+   "lib_id": "74xGxx:74AUP1G04",
+   "note": "EXP_INT_N -> active-high EXP_WAKE on GPIO14 (HD-034)",
+   "pin_names": {
+    "1": "NC",
+    "2": "",
+    "3": "GND",
+    "4": "",
+    "5": "VCC"
+   },
+   "pins": {
+    "1": null,
+    "2": "EXP_INT_N",
+    "3": "GND",
+    "4": "EXP_WAKE",
+    "5": "V3V3_CORE"
+   },
+   "value": "SN74AUP1G04DBVR"
+  },
   "U2": {
    "datasheet": "https://www.st.com/resource/en/datasheet/usblc6-2.pdf",
    "dnp": false,
@@ -3534,7 +4188,7 @@
     "2": "GND",
     "3": "SLOT_AON_EN0",
     "4": "SLOT_AON_CT0",
-    "5": null,
+    "5": "V3V3_AON_0",
     "6": "V3V3_AON_0"
    },
    "value": "TPS22917DBVR"
@@ -3558,7 +4212,7 @@
     "2": "GND",
     "3": "SLOT_AON_EN1",
     "4": "SLOT_AON_CT1",
-    "5": null,
+    "5": "V3V3_AON_1",
     "6": "V3V3_AON_1"
    },
    "value": "TPS22917DBVR"
@@ -3582,7 +4236,7 @@
     "2": "GND",
     "3": "SLOT_AON_EN2",
     "4": "SLOT_AON_CT2",
-    "5": null,
+    "5": "V3V3_AON_2",
     "6": "V3V3_AON_2"
    },
    "value": "TPS22917DBVR"
@@ -3606,7 +4260,7 @@
     "2": "GND",
     "3": "SLOT_AON_EN3",
     "4": "SLOT_AON_CT3",
-    "5": null,
+    "5": "V3V3_AON_3",
     "6": "V3V3_AON_3"
    },
    "value": "TPS22917DBVR"

@@ -15,6 +15,13 @@
 		(descr "")
 	)
 	(lib
+		(name "Connector")
+		(type "KiCad")
+		(uri "${KICAD10_FOOTPRINT_DIR}/Connector.pretty")
+		(options "")
+		(descr "")
+	)
+	(lib
 		(name "Connector_JST")
 		(type "KiCad")
 		(uri "${KICAD10_FOOTPRINT_DIR}/Connector_JST.pretty")
@@ -60,6 +67,13 @@
 		(name "LED_SMD")
 		(type "KiCad")
 		(uri "${KICAD10_FOOTPRINT_DIR}/LED_SMD.pretty")
+		(options "")
+		(descr "")
+	)
+	(lib
+		(name "MountingHole")
+		(type "KiCad")
+		(uri "${KICAD10_FOOTPRINT_DIR}/MountingHole.pretty")
 		(options "")
 		(descr "")
 	)

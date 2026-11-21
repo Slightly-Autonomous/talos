@@ -185,6 +185,70 @@
    },
    "value": "PESD5V0L5UV"
   },
+  "D3": {
+   "datasheet": "~",
+   "dnp": false,
+   "footprint": "LED_SMD:LED_0603_1608Metric",
+   "lib_id": "Device:LED",
+   "note": "PWR: adapter 3.3 V up",
+   "pin_names": {
+    "1": "K",
+    "2": "A"
+   },
+   "pins": {
+    "1": "PWR_LED_K",
+    "2": "V3V3"
+   },
+   "value": "LED_GREEN"
+  },
+  "D4": {
+   "datasheet": "~",
+   "dnp": false,
+   "footprint": "LED_SMD:LED_0603_1608Metric",
+   "lib_id": "Device:LED",
+   "note": "AON: host asked for the card AON rail (lit from the MCP2221 GP0 drive, ~0.5 mA)",
+   "pin_names": {
+    "1": "K",
+    "2": "A"
+   },
+   "pins": {
+    "1": "AON_LED_K",
+    "2": "DBG_AON_EN"
+   },
+   "value": "LED_GREEN"
+  },
+  "D5": {
+   "datasheet": "~",
+   "dnp": false,
+   "footprint": "LED_SMD:LED_0603_1608Metric",
+   "lib_id": "Device:LED",
+   "note": "SW: host asked for the card SW rail (lit from the MCP2221 GP2 drive, ~0.5 mA)",
+   "pin_names": {
+    "1": "K",
+    "2": "A"
+   },
+   "pins": {
+    "1": "SW_LED_K",
+    "2": "DBG_SW_EN"
+   },
+   "value": "LED_GREEN"
+  },
+  "D6": {
+   "datasheet": "~",
+   "dnp": false,
+   "footprint": "LED_SMD:LED_0603_1608Metric",
+   "lib_id": "Device:LED",
+   "note": "FLT: TPS2553 current-limit trip",
+   "pin_names": {
+    "1": "K",
+    "2": "A"
+   },
+   "pins": {
+    "1": "FLT_LED_K",
+    "2": "V3V3"
+   },
+   "value": "LED_RED"
+  },
   "J1": {
    "datasheet": "https://www.usb.org/sites/default/files/documents/usb_type-c.zip",
    "dnp": false,
@@ -269,8 +333,8 @@
     "15": "UART_TX",
     "16": "UART_RX",
     "17": "RESET_N",
-    "18": "PRESENT_N",
-    "19": null,
+    "18": null,
+    "19": "PRESENT_N",
     "2": "GND",
     "20": "GND",
     "3": "V3V3_AON",
@@ -587,6 +651,70 @@
    },
    "value": "330"
   },
+  "R25": {
+   "datasheet": "~",
+   "dnp": false,
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "PWR LED current",
+   "pin_names": {
+    "1": "",
+    "2": ""
+   },
+   "pins": {
+    "1": "PWR_LED_K",
+    "2": "GND"
+   },
+   "value": "2.2k"
+  },
+  "R26": {
+   "datasheet": "~",
+   "dnp": false,
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "AON LED current",
+   "pin_names": {
+    "1": "",
+    "2": ""
+   },
+   "pins": {
+    "1": "AON_LED_K",
+    "2": "GND"
+   },
+   "value": "2.2k"
+  },
+  "R27": {
+   "datasheet": "~",
+   "dnp": false,
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "SW LED current",
+   "pin_names": {
+    "1": "",
+    "2": ""
+   },
+   "pins": {
+    "1": "SW_LED_K",
+    "2": "GND"
+   },
+   "value": "2.2k"
+  },
+  "R28": {
+   "datasheet": "~",
+   "dnp": false,
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "FLT LED current",
+   "pin_names": {
+    "1": "",
+    "2": ""
+   },
+   "pins": {
+    "1": "FLT_LED_K",
+    "2": "DBG_SW_FAULT_N"
+   },
+   "value": "2.2k"
+  },
   "R3": {
    "datasheet": "~",
    "dnp": false,
@@ -866,6 +994,34 @@
     "1": "GND"
    },
    "value": "GND"
+  },
+  "TP20": {
+   "datasheet": "~",
+   "dnp": false,
+   "footprint": "TestPoint:TestPoint_Keystone_5000-5004_Miniature",
+   "lib_id": "Connector:TestPoint",
+   "note": "Keystone 5001 miniature loop for scope/meter ground clips",
+   "pin_names": {
+    "1": "1"
+   },
+   "pins": {
+    "1": "GND"
+   },
+   "value": "GND hook"
+  },
+  "TP21": {
+   "datasheet": "~",
+   "dnp": false,
+   "footprint": "TestPoint:TestPoint_Keystone_5000-5004_Miniature",
+   "lib_id": "Connector:TestPoint",
+   "note": "Keystone 5001 miniature loop for scope/meter ground clips",
+   "pin_names": {
+    "1": "1"
+   },
+   "pins": {
+    "1": "GND"
+   },
+   "value": "GND hook"
   },
   "TP3": {
    "datasheet": "~",

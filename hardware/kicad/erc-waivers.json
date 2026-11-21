@@ -2,7 +2,19 @@
   {
     "board": "TL-MOD-003",
     "type": "pin_to_pin",
-    "match": ["SDO/SA0", "#FLG"],
-    "justification": "LIS2DW12 SDO/SA0 is strapped to V3V3_AON to select I2C address 0x19; in I2C mode it is an address input, not a driver (DS11811 §6). Its internal pull-up cannot be disabled, so strapping low would waste current."
+    "match": [
+      "SDO/SA0",
+      "#FLG"
+    ],
+    "justification": "LIS2DW12 SDO/SA0 is strapped to V3V3_AON to select I2C address 0x19; in I2C mode it is an address input, not a driver (DS11811 \u00a76). Its internal pull-up cannot be disabled, so strapping low would waste current."
+  },
+  {
+    "board": "TL-SN-001",
+    "type": "pin_to_pin",
+    "match": [
+      "QOD",
+      "VOUT"
+    ],
+    "justification": "TPS22917 QOD tied to VOUT on purpose (HD-028): SLVSDW8B 8.3.3 uses QOD to VOUT for the on-chip quick discharge. QOD is the drain of the discharge FET, only on while the switch is off, so it never fights the VOUT driver."
   }
 ]

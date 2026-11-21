@@ -158,5 +158,22 @@ TEST(ManifestValidator, PeakBudget) {
                   .has(ManifestIssueCode::kPeakPowerExceeded));
 }
 
+TEST(ModuleSlotLimits, ModuleOnlyInAllowedSlotsOthersUnaffected) {
+  BoardManifest b = board();
+  b.module_slot_limits = {{ModuleId("environment_sht40_v1"), {0, 2}, "away from the charger"}};
+  auto run = [&](SlotIndex slot, const char* module) {
+    return validate_configuration(b, catalog(), {{slot, ModuleId(module)}}, PowerSource::kUsb);
+  };
+  EXPECT_TRUE(run(0, "environment_sht40_v1").ok());
+  EXPECT_TRUE(run(2, "environment_sht40_v1").ok());
+  const auto r = run(3, "environment_sht40_v1");
+  ASSERT_TRUE(r.has(ManifestIssueCode::kSlotNotAllowed));
+  EXPECT_EQ(r.issues.front().message,
+            "environment_sht40_v1 is only allowed in slots 0, 2 on universal_controller_v1 (away "
+            "from the charger)");
+  EXPECT_EQ(to_string(ManifestIssueCode::kSlotNotAllowed), "slot_not_allowed");
+  EXPECT_TRUE(run(3, "vibration_lis2dw12_v1").ok());
+}
+
 }  // namespace
 }  // namespace talos

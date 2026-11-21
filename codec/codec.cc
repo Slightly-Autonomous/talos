@@ -61,6 +61,8 @@ ObservationPayload payload_from(const v1::ObservationPayload& p) {
     }
     case v1::ObservationPayload::kHeartbeat:
       return Heartbeat{p.heartbeat().battery_mv()};
+    case v1::ObservationPayload::kTamper:
+      return TamperState{p.tamper().open()};
     case v1::ObservationPayload::KIND_NOT_SET:
       break;
   }
@@ -89,6 +91,7 @@ struct PayloadTo {
     p.mutable_object_detected()->set_confidence_permille(v.confidence_permille);
   }
   void operator()(const Heartbeat& v) const { p.mutable_heartbeat()->set_battery_mv(v.battery_mv); }
+  void operator()(const TamperState& v) const { p.mutable_tamper()->set_open(v.open); }
 };
 
 v1::ObservationPayload payload_to(const ObservationPayload& v) {
@@ -110,6 +113,8 @@ Result<CommandArgs> args_from(const v1::CommandArgs& p) {
       return CommandArgs{SetLocked{p.set_locked().locked()}};
     case v1::CommandArgs::kNotify:
       return CommandArgs{Notify{p.notify().recipient_role(), p.notify().text()}};
+    case v1::CommandArgs::kSetMaintenance:
+      return CommandArgs{SetMaintenance{p.set_maintenance().duration_ms()}};
     case v1::CommandArgs::KIND_NOT_SET:
       break;
   }
@@ -127,6 +132,9 @@ struct ArgsTo {
   void operator()(const Notify& a) const {
     p.mutable_notify()->set_recipient_role(a.recipient_role);
     p.mutable_notify()->set_text(a.text);
+  }
+  void operator()(const SetMaintenance& a) const {
+    p.mutable_set_maintenance()->set_duration_ms(a.duration_ms);
   }
 };
 
@@ -427,6 +435,24 @@ Result<JournalEntry> from_proto(const v1::JournalEntry& p) {
       e.event = SourceReset{DeviceId(p.source_reset().device_id()),
                             PrincipalId(p.source_reset().principal_id())};
       break;
+    case v1::JournalEntry::kMaintenanceChanged: {
+      const auto& m = p.maintenance_changed();
+      if (m.device_id().empty())
+        return Error{"invalid_journal_entry", "maintenance without device"};
+      MaintenanceChanged out{DeviceId(m.device_id()), std::nullopt, PrincipalId(m.principal_id()),
+                             m.reason(), std::nullopt};
+      if (m.has_until_unix_ms()) out.until = Timestamp{m.until_unix_ms()};
+      if (m.has_command_id()) out.command = CommandId(m.command_id());
+      e.event = std::move(out);
+      break;
+    }
+    case v1::JournalEntry::kAlarmSuppressed: {
+      const auto& a = p.alarm_suppressed();
+      e.event = AlarmSuppressed{
+          DeviceId(a.device_id()), RuleId(a.rule_id()), EventId(a.causation_event_id()),
+          Timestamp{a.maintenance_until_unix_ms()}, PrincipalId(a.maintenance_principal_id())};
+      break;
+    }
     case v1::JournalEntry::EVENT_NOT_SET:
       return Error{"invalid_journal_entry", "no event"};
   }
@@ -451,6 +477,20 @@ v1::JournalEntry to_proto(const JournalEntry& e) {
   } else if (const auto* r = std::get_if<SourceReset>(&e.event)) {
     p.mutable_source_reset()->set_device_id(r->device.str());
     p.mutable_source_reset()->set_principal_id(r->principal.str());
+  } else if (const auto* m = std::get_if<MaintenanceChanged>(&e.event)) {
+    auto* out = p.mutable_maintenance_changed();
+    out->set_device_id(m->device.str());
+    if (m->until) out->set_until_unix_ms(m->until->unix_ms);
+    out->set_principal_id(m->principal.str());
+    out->set_reason(m->reason);
+    if (m->command) out->set_command_id(m->command->str());
+  } else if (const auto* a = std::get_if<AlarmSuppressed>(&e.event)) {
+    auto* out = p.mutable_alarm_suppressed();
+    out->set_device_id(a->device.str());
+    out->set_rule_id(a->rule.str());
+    out->set_causation_event_id(a->causation.str());
+    out->set_maintenance_until_unix_ms(a->maintenance_until.unix_ms);
+    out->set_maintenance_principal_id(a->maintenance_by.str());
   } else {
     const auto& m = std::get<ArmModeChanged>(e.event);
     p.mutable_arm_mode_changed()->set_mode(arm_to(m.mode));
@@ -542,6 +582,39 @@ Result<BoardManifest> from_proto(const v1::BoardManifest& p) {
   }
   b.board_family = p.board_family();
   b.transport = p.transport();
+  for (const auto& e : p.expanders()) {
+    if (e.i2c_address() > 0x7F) return range_error("expander i2c address");
+    ExpanderSpec x{
+        e.name(), e.part(), static_cast<std::uint8_t>(e.i2c_address()), e.interrupt_net(), {}};
+    for (const auto& pin : e.pins()) {
+      if (pin.direction() != "input" && pin.direction() != "output" &&
+          pin.direction() != "unused") {
+        return Error{"invalid_manifest", "expander " + e.name() + " " + pin.pin() +
+                                             ": direction must be "
+                                             "input, output or unused"};
+      }
+      x.pins.push_back({pin.pin(), pin.net(), pin.direction(), pin.active_low()});
+    }
+    b.expanders.push_back(std::move(x));
+  }
+  for (const auto& w : p.wake_lines())
+    b.wake_lines.push_back({w.net(), w.mcu_pin(), w.active_high()});
+  for (const auto& c : p.board_capabilities()) {
+    if (c.empty()) return Error{"invalid_manifest", "empty board capability"};
+    b.board_capabilities.emplace_back(c);
+  }
+  for (const auto& l : p.module_slot_limits()) {
+    if (l.module_id().empty()) return Error{"invalid_manifest", "module_slot_limits: empty module"};
+    ModuleSlotLimit lim{ModuleId(l.module_id()), {}, l.reason()};
+    for (auto s : l.allowed_slots()) {
+      if (!fits<SlotIndex>(s)) return range_error("allowed slot");
+      lim.allowed_slots.push_back(static_cast<SlotIndex>(s));
+    }
+    b.module_slot_limits.push_back(std::move(lim));
+  }
+  for (const auto& i : p.indicators()) {
+    b.indicators.push_back({i.name(), i.net(), i.driver(), i.active_low(), i.color()});
+  }
   return b;
 }
 

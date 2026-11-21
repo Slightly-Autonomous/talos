@@ -50,6 +50,19 @@ needs `--expect-current <the 16 bytes in hex>` from `id --raw`. It writes one 16
 waits out the write cycle, reads it back, power-cycles AON and reads it again, then appends the
 card, EUI and block to `~/.local/share/talos-dbg/card-ids.jsonl` (outside the repo).
 
+### Programming a sensor node's board identity (once per board, D-09)
+
+```bash
+python3 -m talos_dbg program-id --node /dev/cu.usbmodem1101 --unit-serial SN-A-0007
+# defaults: --board TL-SN-001 --board-revision A; --node also takes a serial_bridge host:port
+```
+
+No GPIO or ADC is free for a revision strap, so the board name, revision and the serial on the
+label go into the node's permanent NVS partition (`talos_id`, never erased by firmware) through
+its diag console (`board-id`). The firmware refuses to change a programmed identity; the tool
+reads it back with `id` and checks every field. The bench runner checks it again (S-M16). This
+mode talks to the node, not to TL-DBG-001, and needs pyserial for a serial port.
+
 ### Self-tests (bench-test-plan.md stages 1-3)
 
 ```bash

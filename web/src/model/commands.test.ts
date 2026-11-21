@@ -5,7 +5,14 @@ import {
   CommandResponseSchema,
   type CommandRequest,
 } from "@talos/contracts/talos/api/v1/api_pb";
-import { lockCommandRequest, newCommandId, requestLock } from "./commands";
+import {
+  DEFAULT_MAINTENANCE_MS,
+  endMaintenanceCommandRequest,
+  lockCommandRequest,
+  maintenanceCommandRequest,
+  newCommandId,
+  requestLock,
+} from "./commands";
 
 test("lock requests never carry a client-chosen expect", () => {
   const req = lockCommandRequest("lock-3", false, "ui-lock-42");
@@ -45,4 +52,18 @@ test("a 409 for another principal's id is retried under a fresh id, never report
 
   conflicts = 2;
   await expect(requestLock(client, "lock-3", true)).rejects.toBeInstanceOf(HubError);
+});
+
+test("maintenance requests target the node's device.health, never carry expect", () => {
+  const start = maintenanceCommandRequest("node-12", undefined, "ui-maint-1");
+  expect(start.operation).toBe("device.maintenance");
+  expect(start.target).toMatchObject({ deviceId: "node-12", capabilityId: "device.health" });
+  expect(start.args?.kind).toEqual({
+    case: "setMaintenance",
+    value: expect.objectContaining({ durationMs: DEFAULT_MAINTENANCE_MS }),
+  });
+  expect(start.expect).toBeUndefined();
+  const end = endMaintenanceCommandRequest("node-12", "ui-maint-2");
+  expect(end.operation).toBe("device.maintenance_end");
+  expect(end.args).toBeUndefined();
 });

@@ -133,4 +133,23 @@ describe("DevSim", () => {
     await expect(s.heartbeat("node-07")).rejects.toThrow(/502/);
     expect(paths).toEqual(["/talos/v1/devices/observations"]);
   });
+  test("node-12 reports its enclosure tamper loop device-level, with a boot state report", async () => {
+    const { s, calls } = sim();
+    await s.boot();
+    const boot = observations(calls).find((c) => c.body!.eventType === "tamper.state");
+    expect(boot?.token).toBe("dev-node-12-token");
+    expect(boot?.body).toMatchObject({
+      source: { deviceId: "node-12", capabilityId: "tamper.enclosure" },
+      payload: { tamper: { open: false } },
+    });
+    expect((boot?.body?.source as Record<string, unknown>).slot).toBeUndefined();
+    await s.tamper("node-12", true);
+    await s.tamper("node-12", false);
+    expect(
+      observations(calls)
+        .filter((c) => (c.body!.source as Record<string, unknown>).capabilityId === "tamper.enclosure")
+        .map((c) => c.body!.eventType),
+    ).toEqual(["tamper.state", "tamper.opened", "tamper.closed"]);
+    await expect(s.tamper("node-07", true)).rejects.toThrow("no tamper loop");
+  });
 });

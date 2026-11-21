@@ -1,7 +1,16 @@
 # Board good-practice review: lights, debug aids and the rest (2026-11-20)
 
-This is a list for the owner to rule on. **Nothing here is applied yet.** Each item carries
-my recommendation:
+**Status 2026-11-20: the owner approved every recommendation ("do everything you suggest").** Applied:
+L-01 to L-04, L-07 to L-09, L-11; D-01 to D-03, D-05, D-07, D-09, D-10; M-01, M-02, M-04, M-06;
+S-01 to S-05. Not done, on purpose: L-05, L-06, L-10, L-12 and M-03 (recommended against); D-04
+(LA header), D-06 (THT hooks on the main board), D-08 (per-slot sense links), E-02 (VBUS fuse),
+E-04 (spare footprints) and M-05 (card fiducials) are optional items left out because the 80 × 70
+main board has no spare area after the additions, and the small boards use panel-rail fiducials.
+One change from the text below: the green lamps are yellow-green (Everlight 19-217/G7C, 2.0 V),
+because a true green LED needs about 2.6 V and would barely light on a 3.3 V anode at 0.5 mA. The
+open hardware items HD-025 to HD-041 were applied as recommended too (design-risks.md).
+
+The original list follows. Each item carries my recommendation:
 
 - **DO**: recommended for Rev A.
 - **OPT**: worth it if cheap or if you want it.

@@ -63,8 +63,67 @@ def drc_report(path: pathlib.Path) -> list[dict]:
             for v in d.get(key, []) if v["severity"] == "error"]
 
 
+def drop_dangling(path: pathlib.Path) -> int:
+    """Delete the track stubs KiCad's DRC calls dangling (rip-up and repair leave slivers a few um long
+    that overlap a live track, so maze_route.tidy's collision test counts them as connected)."""
+    with tempfile.TemporaryDirectory() as tmp:
+        out = os.path.join(tmp, "drc.json")
+        subprocess.run([KICAD_CLI, "pcb", "drc", "--format", "json", "--severity-all", "-o", out, str(path)],
+                       capture_output=True)
+        d = json.load(open(out))
+    dead = {i["uuid"] for v in d.get("violations", []) if v["type"] == "track_dangling" for i in v["items"]}
+    if not dead:
+        return 0
+    board = pcbnew.LoadBoard(str(path))
+    gone = [t for t in board.GetTracks() if t.m_Uuid.AsString() in dead and t.GetClass() == "PCB_TRACK"]
+    for t in gone:
+        board.Delete(t)
+    board.Save(str(path))
+    return len(gone)
+
+
 def drc_errors(path: pathlib.Path) -> list[str]:
     return [f"{v['type']}: {v['description']}" for v in drc_report(path)]
+
+
+def widen_power(pcb: pathlib.Path) -> dict:
+    """HD-038: Freerouting necks Power/Rail tracks down to its default width over several mm. Put every
+    such segment back to its netclass width, then hand back to its old width only the segments DRC
+    blames for a new error (a neck that is really needed between fine-pitch pads)."""
+    board = pcbnew.LoadBoard(str(pcb))
+    ns = board.GetDesignSettings().m_NetSettings
+    old: dict[str, int] = {}
+    for t in board.GetTracks():
+        if t.GetClass() != "PCB_TRACK":
+            continue
+        nc = ns.GetEffectiveNetClass(t.GetNetname())
+        if nc.GetName() not in ("Power", "Rail"):
+            continue
+        want = nc.GetTrackWidth()
+        if t.GetWidth() < want - pcbnew.FromMM(0.005):
+            old[t.m_Uuid.AsString()] = t.GetWidth()
+            t.SetWidth(want)
+    tried = len(old)
+    if not old:
+        return {"widened": 0, "kept_narrow": 0, "narrow_mm": 0.0}
+    board.Save(str(pcb))
+    for _ in range(6):
+        blamed = {i.get("uuid") for v in drc_report(pcb) for i in v.get("items", [])} & set(old)
+        if not blamed:
+            break
+        board = pcbnew.LoadBoard(str(pcb))
+        for t in board.GetTracks():
+            u = t.m_Uuid.AsString()
+            if u in blamed:
+                t.SetWidth(old.pop(u))
+        board.Save(str(pcb))
+    board = pcbnew.LoadBoard(str(pcb))
+    narrow = 0.0
+    for t in board.GetTracks():
+        if t.GetClass() == "PCB_TRACK" and ns.GetEffectiveNetClass(t.GetNetname()).GetName() in ("Power", "Rail") \
+                and t.GetWidth() < ns.GetEffectiveNetClass(t.GetNetname()).GetTrackWidth() - pcbnew.FromMM(0.005):
+            narrow += pcbnew.ToMM(t.GetLength())
+    return {"widened": len(old), "kept_narrow": tried - len(old), "narrow_mm": round(narrow, 2)}
 
 
 def remove_dangling_vias(board) -> int:
@@ -134,7 +193,7 @@ def _is_thermal_pad(pad) -> bool:
     return pad.GetSize().x * pad.GetSize().y >= 2 * areas[len(areas) // 2]
 
 
-def plane_fanout(board, via_d=0.6, drill=0.3, clear=0.2, track_w=0.25, stub_clear=0.17) -> int:
+def plane_fanout(board, via_d=0.65, drill=0.3, clear=0.2, track_w=0.25, stub_clear=0.17) -> int:
     """Give every SMD pad on a plane net (GND on In1, V3V3_CORE on In2) its own via before autorouting.
 
     Freerouting fans plane pins out poorly (it left >100 GND pins unconnected and spent minutes per
@@ -204,8 +263,25 @@ def plane_fanout(board, via_d=0.6, drill=0.3, clear=0.2, track_w=0.25, stub_clea
             return True
 
         spot = None
-        if _is_thermal_pad(pad) and min(w, h) >= via_d + 0.1 and via_ok(px, py):  # thermal pad: via in pad
-            spot = (px, py)
+        if _is_thermal_pad(pad) and min(w, h) >= via_d + 0.1:
+            # Thermal pad: as many vias in the pad as fit at the hole-to-hole pitch (HD-041: U4 on solar
+            # input needs more than one). Filled and capped at fab (HD-039, export_fab.py notes).
+            pitch = via_d + clear
+            nx, ny = (max(1, int((d - via_d) / pitch + 1e-6) + 1) for d in (w, h))
+            grid = [(round(px + (i - (nx - 1) / 2) * pitch, 3), round(py + (j - (ny - 1) / 2) * pitch, 3))
+                    for i in range(nx) for j in range(ny)]
+            for gx, gy in grid:
+                if via_ok(gx, gy):
+                    via = pcbnew.PCB_VIA(board)
+                    via.SetPosition(pcbnew.VECTOR2I(pcbnew.FromMM(gx), pcbnew.FromMM(gy)))
+                    via.SetWidth(pcbnew.FromMM(via_d))
+                    via.SetDrill(pcbnew.FromMM(drill))
+                    via.SetNetCode(net)
+                    via.SetLocked(True)
+                    board.Add(via)
+                    vias.append((gx, gy))
+                    added += 1
+            continue
         else:
             fp = pad.GetParentFootprint()
             cx, cy = to(fp.GetPosition().x), to(fp.GetPosition().y)
@@ -292,7 +368,7 @@ def drop_plane_pins(dsn: str, connected: dict[str, set[str]]) -> int:
     return dropped
 
 
-def stitch_vias(board, pitch_mm: float = 3.0, via_d: float = 0.6, drill: float = 0.3) -> int:
+def stitch_vias(board, pitch_mm: float = 3.0, via_d: float = 0.65, drill: float = 0.3) -> int:
     """Ground stitching: a GND via on a grid wherever the outer GND pours are filled on both sides with
     room for the via (every sample on its rim inside both fills, away from keep-outs and other vias).
     Ties each pour fragment to the others and to the In1 plane, and shortens return paths."""
@@ -308,7 +384,8 @@ def stitch_vias(board, pitch_mm: float = 3.0, via_d: float = 0.6, drill: float =
     no_via = [z for z in board.Zones() if z.GetIsRuleArea() and z.GetDoNotAllowVias()]
     no_via += [z for fp in board.Footprints() for z in fp.Zones() if z.GetIsRuleArea() and z.GetDoNotAllowVias()]
     existing = [t.GetPosition() for t in board.GetTracks() if t.GetClass() == "PCB_VIA"]
-    holes = [p.GetPosition() for p in board.GetPads() if p.GetDrillSize().x > 0]
+    # (centre, drill radius): a mounting hole or THT loop needs its own radius plus the 0.5 mm hole-to-hole rule
+    holes = [(p.GetPosition(), p.GetDrillSize().x // 2) for p in board.GetPads() if p.GetDrillSize().x > 0]
     r = F(via_d / 2 + 0.05)
     rim = [pcbnew.VECTOR2I(int(r * math.cos(k * math.pi / 6)), int(r * math.sin(k * math.pi / 6))) for k in range(12)]
     box = board.GetBoardEdgesBoundingBox()
@@ -322,7 +399,8 @@ def stitch_vias(board, pitch_mm: float = 3.0, via_d: float = 0.6, drill: float =
             pts = [c] + [c + d for d in rim]
             ok = all(any(z.GetFilledPolysList(L).Contains(pt) for z in pours[L]) for L in pours for pt in pts)
             ok = ok and not any(z.Outline().Contains(c) for z in no_via)
-            ok = ok and all((c - e).EuclideanNorm() > F(0.9) for e in existing + holes)
+            ok = ok and all((c - e).EuclideanNorm() > F(0.9) for e in existing)
+            ok = ok and all((c - e).EuclideanNorm() > r_h + F(drill / 2 + 0.55) for e, r_h in holes)
             if ok:
                 v = pcbnew.PCB_VIA(board)
                 v.SetPosition(c)
@@ -339,7 +417,6 @@ def stitch_vias(board, pitch_mm: float = 3.0, via_d: float = 0.6, drill: float =
     # Fragments the grid missed: any outer GND fill island with no via or through-hole pad gets one at the
     # first spot (0.2 mm search) where a via fits inside it and clears every other net on both outer layers.
     clear = F(0.2)
-    others = [i for i in list(board.GetPads()) + list(board.GetTracks()) if i.GetNetCode() != gnd]
     for L in pours:
         for z in pours[L]:
             polys = z.GetFilledPolysList(L)
@@ -353,6 +430,9 @@ def stitch_vias(board, pitch_mm: float = 3.0, via_d: float = 0.6, drill: float =
                 gnd_links += [q.GetPosition() for q in board.GetPads() if q.GetNetCode() == gnd and q.GetDrillSize().x > 0]
                 if any(polys.Contains(e, k) for e in gnd_links):  # respects the island's holes
                     continue
+                # rebuilt per island: a maze tie with rip-up below deletes tracks, and a stale SWIG
+                # reference to a deleted track crashes KiCad
+                others = [i for i in list(board.GetPads()) + list(board.GetTracks()) if i.GetNetCode() != gnd]
                 bb = isl.BBox()
                 spot = None
                 yy = bb.GetY()
@@ -379,7 +459,7 @@ def stitch_vias(board, pitch_mm: float = 3.0, via_d: float = 0.6, drill: float =
                                    and o.GetNumber() != q.GetNumber() and not polys.Contains(o.GetPosition(), k)]
                         targets += sorted(gvias, key=lambda t: (t.GetPosition() - q.GetPosition()).EuclideanNorm())[:3]
                         done = False
-                        for rip in (False, True):
+                        for rip in (False,):  # no rip-up here: on a full board it cascades
                             for t in targets:
                                 if maze_route.connect(board, q, t, 6.0, rip):
                                     done = True
@@ -464,6 +544,16 @@ def route(path: pathlib.Path, name: str, attempt: int) -> None:
     print(f"{name}: {tracks} track segments, {vias} vias ({removed} dangling vias removed)")
 
 
+def complete(path: pathlib.Path, name: str) -> None:
+    """Hand a nearly routed board back to Freerouting: it keeps every track and routes only what is open.
+    Far gentler than maze rip-up, which on a full board breaks one net to close another (worker process)."""
+    board = pcbnew.LoadBoard(str(path))
+    removed = freeroute(board, name, os.environ.get("FREEROUTING_COMPLETE_PASSES", "30"), 0.16)
+    board.Save(str(path))
+    tracks, vias = _counts(board)
+    print(f"{name}: completion pass, {tracks} track segments, {vias} vias ({removed} dangling vias removed)")
+
+
 def _by_uuid(board) -> dict:
     items = list(board.GetPads()) + list(board.GetTracks())
     return {i.m_Uuid.AsString(): i for i in items}
@@ -521,7 +611,7 @@ def stitch(board, report: list[dict], margin_mm: float = 0.01) -> int:
     for v in report:
         if v["type"] != "unconnected_items" or len(v["items"]) != 2:
             continue
-        a, b = (by_uuid.get(i["uuid"]) for i in v["items"])
+        a, b = (by_uuid.get(i["uuid"]) for i in v["items"])  # None once an earlier rip-up deleted it
         if a is None or b is None or a.GetNetCode() != b.GetNetCode():
             continue
         net = a.GetNetCode()
@@ -574,7 +664,9 @@ def stitch(board, report: list[dict], margin_mm: float = 0.01) -> int:
                 if maze_route.connect(board, a, b, window, rip):
                     print(f"    stitch: {a.GetNetname()} maze-routed (window {window:.0f} mm{', rip-up' if rip else ''})")
                     done = True
+                    # rip-up deleted tracks: drop every stale reference (using one crashes KiCad)
                     copper = list(board.GetPads()) + list(board.GetTracks())
+                    by_uuid = _by_uuid(board)
                     break
         if done:
             fixed += 1
@@ -688,8 +780,24 @@ def route_until_clean(name: str) -> bool:
         if not done:
             raise SystemExit(f"{name}: every routing attempt failed")
         best_count, a, best = min(done)
-        print(f"  best attempt {a}: {best_count} DRC errors; repairing", flush=True)
+        print(f"  best attempt {a}: {best_count} DRC errors; completion pass", flush=True)
+        pcb = _workdir(tmp, "c", name, best)
+        p = _worker("complete", name, pcb, 0, logs)
+        p.wait()
+        logs[pcb].close()
+        _report(pcb)
+        if p.returncode == 0:
+            errors = drc_errors(pcb)
+            print(f"  completion: {len(errors)} DRC errors", flush=True)
+            if len(errors) < best_count:
+                best_count, best = len(errors), pcb
+            if not errors:
+                shutil.copy(pcb, path)
+                return True
+        print(f"  repairing from {best_count} DRC errors", flush=True)
         for r in range(1, REPAIR_ROUNDS + 1):
+            # Every round starts from the best board so far and only a better result replaces it: on a
+            # full board, maze rip-up can cascade (rounds built on each other went 8 -> 110 errors).
             pcb = _workdir(tmp, f"r{r}", name, best)
             p = _worker("repair", name, pcb, r, logs)
             p.wait()
@@ -713,10 +821,12 @@ def route_until_clean(name: str) -> bool:
 
 
 def main() -> int:
-    if len(sys.argv) == 5 and sys.argv[1] in ("--attempt", "--repair"):
+    if len(sys.argv) == 5 and sys.argv[1] in ("--attempt", "--repair", "--complete"):
         name, pcb, n = sys.argv[2], pathlib.Path(sys.argv[3]), int(sys.argv[4])
         if sys.argv[1] == "--attempt":
             route(pcb, name, n)
+        elif sys.argv[1] == "--complete":
+            complete(pcb, name)
         else:
             repair(pcb, name)
         return 0
@@ -725,11 +835,45 @@ def main() -> int:
     for name in sys.argv[1:] or BOARDS:
         ok &= route_until_clean(name)
         pcb = BOARDS_DIR / name / f"{name}.kicad_pcb"
+        routed_errors = len(drc_errors(pcb))
+        keep = pcb.with_suffix(".routed.kicad_pcb")
+        shutil.copy(pcb, keep)  # every finishing step below must leave the board no worse than this
         board = pcbnew.LoadBoard(str(pcb))
         n = stitch_vias(board)
         board.Save(str(pcb))
         errors = drc_errors(pcb)
+        for _ in range(REPAIR_ROUNDS if len(errors) > routed_errors else 0):
+            snap = pcb.with_suffix(".snap.kicad_pcb")
+            shutil.copy(pcb, snap)
+            repair(pcb, name)
+            after = drc_errors(pcb)
+            if len(after) >= len(errors):
+                shutil.copy(snap, pcb)  # the repair made it worse: undo it and stop
+                break
+            errors = after
+        if len(errors) > routed_errors:  # stitching cost connections: keep the routed board unstitched
+            print(f"{name}: stitching raised DRC errors {routed_errors} -> {len(errors)}; kept the routed board")
+            shutil.copy(keep, pcb)
+            errors = drc_errors(pcb)
         print(f"{name}: {n} ground stitching vias; {len(errors)} DRC errors after stitching", flush=True)
+        before = len(errors)
+        shutil.copy(pcb, keep)
+        wr = widen_power(pcb)
+        for _ in range(REPAIR_ROUNDS):  # slivers out; repair anything their removal opened
+            if not drop_dangling(pcb):
+                break
+            if len(drc_errors(pcb)) > before:
+                repair(pcb, name)
+        widen_power(pcb)  # repair tracks come out at the router's default width
+        errors = drc_errors(pcb)
+        if len(errors) > before:
+            print(f"{name}: finishing raised DRC errors {before} -> {len(errors)}; kept the stitched board")
+            shutil.copy(keep, pcb)
+            errors = drc_errors(pcb)
+        keep.unlink(missing_ok=True)
+        pcb.with_suffix(".snap.kicad_pcb").unlink(missing_ok=True)
+        print(f"{name}: power/rail necks: {wr['widened']} segments widened to class width, {wr['kept_narrow']} "
+              f"kept narrow ({wr['narrow_mm']} mm total); {len(errors)} DRC errors", flush=True)
         ok &= not errors
         r = silk_pass.finish(str(BOARDS_DIR / name / f"{name}.kicad_pcb"))
         print(f"{name}: silkscreen {r['placed']} references placed, {r['fab_only']} on the fab layer only")

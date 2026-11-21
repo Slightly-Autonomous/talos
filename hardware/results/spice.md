@@ -64,6 +64,56 @@ At what VBUS does the power mux take USB, across reference and resistor toleranc
 
 - SLVSEA3F VREF 1.01/1.06/1.10 V rising, 0.99/1.04/1.09 V falling
 
+## B6 Lamp currents
+
+Does every lamp light (>= 0.2 mA) and stay within its driver's budget at every supply and Vf corner?
+
+| Case | I min (mA) | I max (mA) | Result |
+|---|---:|---:|---|
+| TL-SN-001 D8 PWR (USB_VBUS, 3.3k) | 0.712 | 1.091 | pass |
+| TL-SN-001 D1 STAT (3V3, 1k, GPIO8 sink) | 0.950 | 1.950 | pass |
+| TL-SN-001 D9-D12 S0-S3 (3V3, 2.2k, EXP_C sink) | 0.432 | 0.886 | pass |
+| TL-DBG-001 D3 PWR / D6 FLT (AP2112 3.3 V, 2.2k) | 0.553 | 0.765 | pass |
+| TL-DBG-001 D4 AON / D5 SW (MCP2221 GP VOH, 2.2k) | 0.250 | 0.765 | pass |
+| TL-TEST-001 D1 SW (slot SW rail, 2.2k) | 0.432 | 0.886 | pass |
+
+## B7 Tamper loop edge
+
+How long after the lid opens does TAMPER_N cross the TCA9535 VIH, and does the alarm (plus the 50 ms debounce) meet the 100 ms bench budget?
+
+| Case | to VIH (ms) | alarm after (ms) | loop current shut (uA) | Result |
+|---|---:|---:|---:|---|
+| C38 100 nF (before), VDD 3.0 V | 120.638 | 170.638 | 3.000 | FAIL |
+| C38 100 nF (before), VDD 3.6 V | 120.638 | 170.638 | 3.600 | FAIL |
+| C38 10 nF (fitted), VDD 3.0 V | 12.280 | 62.281 | 3.000 | pass |
+| C38 10 nF (fitted), VDD 3.6 V | 12.280 | 62.281 | 3.600 | pass |
+
+- a loop shorted to GND reads 'shut': single-ended loop limitation (HD-032)
+
+## B8 SPI pull-downs at reset
+
+What level does SCK sit at while GPIO4's reset pull-up fights the 100 k pull-down, and how much current reaches an unpowered card?
+
+| Case | SCK level (V) | into unpowered card (uA) | Result |
+|---|---:|---:|---|
+| reset, before firmware (GPIO4 pull-up on) | 1.832 | 14.316 | pass (brief, boot only) |
+| deep sleep / firmware driving low (no pull-up) | 0.000 | 0.000 | pass |
+
+- firmware drives SCK/MOSI low at boot (HD-027); the undefined window lasts from reset until the GPIO init, a few ms
+
+## B9 Slot AON discharge after switch-off
+
+How long until a card's AON rail is below 0.5 V, with and without the TPS22917 quick discharge (QOD to VOUT, HD-028)?
+
+| Case | to 0.5 V (ms) | Result |
+|---|---:|---|
+| TL-MOD-004, QOD to VOUT (fitted) | 0.340 | pass |
+| TL-MOD-004, QOD open (before) | 3736.397 | slow (firmware must wait) |
+| TL-MOD-003, QOD to VOUT (fitted) | 3.163 | pass |
+| TL-MOD-003, QOD open (before) | 1394.921 | slow (firmware must wait) |
+
+- pass = below 0.5 V within a 20 ms off time (EST firmware power-cycle window)
+
 ## Parameters
 
 | Name | Value | Source |
@@ -88,3 +138,27 @@ At what VBUS does the power mux take USB, across reference and resistor toleranc
 | sw_deglitch | 0.0075 | TPS2553 FAULT deglitch 7.5 ms typ (SLVS841G 6.5) |
 | i2c_r | 2350 | R5/R6 4.7k on the root bus in parallel with the selected branch's 4.7k (R34-R41) |
 | i2c_c | 1e-10 | EST: root bus + mux + one branch + card, ~100 pF; kisi can replace with extracted copper |
+| vbus_min | 4.4 | USB VBUS at the device after cable drop (USB 2.0 allows 4.4 V at the far end, EST) |
+| vbus_max | 5.25 | USB 2.0 VBUS maximum 5.25 V |
+| v3v3_min | 3 | EST: 3.3 V rail low corner incl. TPS63900 accuracy and droop |
+| v3v3_max | 3.6 | EST: 3.3 V rail high corner |
+| vf_lo | 1.65 | EST: red/yellow-green AlGaInP LED Vf at 0.3-1 mA (datasheets give 1.75-2.4 V at 20 mA) |
+| vf_hi | 2.05 | EST: same, high corner |
+| led_i_min | 0.0002 | EST: dimmest still clearly visible indoors behind a light pipe, 0.2 mA |
+| led_i_max | 0.005 | EST: ceiling: TCA9535 and MCP2221 GP pins, and a sensible indicator budget |
+| mcp_voh | 2.6 | EST: MCP2221A GP VOH while sourcing ~0.5 mA (DS20005565E gives VOH at higher currents) |
+| tamper_r | 1e+06 | R99 1 MOhm pull-up (gen_schematics.py) |
+| tamper_c | 1e-08 | C38 10 nF (gen_schematics.py, changed from 100 nF after this bench) |
+| tamper_cable_c | 2e-10 | EST: 2 m of twisted pair to the lid and wall switches, ~100 pF/m |
+| tca_vih_frac | 0.7 | TCA9535 VIH = 0.7 x VCC (SCPS201 6.5) |
+| tamper_debounce | 0.05 | firmware tamper debounce 50 ms (firmware/portable/indicators.h) |
+| tamper_budget | 0.1 | bench S-M17: P0 within 100 ms of the lid opening |
+| spi_rpd | 100000 | R101-R103 100 kOhm pull-downs (HD-027) |
+| esp_rpu | 45000 | ESP32-H2 internal weak pull-up ~45 kOhm typ (ESP32-H2 datasheet DC characteristics, EST) |
+| card_vih | 2.31 | card input VIH, 0.7 x 3.3 V (CMOS) |
+| card_vil | 0.99 | card input VIL, 0.3 x 3.3 V (CMOS) |
+| card_off_r | 100000 | EST: an unpowered card's rail seen through its clamp diodes, ~100 kOhm of quiescent load |
+| qod_r | 150 | EST: TPS22917 QOD resistance ~150 Ohm (SLVSDW8B 6.5 lists RQOD; replace with the bench value) |
+| card_idle_r_mod004 | 1.65e+06 | EST: TL-MOD-004 idle ~2 uA at 3.3 V (SHT40 + EEPROM sleep) |
+| card_idle_r_mod003 | 66000 | EST: TL-MOD-003 idle ~50 uA at 3.3 V (LIS2DW12 low-power wake mode) |
+| por_v | 0.5 | EST: discharged enough for every card part to see a clean power-on reset |

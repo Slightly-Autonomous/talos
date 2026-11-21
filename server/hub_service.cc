@@ -287,6 +287,13 @@ api::StateResponse HubService::view_locked(const PropertyState& s, Timestamp now
     v->set_freshness(to_api(freshness(s, ref, now, config_.engine.freshness_max_age)));
     v->set_journal_seq(cap.journal_seq);
   }
+  for (const auto& [device, w] : s.maintenance) {
+    if (now >= w.until) continue;  // expired; the next tick journals the end
+    auto* m = out.add_maintenance();
+    m->set_device_id(device.str());
+    m->set_until_unix_ms(w.until.unix_ms);
+    m->set_principal_id(w.principal.str());
+  }
   for (const auto& [id, rec] : s.commands.records()) *out.add_commands() = command_view(rec);
   for (const auto& [key, rec] : s.commands.denied()) *out.add_commands() = command_view(rec);
   return out;
@@ -576,7 +583,13 @@ std::vector<fw::Downlink> HubService::device_exchange(const DeviceId& device,
        : r.status == IngestStatus::kDuplicate ? metrics_.ingest_duplicate
                                               : metrics_.ingest_rejected)++;
       note_ingest_locked(device, r, now);
-      if (r.status == IngestStatus::kAccepted) registry_.observe(device, e, now);
+      if (r.status == IngestStatus::kAccepted) {
+        registry_.observe(device, e, now);
+      } else if (e.kind == fw::EventKind::kTamper && r.status == IngestStatus::kRejected) {
+        // A device whose config does not declare tamper.enclosure: the alarm
+        // path can't take it, but health must still show the open lid.
+        registry_.observe_unjournaled(device, e, now);
+      }
       if (r.error && r.status == IngestStatus::kAccepted) ++metrics_.journal_append_failures;
     } else {
       registry_.observe_unjournaled(device, e, now);
@@ -704,9 +717,21 @@ api::HealthListResponse HubService::device_health() const {
     const auto& caps = engine_->state().capabilities;
     std::optional<Timestamp> seen;
     if (auto it = caps.find(health_ref); it != caps.end()) seen = it->second.received_at;
+    // An open enclosure stays a fault until a closed report, however old it is.
+    bool tamper_open = false;
+    if (auto it = caps.find({d.id, std::nullopt, CapabilityId("tamper.enclosure")});
+        it != caps.end()) {
+      const auto* v = std::get_if<TamperState>(&it->second.value);
+      tamper_open = v && v->open;
+    }
+    std::optional<Timestamp> maintenance_until;
+    if (auto m = engine_->state().maintenance.find(d.id); m != engine_->state().maintenance.end()) {
+      maintenance_until = m->second.until;
+    }
     *out.add_devices() =
         project_health(d.id, registry_.find(d.id), engine_->freshness_of(health_ref), seen, now,
-                       engine_->config().freshness_max_age, registry_.anomaly(d.id));
+                       engine_->config().freshness_max_age, registry_.anomaly(d.id), tamper_open,
+                       maintenance_until);
   }
   return out;
 }

@@ -223,3 +223,39 @@ requirements:
     test: //core/policy:policy_test (AgentCannotLowerArmMode), //server:server_test (HttpE2E.AgentCannotLowerTheArmMode)
     severity: high
     status: implemented
+  - id: REQ-038
+    statement: Opening the sensor node's enclosure (or cutting its tamper loop) is a debounced P0 event, also from deep sleep; it is journaled as a tamper.enclosure observation, alarms through rules in every arm mode, and the hub and UI show the device faulted until the lid is closed (missing tamper state is unknown). An opening that reaches the hub late (overtaken by its restore) or only as a cold-boot state report after a known-closed lid still alarms; chatter faster than the debounce is reported open; event ids are owned by their source device
+    subsystem: firmware.runtime, core.ingest, core.rules, server.health, simulation.twin, web
+    test: //firmware/portable:indicators_test (Tamper.*), //firmware/sim:indicators_tamper_test (Tamper.*, ExpWake.*), //firmware/portable:wire_test (TamperKindRoundTripsAndUnknownKindsAreRefused), //core/engine:engine_test (TamperTest.*), //codec:codec_test (AllPayloadKindsRoundTrip), //server:server_test (TamperOpenFaultsTheDeviceUntilRestored, TamperOverTheDeviceApiIsJournaledAndFaultsHealth, DeviceRegistryTamper.*), //simulation/runner:scenario_test + backend_parity_test (garage_enclosure_*), web/src/model/view.test.ts (enclosure tamper), web/e2e/intrusion.spec.ts (enclosure tamper)
+    severity: critical
+    status: verified_sim
+  - id: REQ-039
+    statement: Slot LEDs stay dark on battery (no visible reaction to an intruder) and light only on external power or in a timed service mode; the status LED shows deterministic short-pulse blink codes
+    subsystem: firmware.runtime
+    test: //firmware/portable:indicators_test (StatusLed.*, SlotLeds.*), //firmware/sim:indicators_tamper_test (SlotLeds.*, StatusLed.*), //firmware/sim:diag_test (LedServiceModeLightsSlotLedsOnBattery)
+    severity: high
+    status: verified_sim
+  - id: REQ-040
+    statement: Each sensor node carries its board name, revision and serial in the permanent partition, written once at program time and checked on the bench
+    subsystem: firmware.diag, tools.dbg, tools.bench
+    test: //firmware/sim:diag_test (BoardIdIsWrittenOnceAndSurvivesAWorkingPartitionErase), tools/dbg/tests/test_node_id.py, tools/bench/tests/test_runner.py (S-M16)
+    severity: medium
+    status: verified_sim
+  - id: REQ-041
+    statement: Board manifests can restrict a module to some slots (provisional data); on TL-SN-001 the temperature/humidity card is only valid in slots 0 and 2, away from the charger (B-03), and other slots get a slot_not_allowed diagnostic
+    subsystem: core.manifest
+    test: //codec:yaml_loader_test (B_03_EnvironmentCardOnlyInTheTopSlots)
+    severity: medium
+    status: implemented
+  - id: REQ-042
+    statement: An owner can put one node into a bounded maintenance window (default 30 min, at most 4 h; humans only) during which its tamper alarm is suppressed and the suppression journaled; it ends on the hub clock or on cancel, and a lid still open then alarms; back-to-back windows are capped at 4 h from the first start; other nodes and the node's other alarms and health findings are unaffected
+    subsystem: core.execution, core.engine, server.health, simulation.twin, web
+    test: //core/engine:engine_test (MaintenanceTest.*), //server:server_test (MaintenanceIsAHumanCommandShownInStateAndHealthUntilItExpires, ProjectHealth.MaintenanceCoversOnlyTheTamperAlarm), //core/engine:engine_test (EngineJournal.AHubInternalCommandLeftAcceptedIsNeverHandedToADevice), //simulation/runner:scenario_test + backend_parity_test (garage_enclosure_maintenance), web/src/model/view.test.ts (maintenance, device tone), web/src/model/commands.test.ts, web/e2e/intrusion.spec.ts (maintenance)
+    severity: high
+    status: verified_sim
+  - id: REQ-043
+    statement: A press of the node's BOOT button toggles slot-LED service mode without a laptop, debounced on the injected clock and without affecting the strap or download mode
+    subsystem: firmware.runtime
+    test: //firmware/portable:indicators_test (ServiceButton.*), //firmware/sim:indicators_tamper_test (ServiceButton.*)
+    severity: low
+    status: verified_sim

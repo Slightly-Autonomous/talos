@@ -58,6 +58,13 @@ message CommandView {
   repeated talos.v1.CommandTransition history = 5;
 }
 
+// A node in maintenance: its tamper alarm is suppressed until until_unix_ms.
+message DeviceMaintenance {
+  string device_id = 1;
+  int64 until_unix_ms = 2;
+  string principal_id = 3;
+}
+
 message StateResponse {
   string property_id = 1;
   uint64 through_seq = 2;
@@ -65,6 +72,7 @@ message StateResponse {
   repeated CapabilityView capabilities = 4;
   repeated CommandView commands = 5;
   int64 server_time_unix_ms = 6;
+  repeated DeviceMaintenance maintenance = 7;
 }
 
 message JournalPage {

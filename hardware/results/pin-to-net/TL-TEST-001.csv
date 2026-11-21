@@ -3,6 +3,8 @@ C1,1,V3V3_AON,100n
 C1,2,GND,100n
 C2,1,V3V3_AON,100n
 C2,2,GND,100n
+D1,1,SW_LED_K,LED_GREEN
+D1,2,V3V3_SW,LED_GREEN
 J1,1,GND,sensor_edge_v1 card fingers
 J1,2,GND,sensor_edge_v1 card fingers
 J1,3,V3V3_AON,sensor_edge_v1 card fingers
@@ -20,8 +22,8 @@ J1,14,CS_N,sensor_edge_v1 card fingers
 J1,15,UART_TX,sensor_edge_v1 card fingers
 J1,16,UART_RX,sensor_edge_v1 card fingers
 J1,17,RESET_N,sensor_edge_v1 card fingers
-J1,18,GND,sensor_edge_v1 card fingers
-J1,19,NC,sensor_edge_v1 card fingers
+J1,18,NC,sensor_edge_v1 card fingers
+J1,19,GND,sensor_edge_v1 card fingers
 J1,20,GND,sensor_edge_v1 card fingers
 R1,1,DRV_WAKE,1k
 R1,2,WAKE,1k
@@ -47,6 +49,8 @@ R19,1,EXP_NC5,10k
 R19,2,GND,10k
 R2,1,DRV_ALERT,1k
 R2,2,ALERT_N,1k
+R20,1,SW_LED_K,2.2k
+R20,2,GND,2.2k
 R3,1,DRV_MISO,1k
 R3,2,MISO,1k
 R4,1,DRV_UART_RX,1k

@@ -3,6 +3,7 @@
 #include <gtest/gtest.h>
 
 #include "core/engine/preview.h"
+#include "core/execution/operations.h"
 #include "core/testing/fixtures.h"
 
 namespace talos {
@@ -458,6 +459,384 @@ TEST_F(EngineTest, TtlWindowAndTargetAreBounded) {
   EXPECT_EQ(reason_of(engine, g.id), "unknown_target_device");
 }
 
+// --- Enclosure tamper (HD-032, ADR 0007 amendment) -----------------------------------------
+
+const CapabilityRef kTamper{DeviceId("node-12"), std::nullopt, CapabilityId("tamper.enclosure")};
+const CapabilityRef kNotifier{DeviceId("notifier"), std::nullopt, CapabilityId("notify")};
+
+// Tamper is a 24-hour condition: the rule has no armed_modes, so it alarms in
+// every mode, disarmed included (alarm-panel convention).
+EngineConfig tamper_config() {
+  EngineConfig c = config();
+  for (auto& d : c.property.devices) {
+    if (d.id == DeviceId("node-12")) d.capabilities.emplace_back("tamper.enclosure");
+  }
+  Device n;
+  n.id = DeviceId("notifier");
+  n.property = c.property.id;
+  n.capabilities = {CapabilityId("notify")};
+  c.property.devices.push_back(n);
+  Rule r;
+  r.id = RuleId("tamper_alarm");
+  r.property = c.property.id;
+  r.principal = PrincipalId("rule:tamper");
+  r.trigger = {"tamper.opened", std::nullopt};
+  RuleAction a;
+  a.operation = "notify";
+  a.target = kNotifier;
+  a.args = Notify{"owner", "Sensor node enclosure opened"};
+  a.verification = VerificationMode::kAckOnly;
+  r.actions.push_back(a);
+  c.rules.push_back(r);
+  c.principals.push_back({PrincipalId("rule:tamper"),
+                          PrincipalKind::kRule,
+                          {{c.property.id, RiskClass::kBenignOutput}}});
+  return c;
+}
+
+class TamperTest : public ::testing::Test {
+ protected:
+  InMemoryJournal journal;
+  VirtualClock clock{Timestamp{1'000}};
+  HubEngine engine{tamper_config(), journal, clock};
+};
+
+TEST_F(TamperTest, OpeningAlarmsInEveryModeAndIsJournaled) {
+  std::uint64_t seq = 0;
+  for (ArmMode m : {ArmMode::kDisarmed, ArmMode::kArmedHome, ArmMode::kArmedAway}) {
+    ASSERT_TRUE(engine.set_arm_mode(m, kOwner));
+    const auto r =
+        engine.on_observation(observation(kTamper, ++seq, TamperState{true}, "tamper.opened"));
+    EXPECT_EQ(r.status, IngestStatus::kAccepted);
+    auto out = engine.take_outbound();
+    ASSERT_EQ(out.size(), 1u) << int(m);
+    EXPECT_EQ(out[0].operation, "notify");
+    EXPECT_EQ(out[0].causation, EventId("node-12:1:" + std::to_string(seq)));
+    engine.on_observation(observation(kTamper, ++seq, TamperState{false}, "tamper.closed"));
+    EXPECT_TRUE(engine.take_outbound().empty());  // closing is recorded, not an alarm
+  }
+  // Both directions are in the journal and the state, ordered by journal_seq.
+  const auto* st = &engine.state().capabilities.at(kTamper);
+  EXPECT_EQ(std::get<TamperState>(st->value), TamperState{false});
+  int opened = 0, closed = 0;
+  for (const auto& e : read_all(journal, 0)) {
+    if (const auto* o = std::get_if<ObservationRecorded>(&e.event)) {
+      opened += o->envelope.event_type == "tamper.opened";
+      closed += o->envelope.event_type == "tamper.closed";
+    }
+  }
+  EXPECT_EQ(opened, 3);
+  EXPECT_EQ(closed, 3);
+}
+
+TEST_F(TamperTest, RedeliveredOpenAlarmsOnceAndBootStateReportDoesNotAlarm) {
+  engine.on_observation(observation(kTamper, 1, TamperState{true}, "tamper.state"));
+  EXPECT_TRUE(engine.take_outbound().empty());  // a boot report is a state, not an opening
+  engine.on_observation(observation(kTamper, 2, TamperState{true}, "tamper.opened"));
+  EXPECT_EQ(
+      engine.on_observation(observation(kTamper, 2, TamperState{true}, "tamper.opened")).status,
+      IngestStatus::kDuplicate);
+  EXPECT_EQ(engine.take_outbound().size(), 1u);
+}
+
+TEST_F(TamperTest, OwnershipAndPayloadChecks) {
+  // A device that does not declare tamper.enclosure cannot report it.
+  CapabilityRef other{DeviceId("node-07"), std::nullopt, CapabilityId("tamper.enclosure")};
+  EXPECT_EQ(
+      engine.on_observation(observation(other, 1, TamperState{true}, "tamper.opened")).error->code,
+      "undeclared_capability");
+  // The event type must agree with the payload; the payload with the capability.
+  EXPECT_EQ(engine.on_observation(observation(kTamper, 1, TamperState{false}, "tamper.opened"))
+                .error->code,
+            "event_type_does_not_match_payload");
+  EXPECT_EQ(engine.on_observation(observation(kTamper, 2, ContactState{true}, "contact.opened"))
+                .error->code,
+            "payload_does_not_match_capability");
+  EXPECT_TRUE(engine.take_outbound().empty());
+}
+
+// Red team: the node's P0 opening sat in retry backoff while its P1 restore
+// overtook it. As superseded history the opening never alarmed.
+TEST_F(TamperTest, LateOpeningOvertakenByItsRestoreStillAlarms) {
+  engine.on_observation(observation(kTamper, 1, TamperState{false}, "tamper.state"));
+  engine.on_observation(observation(kTamper, 3, TamperState{false}, "tamper.closed"));
+  EXPECT_TRUE(engine.take_outbound().empty());
+  const auto r = engine.on_observation(observation(kTamper, 2, TamperState{true}, "tamper.opened"));
+  EXPECT_TRUE(r.superseded);
+  auto out = engine.take_outbound();
+  ASSERT_EQ(out.size(), 1u);
+  EXPECT_EQ(out[0].causation, EventId("node-12:1:2"));
+  // Still history for state: the lid is closed.
+  EXPECT_EQ(std::get<TamperState>(engine.state().capabilities.at(kTamper).value),
+            TamperState{false});
+  // A late closing is just history.
+  engine.on_observation(observation(kTamper, 4, TamperState{true}, "tamper.opened"));
+  engine.take_outbound();
+  engine.on_observation(observation(kTamper, 5, TamperState{false}, "tamper.closed"));
+  EXPECT_TRUE(engine.take_outbound().empty());
+}
+
+// Red team: lid opened, then the node lost power (or a watchdog reset) before
+// the P0 left. After the cold boot it can only send a state report. The hub
+// last knew the lid closed, so that report is an opening and must alarm.
+TEST_F(TamperTest, ColdBootStateOpenAfterAKnownClosedLidAlarms) {
+  engine.on_observation(observation(kTamper, 1, TamperState{false}, "tamper.state"));
+  EXPECT_TRUE(engine.take_outbound().empty());
+  ObservationEnvelope boot = observation(kTamper, 1, TamperState{true}, "tamper.state");
+  boot.position = {2, 1};  // new boot epoch
+  boot.event_id = EventId("node-12:2:1");
+  engine.on_observation(boot);
+  auto out = engine.take_outbound();
+  ASSERT_EQ(out.size(), 1u);
+  EXPECT_EQ(out[0].causation, EventId("node-12:2:1"));
+  // Already known open: another state report is not a second opening.
+  ObservationEnvelope again = boot;
+  again.position = {3, 1};
+  again.event_id = EventId("node-12:3:1");
+  engine.on_observation(again);
+  EXPECT_TRUE(engine.take_outbound().empty());
+}
+
+// Red team: event ids name their source. node-07 could otherwise pre-claim
+// node-12's next id; node-12's real opening would dedupe to node-07's command.
+TEST_F(TamperTest, AnEventIdOfAnotherDeviceIsRefused) {
+  ObservationEnvelope squat =
+      observation({DeviceId("node-07"), std::nullopt, CapabilityId("contact.open_state")}, 1,
+                  ContactState{true}, "contact.opened");
+  squat.event_id = EventId("node-12:1:2");
+  EXPECT_EQ(engine.on_observation(squat).error->code, "event_id_not_owned_by_source");
+  squat.event_id = EventId("node-07");  // no separator: not namespaced either
+  EXPECT_EQ(engine.on_observation(squat).error->code, "event_id_not_owned_by_source");
+  squat.event_id = EventId("node-0:1:1");
+  EXPECT_EQ(engine.on_observation(squat).error->code, "event_id_not_owned_by_source");
+  engine.on_observation(observation(kTamper, 2, TamperState{true}, "tamper.opened"));
+  EXPECT_EQ(engine.take_outbound().size(), 1u);
+}
+
+// --- Maintenance mode (owner decision 2026-11-21) ---------------------------------------
+
+const CapabilityRef kTamper07{DeviceId("node-07"), std::nullopt, CapabilityId("tamper.enclosure")};
+
+class MaintenanceTest : public ::testing::Test {
+ protected:
+  static EngineConfig make_config() {
+    EngineConfig c = tamper_config();
+    for (auto& d : c.property.devices) {
+      if (d.id == DeviceId("node-07")) d.capabilities.emplace_back("tamper.enclosure");
+    }
+    return c;
+  }
+  void SetUp() override {
+    ASSERT_TRUE(engine.set_arm_mode(ArmMode::kArmedAway, kOwner));
+    heartbeat("node-12");
+  }
+  void heartbeat(const std::string& device) {
+    engine.on_observation(
+        observation({DeviceId(device), std::nullopt, CapabilityId("device.health")}, ++seq,
+                    Heartbeat{3900}, "device.heartbeat"));
+  }
+  Command maintenance(const PrincipalId& who, std::uint32_t ms, const std::string& id,
+                      const std::string& op = "device.maintenance") {
+    Command c;
+    c.id = CommandId(id);
+    c.idempotency_key = id;
+    c.principal = who;
+    c.property = PropertyId("house-01");
+    c.target = {DeviceId("node-12"), std::nullopt, CapabilityId("device.health")};
+    c.operation = op;
+    if (op == "device.maintenance") c.args = SetMaintenance{ms};
+    c.created_at = clock.now();
+    c.expires_at = clock.now() + Millis{10'000};
+    return c;
+  }
+  void open(const CapabilityRef& ref, bool lid) {
+    engine.on_observation(
+        observation(ref, ++seq, TamperState{lid}, lid ? "tamper.opened" : "tamper.closed"));
+  }
+  int suppressed() {
+    int n = 0;
+    for (const auto& e : read_all(journal, 0))
+      n += std::holds_alternative<AlarmSuppressed>(e.event);
+    return n;
+  }
+  std::uint64_t seq = 100;
+  InMemoryJournal journal;
+  VirtualClock clock{Timestamp{1'000}};
+  HubEngine engine{make_config(), journal, clock};
+};
+
+TEST_F(MaintenanceTest, SuppressesOnlyThatNodesTamperAlarmAndIsJournaled) {
+  auto r = engine.request(maintenance(kOwner, 0, "m1"));
+  EXPECT_EQ(engine.state().commands.find(r.id)->status, CommandStatus::kVerified);
+  ASSERT_TRUE(engine.state().maintenance.contains(DeviceId("node-12")));
+  EXPECT_EQ(engine.state().maintenance.at(DeviceId("node-12")).until,
+            clock.now() + kDefaultMaintenance);  // 30 min default
+  EXPECT_TRUE(engine.take_outbound().empty());   // never handed to a device
+  open(kTamper, true);
+  EXPECT_TRUE(engine.take_outbound().empty());
+  EXPECT_EQ(std::get<TamperState>(engine.state().capabilities.at(kTamper).value),
+            TamperState{true});
+  ASSERT_EQ(suppressed(), 1);
+  for (const auto& e : read_all(journal, 0)) {
+    if (const auto* a = std::get_if<AlarmSuppressed>(&e.event)) {
+      EXPECT_EQ(a->maintenance_by, kOwner);
+      EXPECT_EQ(a->rule, RuleId("tamper_alarm"));
+      EXPECT_EQ(a->maintenance_until, clock.now() + kDefaultMaintenance);
+    }
+  }
+  open(kTamper07, true);  // another node: alarms as usual
+  EXPECT_EQ(engine.take_outbound().size(), 1u);
+}
+
+TEST_F(MaintenanceTest, ExpiryWithTheLidOpenAlarmsOnceDeterministically) {
+  engine.request(maintenance(kOwner, 60'000, "m1"));
+  open(kTamper, true);
+  clock.advance(Millis{59'999});
+  ASSERT_TRUE(engine.tick());
+  EXPECT_TRUE(engine.take_outbound().empty());
+  clock.advance(Millis{1});
+  ASSERT_TRUE(engine.tick());
+  EXPECT_FALSE(engine.state().maintenance.contains(DeviceId("node-12")));
+  auto out = engine.take_outbound();
+  ASSERT_EQ(out.size(), 1u);
+  EXPECT_EQ(out[0].causation, EventId("node-12:1:" + std::to_string(seq)));
+  ASSERT_TRUE(engine.tick());  // no repeat
+  EXPECT_TRUE(engine.take_outbound().empty());
+  // The expiry is journaled by the system, before the alarm.
+  bool expired = false;
+  for (const auto& e : read_all(journal, 0)) {
+    if (const auto* m = std::get_if<MaintenanceChanged>(&e.event); m && !m->until) {
+      expired = m->reason == "expired" && m->principal == kMaintenanceExpiry;
+    }
+  }
+  EXPECT_TRUE(expired);
+}
+
+TEST_F(MaintenanceTest, LidClosedBeforeExpiryNeverAlarms) {
+  engine.request(maintenance(kOwner, 60'000, "m1"));
+  open(kTamper, true);
+  open(kTamper, false);
+  clock.advance(Millis{60'000});
+  ASSERT_TRUE(engine.tick());
+  EXPECT_TRUE(engine.take_outbound().empty());
+}
+
+TEST_F(MaintenanceTest, CancelWithTheLidOpenAlarmsAndAnAlarmAlreadyRaisedIsNotRepeated) {
+  open(kTamper, true);  // alarms before maintenance
+  ASSERT_EQ(engine.take_outbound().size(), 1u);
+  engine.request(maintenance(kOwner, 60'000, "m1"));
+  // Ending raises protection: allowed for an agent (benign), like arming.
+  auto end = engine.request(maintenance(kAgent, 0, "m-end", "device.maintenance_end"));
+  EXPECT_EQ(engine.state().commands.find(end.id)->status, CommandStatus::kVerified);
+  EXPECT_FALSE(engine.state().maintenance.contains(DeviceId("node-12")));
+  EXPECT_TRUE(engine.take_outbound().empty());  // same opening: deduped, not a second alarm
+  engine.request(maintenance(kOwner, 60'000, "m2"));
+  open(kTamper, false);
+  open(kTamper, true);  // suppressed
+  engine.request(maintenance(kOwner, 0, "m-end2", "device.maintenance_end"));
+  EXPECT_EQ(engine.take_outbound().size(), 1u);  // cancelled with the lid open: alarm now
+}
+
+TEST_F(MaintenanceTest, OnlyHumansWithFreshStateAndBoundedDurations) {
+  auto agent = engine.request(maintenance(kAgent, 0, "a1"));
+  EXPECT_EQ(engine.state().commands.find(agent.id)->history.back().reason,
+            "requires_human_authorization");
+  auto too_long = engine.request(maintenance(kOwner, 4 * 3'600'000 + 1, "m-long"));
+  EXPECT_EQ(engine.state().commands.find(too_long.id)->history.back().reason, "args_out_of_bounds");
+  EXPECT_EQ(engine.state()
+                .commands.find(engine.request(maintenance(kOwner, 59'999, "m-s")).id)
+                ->history.back()
+                .reason,
+            "args_out_of_bounds");
+  clock.advance(Millis{61'000});  // heartbeat older than freshness_max_age (60 s)
+  auto stale = engine.request(maintenance(kOwner, 0, "m-stale"));
+  EXPECT_EQ(engine.state().commands.find(stale.id)->history.back().reason,
+            "target_state_not_fresh");
+  EXPECT_TRUE(engine.state().maintenance.empty());
+}
+
+TEST_F(MaintenanceTest, RestartKeepsTheWindowAndItsExpiry) {
+  engine.request(maintenance(kOwner, 60'000, "m1"));
+  open(kTamper, true);
+  HubEngine restarted(make_config(), journal, clock);
+  EXPECT_EQ(restarted.state(), engine.state());
+  EXPECT_TRUE(restarted.in_maintenance(DeviceId("node-12")));
+  clock.advance(Millis{60'000});
+  ASSERT_TRUE(restarted.tick());
+  EXPECT_EQ(restarted.take_outbound().size(), 1u);
+}
+
+// Red team: back-to-back restarts kept an open lid silent forever. A chain of
+// windows is capped at kMaxMaintenance from its first start.
+TEST_F(MaintenanceTest, WindowsCannotBeChainedPastTheMaximum) {
+  ASSERT_EQ(
+      engine.state().commands.find(engine.request(maintenance(kOwner, 3'600'000, "m1")).id)->status,
+      CommandStatus::kVerified);
+  open(kTamper, true);  // suppressed
+  int n = 0;
+  for (; n < 10; ++n) {
+    clock.advance(Millis{50 * 60'000});
+    heartbeat("node-12");
+    auto r = engine.request(maintenance(kOwner, 3'600'000, "m-chain-" + std::to_string(n)));
+    if (engine.state().commands.find(r.id)->status != CommandStatus::kVerified) {
+      EXPECT_EQ(engine.state().commands.find(r.id)->history.back().reason, "maintenance_limit");
+      break;
+    }
+  }
+  EXPECT_LT(n, 4);  // 4 h from the first start, whatever the restarts
+  // A shorter restart inside the cap is fine.
+  const auto since = engine.state().maintenance.at(DeviceId("node-12")).since;
+  auto ok = engine.request(maintenance(kOwner, 60'000, "m-short"));
+  EXPECT_EQ(engine.state().commands.find(ok.id)->status, CommandStatus::kVerified);
+  EXPECT_EQ(engine.state().maintenance.at(DeviceId("node-12")).since, since);
+  // At the cap the window ends and the still-open lid alarms.
+  clock.advance(Millis{4 * 3'600'000});
+  ASSERT_TRUE(engine.tick());
+  EXPECT_EQ(engine.take_outbound().size(), 1u);
+  // After it ended, a new window starts a new chain.
+  heartbeat("node-12");
+  auto fresh = engine.request(maintenance(kOwner, 3'600'000, "m-new"));
+  EXPECT_EQ(engine.state().commands.find(fresh.id)->status, CommandStatus::kVerified);
+  EXPECT_EQ(engine.state().maintenance.at(DeviceId("node-12")).since, clock.now());
+  HubEngine restarted(make_config(), journal, clock);
+  EXPECT_EQ(restarted.state(), engine.state());  // the chain start replays
+}
+
+// Maintenance of node-12 never hides node-12's other alarms (here: contact).
+TEST_F(MaintenanceTest, OtherEventsOfTheNodeStillFireTheirRules) {
+  EngineConfig c = make_config();
+  Rule r;
+  r.id = RuleId("door_open");
+  r.property = c.property.id;
+  r.principal = PrincipalId("rule:tamper");
+  r.trigger = {"contact.opened", std::nullopt};
+  RuleAction a;
+  a.operation = "notify";
+  a.target = kNotifier;
+  a.args = Notify{"owner", "door"};
+  a.verification = VerificationMode::kAckOnly;
+  r.actions.push_back(a);
+  c.rules.push_back(r);
+  InMemoryJournal j;
+  HubEngine e(c, j, clock);
+  e.on_observation(observation({DeviceId("node-12"), std::nullopt, CapabilityId("device.health")},
+                               1, Heartbeat{3900}, "device.heartbeat"));
+  Command m = maintenance(kOwner, 0, "m1");
+  ASSERT_EQ(e.state().commands.find(e.request(m).id)->status, CommandStatus::kVerified);
+  CapabilityRef door{DeviceId("node-12"), SlotIndex{0}, CapabilityId("contact.open_state")};
+  e.on_observation(observation(door, 2, ContactState{true}, "contact.opened"));
+  EXPECT_EQ(e.take_outbound().size(), 1u);
+  // And a late or cold-boot opening during maintenance is suppressed, not lost.
+  e.on_observation(observation(kTamper, 4, TamperState{false}, "tamper.closed"));
+  e.on_observation(observation(kTamper, 3, TamperState{true}, "tamper.opened"));
+  EXPECT_TRUE(e.take_outbound().empty());
+  int suppressed = 0;
+  for (const auto& entry : read_all(j, 0)) {
+    suppressed += std::holds_alternative<AlarmSuppressed>(entry.event);
+  }
+  EXPECT_EQ(suppressed, 1);
+}
+
 TEST(EngineCapabilities, UndeclaredTargetCapabilityIsDenied) {
   auto cfg = config();
   for (auto& d : cfg.property.devices) {
@@ -476,7 +855,9 @@ TEST(EngineCapabilities, UndeclaredTargetCapabilityIsDenied) {
 class FlakyJournal final : public IJournal {
  public:
   Result<JournalEntry> append(Timestamp t, DomainEvent e) override {
-    if (fail) return Error{"storage_error", "disk full"};
+    if (fail || (fail_maintenance && std::holds_alternative<MaintenanceChanged>(e))) {
+      return Error{"storage_error", "disk full"};
+    }
     return inner.append(t, std::move(e));
   }
   std::vector<JournalEntry> read(std::uint64_t after, std::size_t limit) const override {
@@ -484,8 +865,43 @@ class FlakyJournal final : public IJournal {
   }
   std::uint64_t last_seq() const override { return inner.last_seq(); }
   bool fail = false;
+  bool fail_maintenance = false;
   InMemoryJournal inner;
 };
+
+// Red team: a crash between accepting device.maintenance and journaling its
+// effect left it accepted; on restart it was queued and handed to the node.
+TEST(EngineJournal, AHubInternalCommandLeftAcceptedIsNeverHandedToADevice) {
+  FlakyJournal journal;
+  VirtualClock clock{Timestamp{1'000}};
+  HubEngine engine{tamper_config(), journal, clock};
+  engine.on_observation(
+      observation({DeviceId("node-12"), std::nullopt, CapabilityId("device.health")}, 1,
+                  Heartbeat{3900}, "device.heartbeat"));
+  Command c;
+  c.id = CommandId("m1");
+  c.idempotency_key = "m1";
+  c.principal = kOwner;
+  c.property = PropertyId("house-01");
+  c.target = {DeviceId("node-12"), std::nullopt, CapabilityId("device.health")};
+  c.operation = "device.maintenance";
+  c.args = SetMaintenance{0};
+  c.created_at = clock.now();
+  c.expires_at = clock.now() + Millis{10'000};
+  journal.fail_maintenance = true;
+  auto r = engine.request(c);
+  ASSERT_TRUE(r.error.has_value());
+  EXPECT_EQ(engine.state().commands.find(c.id)->status, CommandStatus::kAccepted);
+  EXPECT_TRUE(engine.take_outbound().empty());
+  journal.fail_maintenance = false;
+  HubEngine restarted(tamper_config(), journal, clock);
+  EXPECT_TRUE(restarted.take_outbound().empty());
+  EXPECT_TRUE(restarted.take_outbound(DeviceId("node-12")).empty());
+  clock.advance(Millis{10'001});
+  ASSERT_TRUE(restarted.tick());
+  EXPECT_EQ(restarted.state().commands.find(c.id)->status, CommandStatus::kExpired);
+  EXPECT_TRUE(restarted.state().maintenance.empty());
+}
 
 TEST(EngineJournal, AppendFailuresPropagateAndNothingIsHandedOff) {
   FlakyJournal journal;

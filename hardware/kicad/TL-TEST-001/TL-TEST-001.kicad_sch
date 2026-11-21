@@ -972,6 +972,220 @@
 			)
 			(embedded_fonts no)
 		)
+		(symbol "Device:LED"
+			(pin_numbers
+				(hide yes)
+			)
+			(pin_names
+				(offset 1.016)
+				(hide yes)
+			)
+			(exclude_from_sim no)
+			(in_bom yes)
+			(on_board yes)
+			(in_pos_files yes)
+			(duplicate_pin_numbers_are_jumpers no)
+			(property "Reference" "D"
+				(at 0 2.54 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Value" "LED"
+				(at 0 -2.54 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Footprint" ""
+				(at 0 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Datasheet" ""
+				(at 0 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Description" "Light emitting diode"
+				(at 0 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Sim.Pins" "1=K 2=A"
+				(at 0 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "ki_keywords" "LED diode"
+				(at 0 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "ki_fp_filters" "LED* LED_SMD:* LED_THT:*"
+				(at 0 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(symbol "LED_0_1"
+				(polyline
+					(pts
+						(xy -3.048 -0.762)
+						(xy -4.572 -2.286)
+						(xy -3.81 -2.286)
+						(xy -4.572 -2.286)
+						(xy -4.572 -1.524)
+					)
+					(stroke
+						(width 0)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(polyline
+					(pts
+						(xy -1.778 -0.762)
+						(xy -3.302 -2.286)
+						(xy -2.54 -2.286)
+						(xy -3.302 -2.286)
+						(xy -3.302 -1.524)
+					)
+					(stroke
+						(width 0)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(polyline
+					(pts
+						(xy -1.27 0)
+						(xy 1.27 0)
+					)
+					(stroke
+						(width 0)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(polyline
+					(pts
+						(xy -1.27 -1.27)
+						(xy -1.27 1.27)
+					)
+					(stroke
+						(width 0.254)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(polyline
+					(pts
+						(xy 1.27 -1.27)
+						(xy 1.27 1.27)
+						(xy -1.27 0)
+						(xy 1.27 -1.27)
+					)
+					(stroke
+						(width 0.254)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+			)
+			(symbol "LED_1_1"
+				(pin passive line
+					(at -3.81 0 0)
+					(length 2.54)
+					(name "K"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "1"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin passive line
+					(at 3.81 0 180)
+					(length 2.54)
+					(name "A"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "2"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+			)
+			(embedded_fonts no)
+		)
 		(symbol "Device:R"
 			(pin_numbers
 				(hide yes)
@@ -2432,30 +2646,30 @@
 		)
 		(uuid "1b11c203-08bd-59a4-82e3-24ea4168e835")
 	)
+	(no_connect
+		(at 50.8 55.88)
+		(uuid "b7dcf6e3-09be-5558-98f7-1b3cfeb1779e")
+	)
 	(wire
 		(pts
-			(xy 50.8 55.88)
-			(xy 53.34 55.88)
+			(xy 38.1 58.42)
+			(xy 35.56 58.42)
 		)
 		(stroke
 			(width 0)
 			(type default)
 		)
-		(uuid "9ceb7b26-68fd-5d9c-9d5e-45d9de7619ee")
+		(uuid "de304a15-433f-5bce-ac9a-931a455fa29c")
 	)
 	(label "GND"
-		(at 53.34 55.88 0)
+		(at 35.56 58.42 180)
 		(effects
 			(font
 				(size 1.27 1.27)
 			)
-			(justify left bottom)
+			(justify right bottom)
 		)
-		(uuid "5ae6b1e3-0dc6-5c94-9759-a88f15381b1b")
-	)
-	(no_connect
-		(at 38.1 58.42)
-		(uuid "cda0e2c6-ff41-5818-ae53-9d76187e4102")
+		(uuid "cd6edbbb-a546-5624-b38f-7617b3a19134")
 	)
 	(wire
 		(pts
@@ -4022,32 +4236,32 @@
 		(uuid "8bb1926e-eb63-5360-8e98-0c2efaf07e7c")
 	)
 	(symbol
-		(lib_id "Device:R")
-		(at 304.8 48.26 0)
+		(lib_id "Device:LED")
+		(at 317.5 35.56 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
-		(uuid "4bee25dc-677c-5f6b-b085-9443989f83b5")
-		(property "Reference" "R6"
-			(at 304.8 40.64 0)
+		(uuid "4fa0cbab-1b66-5636-84ca-243735010262")
+		(property "Reference" "D1"
+			(at 317.5 27.94 0)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
 			)
 		)
-		(property "Value" "10k"
-			(at 304.8 55.88 0)
+		(property "Value" "LED_GREEN"
+			(at 317.5 43.18 0)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
 			)
 		)
-		(property "Footprint" "Resistor_SMD:R_0402_1005Metric"
-			(at 304.8 48.26 0)
+		(property "Footprint" "LED_SMD:LED_0603_1608Metric"
+			(at 317.5 35.56 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -4056,7 +4270,225 @@
 			)
 		)
 		(property "Datasheet" "~"
-			(at 304.8 48.26 0)
+			(at 317.5 35.56 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Talos_Note" "SW: slot switched rail on"
+			(at 317.5 35.56 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "4669465b-5650-5cc6-b94f-46087a84a2ae")
+		)
+		(pin "2"
+			(uuid "2645ee63-a86c-51e0-966f-151e30631d7f")
+		)
+		(instances
+			(project "TL-TEST-001"
+				(path "/9e021e9c-8f9d-517b-920e-82daea435b21"
+					(reference "D1")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(wire
+		(pts
+			(xy 313.69 35.56)
+			(xy 311.15 35.56)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "d49e9cf9-b42d-52f0-a189-79fcdbffc094")
+	)
+	(label "SW_LED_K"
+		(at 311.15 35.56 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right bottom)
+		)
+		(uuid "86ba253a-1504-5354-81fd-cd5443bcd399")
+	)
+	(wire
+		(pts
+			(xy 321.31 35.56)
+			(xy 323.85 35.56)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "d10e381b-cc4a-519f-8a01-8c0b10449c1f")
+	)
+	(label "V3V3_SW"
+		(at 323.85 35.56 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "c0c1ab41-8290-539f-8beb-e495f35cc615")
+	)
+	(symbol
+		(lib_id "Device:R")
+		(at 347.98 48.26 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "456e54e4-7e5d-5ff0-bc26-eeb3515f5a9e")
+		(property "Reference" "R20"
+			(at 347.98 40.64 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "2.2k"
+			(at 347.98 55.88 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" "Resistor_SMD:R_0402_1005Metric"
+			(at 347.98 48.26 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" "~"
+			(at 347.98 48.26 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Talos_Note" "SW LED current"
+			(at 347.98 48.26 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "8eb51f94-6483-55d7-b17d-64113183929b")
+		)
+		(pin "2"
+			(uuid "65ef32f1-2e36-5afe-8bfa-a01f6ec7fd07")
+		)
+		(instances
+			(project "TL-TEST-001"
+				(path "/9e021e9c-8f9d-517b-920e-82daea435b21"
+					(reference "R20")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(wire
+		(pts
+			(xy 347.98 44.45)
+			(xy 347.98 41.91)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "44d001fb-ff2a-5946-afe6-14ad18ca0bf6")
+	)
+	(label "SW_LED_K"
+		(at 347.98 41.91 90)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "58836a9d-6c78-5333-856a-865647cd17ea")
+	)
+	(wire
+		(pts
+			(xy 347.98 52.07)
+			(xy 347.98 54.61)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "26aab261-5d7d-5825-9713-5f0ff9d3788c")
+	)
+	(label "GND"
+		(at 347.98 54.61 270)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right bottom)
+		)
+		(uuid "c717df26-c77f-5627-b291-727b7c1c9e21")
+	)
+	(symbol
+		(lib_id "Device:R")
+		(at 363.22 48.26 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "4bee25dc-677c-5f6b-b085-9443989f83b5")
+		(property "Reference" "R6"
+			(at 363.22 40.64 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "10k"
+			(at 363.22 55.88 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" "Resistor_SMD:R_0402_1005Metric"
+			(at 363.22 48.26 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" "~"
+			(at 363.22 48.26 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -4065,7 +4497,7 @@
 			)
 		)
 		(property "Talos_Note" "UART loopback"
-			(at 304.8 48.26 0)
+			(at 363.22 48.26 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -4090,8 +4522,8 @@
 	)
 	(wire
 		(pts
-			(xy 304.8 44.45)
-			(xy 304.8 41.91)
+			(xy 363.22 44.45)
+			(xy 363.22 41.91)
 		)
 		(stroke
 			(width 0)
@@ -4100,7 +4532,7 @@
 		(uuid "dc3f9b88-2afc-552d-b97b-9bdbd03787e5")
 	)
 	(label "UART_TX"
-		(at 304.8 41.91 90)
+		(at 363.22 41.91 90)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -4111,8 +4543,8 @@
 	)
 	(wire
 		(pts
-			(xy 304.8 52.07)
-			(xy 304.8 54.61)
+			(xy 363.22 52.07)
+			(xy 363.22 54.61)
 		)
 		(stroke
 			(width 0)
@@ -4121,7 +4553,7 @@
 		(uuid "8d828ad1-a661-5155-8b68-53be08f5fff8")
 	)
 	(label "UART_RX"
-		(at 304.8 54.61 270)
+		(at 363.22 54.61 270)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -4132,7 +4564,7 @@
 	)
 	(symbol
 		(lib_id "Device:R")
-		(at 320.04 45.72 0)
+		(at 378.46 45.72 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
@@ -4140,7 +4572,7 @@
 		(dnp no)
 		(uuid "ec046391-b593-52d9-a762-43b35b9105a9")
 		(property "Reference" "R7"
-			(at 320.04 38.1 0)
+			(at 378.46 38.1 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -4148,7 +4580,7 @@
 			)
 		)
 		(property "Value" "10k"
-			(at 320.04 53.34 0)
+			(at 378.46 53.34 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -4156,7 +4588,7 @@
 			)
 		)
 		(property "Footprint" "Resistor_SMD:R_0402_1005Metric"
-			(at 320.04 45.72 0)
+			(at 378.46 45.72 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -4165,7 +4597,7 @@
 			)
 		)
 		(property "Datasheet" "~"
-			(at 320.04 45.72 0)
+			(at 378.46 45.72 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -4174,7 +4606,7 @@
 			)
 		)
 		(property "Talos_Note" "SPI loopback"
-			(at 320.04 45.72 0)
+			(at 378.46 45.72 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -4199,8 +4631,8 @@
 	)
 	(wire
 		(pts
-			(xy 320.04 41.91)
-			(xy 320.04 39.37)
+			(xy 378.46 41.91)
+			(xy 378.46 39.37)
 		)
 		(stroke
 			(width 0)
@@ -4209,7 +4641,7 @@
 		(uuid "06204455-eb0f-512f-b410-d8c1bec515bd")
 	)
 	(label "MOSI"
-		(at 320.04 39.37 90)
+		(at 378.46 39.37 90)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -4220,8 +4652,8 @@
 	)
 	(wire
 		(pts
-			(xy 320.04 49.53)
-			(xy 320.04 52.07)
+			(xy 378.46 49.53)
+			(xy 378.46 52.07)
 		)
 		(stroke
 			(width 0)
@@ -4230,7 +4662,7 @@
 		(uuid "a4a9145a-1221-5a77-bcd1-cde829dc3d0f")
 	)
 	(label "MISO"
-		(at 320.04 52.07 270)
+		(at 378.46 52.07 270)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -4241,7 +4673,7 @@
 	)
 	(symbol
 		(lib_id "Device:R")
-		(at 335.28 48.26 0)
+		(at 27.94 139.7 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
@@ -4249,7 +4681,7 @@
 		(dnp no)
 		(uuid "98c17104-dde6-583c-8513-36fe5881abdd")
 		(property "Reference" "R8"
-			(at 335.28 40.64 0)
+			(at 27.94 132.08 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -4257,7 +4689,7 @@
 			)
 		)
 		(property "Value" "10k"
-			(at 335.28 55.88 0)
+			(at 27.94 147.32 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -4265,7 +4697,7 @@
 			)
 		)
 		(property "Footprint" "Resistor_SMD:R_0402_1005Metric"
-			(at 335.28 48.26 0)
+			(at 27.94 139.7 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -4274,7 +4706,7 @@
 			)
 		)
 		(property "Datasheet" "~"
-			(at 335.28 48.26 0)
+			(at 27.94 139.7 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -4283,7 +4715,7 @@
 			)
 		)
 		(property "Talos_Note" "SW rail sense into P04"
-			(at 335.28 48.26 0)
+			(at 27.94 139.7 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -4308,8 +4740,8 @@
 	)
 	(wire
 		(pts
-			(xy 335.28 44.45)
-			(xy 335.28 41.91)
+			(xy 27.94 135.89)
+			(xy 27.94 133.35)
 		)
 		(stroke
 			(width 0)
@@ -4318,7 +4750,7 @@
 		(uuid "91a3f993-3db7-5411-9ee1-06cabf9ef0da")
 	)
 	(label "V3V3_SW"
-		(at 335.28 41.91 90)
+		(at 27.94 133.35 90)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -4329,8 +4761,8 @@
 	)
 	(wire
 		(pts
-			(xy 335.28 52.07)
-			(xy 335.28 54.61)
+			(xy 27.94 143.51)
+			(xy 27.94 146.05)
 		)
 		(stroke
 			(width 0)
@@ -4339,7 +4771,7 @@
 		(uuid "208f9805-1940-5b49-b109-c8302a88d295")
 	)
 	(label "SW_SENSE"
-		(at 335.28 54.61 270)
+		(at 27.94 146.05 270)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -4350,7 +4782,7 @@
 	)
 	(symbol
 		(lib_id "Device:R")
-		(at 350.52 45.72 0)
+		(at 43.18 137.16 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
@@ -4358,7 +4790,7 @@
 		(dnp no)
 		(uuid "52bf00be-48f4-50a8-9bfc-c5bf9d9e7b8f")
 		(property "Reference" "R9"
-			(at 350.52 38.1 0)
+			(at 43.18 129.54 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -4366,7 +4798,7 @@
 			)
 		)
 		(property "Value" "100k"
-			(at 350.52 53.34 0)
+			(at 43.18 144.78 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -4374,7 +4806,7 @@
 			)
 		)
 		(property "Footprint" "Resistor_SMD:R_0402_1005Metric"
-			(at 350.52 45.72 0)
+			(at 43.18 137.16 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -4383,7 +4815,7 @@
 			)
 		)
 		(property "Datasheet" "~"
-			(at 350.52 45.72 0)
+			(at 43.18 137.16 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -4408,8 +4840,8 @@
 	)
 	(wire
 		(pts
-			(xy 350.52 41.91)
-			(xy 350.52 39.37)
+			(xy 43.18 133.35)
+			(xy 43.18 130.81)
 		)
 		(stroke
 			(width 0)
@@ -4418,7 +4850,7 @@
 		(uuid "5371532f-5942-5710-a54e-2859e5208c02")
 	)
 	(label "SCK"
-		(at 350.52 39.37 90)
+		(at 43.18 130.81 90)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -4429,8 +4861,8 @@
 	)
 	(wire
 		(pts
-			(xy 350.52 49.53)
-			(xy 350.52 52.07)
+			(xy 43.18 140.97)
+			(xy 43.18 143.51)
 		)
 		(stroke
 			(width 0)
@@ -4439,7 +4871,7 @@
 		(uuid "eb26028f-224a-5caa-aa3a-48ed114222dc")
 	)
 	(label "GND"
-		(at 350.52 52.07 270)
+		(at 43.18 143.51 270)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -4450,7 +4882,7 @@
 	)
 	(symbol
 		(lib_id "Device:R")
-		(at 365.76 45.72 0)
+		(at 58.42 137.16 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
@@ -4458,7 +4890,7 @@
 		(dnp no)
 		(uuid "35cba0a6-4619-5a7c-87d9-23f2685f22fe")
 		(property "Reference" "R10"
-			(at 365.76 38.1 0)
+			(at 58.42 129.54 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -4466,7 +4898,7 @@
 			)
 		)
 		(property "Value" "100k"
-			(at 365.76 53.34 0)
+			(at 58.42 144.78 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -4474,7 +4906,7 @@
 			)
 		)
 		(property "Footprint" "Resistor_SMD:R_0402_1005Metric"
-			(at 365.76 45.72 0)
+			(at 58.42 137.16 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -4483,7 +4915,7 @@
 			)
 		)
 		(property "Datasheet" "~"
-			(at 365.76 45.72 0)
+			(at 58.42 137.16 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -4508,8 +4940,8 @@
 	)
 	(wire
 		(pts
-			(xy 365.76 41.91)
-			(xy 365.76 39.37)
+			(xy 58.42 133.35)
+			(xy 58.42 130.81)
 		)
 		(stroke
 			(width 0)
@@ -4518,7 +4950,7 @@
 		(uuid "a43e4b12-e853-5948-8250-40f4c2b509bc")
 	)
 	(label "MOSI"
-		(at 365.76 39.37 90)
+		(at 58.42 130.81 90)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -4529,8 +4961,8 @@
 	)
 	(wire
 		(pts
-			(xy 365.76 49.53)
-			(xy 365.76 52.07)
+			(xy 58.42 140.97)
+			(xy 58.42 143.51)
 		)
 		(stroke
 			(width 0)
@@ -4539,7 +4971,7 @@
 		(uuid "57cfd8f8-fe19-5cc3-af79-e27d96f00958")
 	)
 	(label "GND"
-		(at 365.76 52.07 270)
+		(at 58.42 143.51 270)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -4550,7 +4982,7 @@
 	)
 	(symbol
 		(lib_id "Device:R")
-		(at 381 48.26 0)
+		(at 73.66 139.7 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
@@ -4558,415 +4990,6 @@
 		(dnp no)
 		(uuid "cba11845-7f6c-5007-b38d-87f9831d4529")
 		(property "Reference" "R11"
-			(at 381 40.64 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Value" "100k"
-			(at 381 55.88 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Footprint" "Resistor_SMD:R_0402_1005Metric"
-			(at 381 48.26 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Datasheet" "~"
-			(at 381 48.26 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(pin "1"
-			(uuid "198fb446-f243-5c14-bfcc-a12782162654")
-		)
-		(pin "2"
-			(uuid "57b68dea-310c-5aed-ae70-b6995daf9eff")
-		)
-		(instances
-			(project "TL-TEST-001"
-				(path "/9e021e9c-8f9d-517b-920e-82daea435b21"
-					(reference "R11")
-					(unit 1)
-				)
-			)
-		)
-	)
-	(wire
-		(pts
-			(xy 381 44.45)
-			(xy 381 41.91)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "a47c6e36-766d-5530-86f6-4fe5fbc7c447")
-	)
-	(label "UART_TX"
-		(at 381 41.91 90)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left bottom)
-		)
-		(uuid "3a3fd3a5-f1a6-588a-b961-240c105a6e2e")
-	)
-	(wire
-		(pts
-			(xy 381 52.07)
-			(xy 381 54.61)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "044cbd47-d6ac-551c-8617-87874897f84d")
-	)
-	(label "GND"
-		(at 381 54.61 270)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify right bottom)
-		)
-		(uuid "708a2ec7-1986-5670-9a08-180d09c3cabc")
-	)
-	(symbol
-		(lib_id "Device:R")
-		(at 27.94 137.16 0)
-		(unit 1)
-		(exclude_from_sim no)
-		(in_bom yes)
-		(on_board yes)
-		(dnp no)
-		(uuid "aab7488e-2100-5029-a9c9-375c62addb78")
-		(property "Reference" "R12"
-			(at 27.94 129.54 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Value" "1M"
-			(at 27.94 144.78 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Footprint" "Resistor_SMD:R_0402_1005Metric"
-			(at 27.94 137.16 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Datasheet" "~"
-			(at 27.94 137.16 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(pin "1"
-			(uuid "8cc471f3-7af0-59f6-86a2-1a3daff1f469")
-		)
-		(pin "2"
-			(uuid "45bf1b8c-b3eb-5a55-9bd1-a62a4547deeb")
-		)
-		(instances
-			(project "TL-TEST-001"
-				(path "/9e021e9c-8f9d-517b-920e-82daea435b21"
-					(reference "R12")
-					(unit 1)
-				)
-			)
-		)
-	)
-	(wire
-		(pts
-			(xy 27.94 133.35)
-			(xy 27.94 130.81)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "c209c8a8-e247-546f-87fd-d3ddcbb93e5a")
-	)
-	(label "CS_N"
-		(at 27.94 130.81 90)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left bottom)
-		)
-		(uuid "a4cfd52f-1ddc-58b4-babf-bd2067078127")
-	)
-	(wire
-		(pts
-			(xy 27.94 140.97)
-			(xy 27.94 143.51)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "c47e5d49-02dd-5723-bbf6-54c25b2181d4")
-	)
-	(label "GND"
-		(at 27.94 143.51 270)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify right bottom)
-		)
-		(uuid "5539016e-e723-5bc6-b2bf-d2bc98597d28")
-	)
-	(symbol
-		(lib_id "Device:R")
-		(at 43.18 139.7 0)
-		(unit 1)
-		(exclude_from_sim no)
-		(in_bom yes)
-		(on_board yes)
-		(dnp no)
-		(uuid "7c25f8f0-c2fb-5a4b-8a44-ae2598c49816")
-		(property "Reference" "R13"
-			(at 43.18 132.08 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Value" "1M"
-			(at 43.18 147.32 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Footprint" "Resistor_SMD:R_0402_1005Metric"
-			(at 43.18 139.7 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Datasheet" "~"
-			(at 43.18 139.7 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(pin "1"
-			(uuid "af1e77a4-d539-5485-a899-553e8cd26dcb")
-		)
-		(pin "2"
-			(uuid "67fee5fc-9f9c-564d-887c-5a9b7d4984a5")
-		)
-		(instances
-			(project "TL-TEST-001"
-				(path "/9e021e9c-8f9d-517b-920e-82daea435b21"
-					(reference "R13")
-					(unit 1)
-				)
-			)
-		)
-	)
-	(wire
-		(pts
-			(xy 43.18 135.89)
-			(xy 43.18 133.35)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "e7728a81-ddd9-5998-a876-69ea185942d3")
-	)
-	(label "RESET_N"
-		(at 43.18 133.35 90)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left bottom)
-		)
-		(uuid "7e1bec59-0b04-5c73-8514-f12ecbc6801c")
-	)
-	(wire
-		(pts
-			(xy 43.18 143.51)
-			(xy 43.18 146.05)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "09d827a3-251e-5163-a3b8-0e5d144397a8")
-	)
-	(label "GND"
-		(at 43.18 146.05 270)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify right bottom)
-		)
-		(uuid "42ac9923-6439-5a97-b13d-74623c7f6cbd")
-	)
-	(symbol
-		(lib_id "Device:R")
-		(at 58.42 139.7 0)
-		(unit 1)
-		(exclude_from_sim no)
-		(in_bom yes)
-		(on_board yes)
-		(dnp no)
-		(uuid "824c04d0-f349-56c3-8ec3-f7c2d445e5ff")
-		(property "Reference" "R14"
-			(at 58.42 132.08 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Value" "10k"
-			(at 58.42 147.32 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Footprint" "Resistor_SMD:R_0402_1005Metric"
-			(at 58.42 139.7 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Datasheet" "~"
-			(at 58.42 139.7 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Talos_Note" "unused expander input held low"
-			(at 58.42 139.7 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(pin "1"
-			(uuid "b9ba01bb-2d84-55a3-a6e0-13a091467747")
-		)
-		(pin "2"
-			(uuid "2c961ef2-5a6f-55f5-8167-b5b26a5e130c")
-		)
-		(instances
-			(project "TL-TEST-001"
-				(path "/9e021e9c-8f9d-517b-920e-82daea435b21"
-					(reference "R14")
-					(unit 1)
-				)
-			)
-		)
-	)
-	(wire
-		(pts
-			(xy 58.42 135.89)
-			(xy 58.42 133.35)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "6c08610b-b731-5ea0-83a3-1b60484064b5")
-	)
-	(label "EXP_NC0"
-		(at 58.42 133.35 90)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left bottom)
-		)
-		(uuid "05b84ef6-a23f-5b3a-b53d-2c340e1a9c1c")
-	)
-	(wire
-		(pts
-			(xy 58.42 143.51)
-			(xy 58.42 146.05)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "4dfebaa1-0cdb-5a42-a333-9ffba99d7181")
-	)
-	(label "GND"
-		(at 58.42 146.05 270)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify right bottom)
-		)
-		(uuid "157be906-d086-5f72-95b0-1e2957c6a7ca")
-	)
-	(symbol
-		(lib_id "Device:R")
-		(at 73.66 139.7 0)
-		(unit 1)
-		(exclude_from_sim no)
-		(in_bom yes)
-		(on_board yes)
-		(dnp no)
-		(uuid "ad07b07a-ef01-501f-8058-a951de07cd99")
-		(property "Reference" "R15"
 			(at 73.66 132.08 0)
 			(effects
 				(font
@@ -4974,7 +4997,7 @@
 				)
 			)
 		)
-		(property "Value" "10k"
+		(property "Value" "100k"
 			(at 73.66 147.32 0)
 			(effects
 				(font
@@ -5000,25 +5023,16 @@
 				(hide yes)
 			)
 		)
-		(property "Talos_Note" "unused expander input held low"
-			(at 73.66 139.7 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
 		(pin "1"
-			(uuid "a6ee8aba-18e9-558c-8597-22debbd39096")
+			(uuid "198fb446-f243-5c14-bfcc-a12782162654")
 		)
 		(pin "2"
-			(uuid "b7253db3-b184-5dce-9a35-1dc31d94404a")
+			(uuid "57b68dea-310c-5aed-ae70-b6995daf9eff")
 		)
 		(instances
 			(project "TL-TEST-001"
 				(path "/9e021e9c-8f9d-517b-920e-82daea435b21"
-					(reference "R15")
+					(reference "R11")
 					(unit 1)
 				)
 			)
@@ -5033,9 +5047,9 @@
 			(width 0)
 			(type default)
 		)
-		(uuid "5e8e7fc4-a4cc-5c1d-809e-7dfd12fed15f")
+		(uuid "a47c6e36-766d-5530-86f6-4fe5fbc7c447")
 	)
-	(label "EXP_NC1"
+	(label "UART_TX"
 		(at 73.66 133.35 90)
 		(effects
 			(font
@@ -5043,7 +5057,7 @@
 			)
 			(justify left bottom)
 		)
-		(uuid "00d423e0-7e61-525d-a6b9-8821107a0e77")
+		(uuid "3a3fd3a5-f1a6-588a-b961-240c105a6e2e")
 	)
 	(wire
 		(pts
@@ -5054,7 +5068,7 @@
 			(width 0)
 			(type default)
 		)
-		(uuid "f33db22e-6d55-5d64-9007-aea5373fb31b")
+		(uuid "044cbd47-d6ac-551c-8617-87874897f84d")
 	)
 	(label "GND"
 		(at 73.66 146.05 270)
@@ -5064,27 +5078,27 @@
 			)
 			(justify right bottom)
 		)
-		(uuid "190f8bba-d122-54a3-879f-5fc73cd190eb")
+		(uuid "708a2ec7-1986-5670-9a08-180d09c3cabc")
 	)
 	(symbol
 		(lib_id "Device:R")
-		(at 88.9 139.7 0)
+		(at 88.9 137.16 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
-		(uuid "5789afdd-0a75-54f4-bff1-5bf1a22b046e")
-		(property "Reference" "R16"
-			(at 88.9 132.08 0)
+		(uuid "aab7488e-2100-5029-a9c9-375c62addb78")
+		(property "Reference" "R12"
+			(at 88.9 129.54 0)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
 			)
 		)
-		(property "Value" "10k"
-			(at 88.9 147.32 0)
+		(property "Value" "1M"
+			(at 88.9 144.78 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -5092,7 +5106,7 @@
 			)
 		)
 		(property "Footprint" "Resistor_SMD:R_0402_1005Metric"
-			(at 88.9 139.7 0)
+			(at 88.9 137.16 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -5101,16 +5115,7 @@
 			)
 		)
 		(property "Datasheet" "~"
-			(at 88.9 139.7 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Talos_Note" "unused expander input held low"
-			(at 88.9 139.7 0)
+			(at 88.9 137.16 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -5119,15 +5124,15 @@
 			)
 		)
 		(pin "1"
-			(uuid "e870b724-6c0d-517c-8d02-3e2ec5fc64a7")
+			(uuid "8cc471f3-7af0-59f6-86a2-1a3daff1f469")
 		)
 		(pin "2"
-			(uuid "b1b14dcf-e80a-5ea7-963b-89710650df68")
+			(uuid "45bf1b8c-b3eb-5a55-9bd1-a62a4547deeb")
 		)
 		(instances
 			(project "TL-TEST-001"
 				(path "/9e021e9c-8f9d-517b-920e-82daea435b21"
-					(reference "R16")
+					(reference "R12")
 					(unit 1)
 				)
 			)
@@ -5135,45 +5140,45 @@
 	)
 	(wire
 		(pts
-			(xy 88.9 135.89)
 			(xy 88.9 133.35)
+			(xy 88.9 130.81)
 		)
 		(stroke
 			(width 0)
 			(type default)
 		)
-		(uuid "f1dccf8c-671f-5a7c-b19e-f507caf4946e")
+		(uuid "c209c8a8-e247-546f-87fd-d3ddcbb93e5a")
 	)
-	(label "EXP_NC2"
-		(at 88.9 133.35 90)
+	(label "CS_N"
+		(at 88.9 130.81 90)
 		(effects
 			(font
 				(size 1.27 1.27)
 			)
 			(justify left bottom)
 		)
-		(uuid "37658cb4-51f6-5369-b7d9-9e9880736de4")
+		(uuid "a4cfd52f-1ddc-58b4-babf-bd2067078127")
 	)
 	(wire
 		(pts
+			(xy 88.9 140.97)
 			(xy 88.9 143.51)
-			(xy 88.9 146.05)
 		)
 		(stroke
 			(width 0)
 			(type default)
 		)
-		(uuid "f89b9e20-ddf6-581f-b753-7f6feee26057")
+		(uuid "c47e5d49-02dd-5723-bbf6-54c25b2181d4")
 	)
 	(label "GND"
-		(at 88.9 146.05 270)
+		(at 88.9 143.51 270)
 		(effects
 			(font
 				(size 1.27 1.27)
 			)
 			(justify right bottom)
 		)
-		(uuid "fcb4b5de-2433-5391-a794-a656852ad41a")
+		(uuid "5539016e-e723-5bc6-b2bf-d2bc98597d28")
 	)
 	(symbol
 		(lib_id "Device:R")
@@ -5183,8 +5188,8 @@
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
-		(uuid "fad2ef0e-f390-538e-b192-25d0231af341")
-		(property "Reference" "R17"
+		(uuid "7c25f8f0-c2fb-5a4b-8a44-ae2598c49816")
+		(property "Reference" "R13"
 			(at 104.14 132.08 0)
 			(effects
 				(font
@@ -5192,7 +5197,7 @@
 				)
 			)
 		)
-		(property "Value" "10k"
+		(property "Value" "1M"
 			(at 104.14 147.32 0)
 			(effects
 				(font
@@ -5218,25 +5223,16 @@
 				(hide yes)
 			)
 		)
-		(property "Talos_Note" "unused expander input held low"
-			(at 104.14 139.7 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
 		(pin "1"
-			(uuid "9f92b0a8-4d76-5946-910d-13f8f355cc32")
+			(uuid "af1e77a4-d539-5485-a899-553e8cd26dcb")
 		)
 		(pin "2"
-			(uuid "7d47ff28-c0fe-58e1-af86-4d1b48cdeb55")
+			(uuid "67fee5fc-9f9c-564d-887c-5a9b7d4984a5")
 		)
 		(instances
 			(project "TL-TEST-001"
 				(path "/9e021e9c-8f9d-517b-920e-82daea435b21"
-					(reference "R17")
+					(reference "R13")
 					(unit 1)
 				)
 			)
@@ -5251,9 +5247,9 @@
 			(width 0)
 			(type default)
 		)
-		(uuid "cf51a06f-12c7-51e2-b675-70b6870fcc2a")
+		(uuid "e7728a81-ddd9-5998-a876-69ea185942d3")
 	)
-	(label "EXP_NC3"
+	(label "RESET_N"
 		(at 104.14 133.35 90)
 		(effects
 			(font
@@ -5261,7 +5257,7 @@
 			)
 			(justify left bottom)
 		)
-		(uuid "aaad1d5e-ccbb-5777-9e0e-881707710820")
+		(uuid "7e1bec59-0b04-5c73-8514-f12ecbc6801c")
 	)
 	(wire
 		(pts
@@ -5272,7 +5268,7 @@
 			(width 0)
 			(type default)
 		)
-		(uuid "8ab777d5-307e-570a-843d-9ba1517c491d")
+		(uuid "09d827a3-251e-5163-a3b8-0e5d144397a8")
 	)
 	(label "GND"
 		(at 104.14 146.05 270)
@@ -5282,7 +5278,7 @@
 			)
 			(justify right bottom)
 		)
-		(uuid "7222a9d0-79d0-5d0f-9178-3533771eb055")
+		(uuid "42ac9923-6439-5a97-b13d-74623c7f6cbd")
 	)
 	(symbol
 		(lib_id "Device:R")
@@ -5292,8 +5288,8 @@
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
-		(uuid "045e8369-1905-5021-b8e2-05481472d029")
-		(property "Reference" "R18"
+		(uuid "824c04d0-f349-56c3-8ec3-f7c2d445e5ff")
+		(property "Reference" "R14"
 			(at 119.38 132.08 0)
 			(effects
 				(font
@@ -5337,15 +5333,15 @@
 			)
 		)
 		(pin "1"
-			(uuid "8d288ca4-f74c-5c80-a0bc-54fddaab7d5f")
+			(uuid "b9ba01bb-2d84-55a3-a6e0-13a091467747")
 		)
 		(pin "2"
-			(uuid "fccd2870-cc21-5e5b-98aa-bf533a2c7135")
+			(uuid "2c961ef2-5a6f-55f5-8167-b5b26a5e130c")
 		)
 		(instances
 			(project "TL-TEST-001"
 				(path "/9e021e9c-8f9d-517b-920e-82daea435b21"
-					(reference "R18")
+					(reference "R14")
 					(unit 1)
 				)
 			)
@@ -5360,9 +5356,9 @@
 			(width 0)
 			(type default)
 		)
-		(uuid "7be3c05b-d954-50b6-b2c9-ea163c28ce96")
+		(uuid "6c08610b-b731-5ea0-83a3-1b60484064b5")
 	)
-	(label "EXP_NC4"
+	(label "EXP_NC0"
 		(at 119.38 133.35 90)
 		(effects
 			(font
@@ -5370,7 +5366,7 @@
 			)
 			(justify left bottom)
 		)
-		(uuid "5ad102a2-e0ce-5f9f-bd36-01e3b7dcadfc")
+		(uuid "05b84ef6-a23f-5b3a-b53d-2c340e1a9c1c")
 	)
 	(wire
 		(pts
@@ -5381,7 +5377,7 @@
 			(width 0)
 			(type default)
 		)
-		(uuid "af2ecb6b-73cf-50e5-86e5-778e44461943")
+		(uuid "4dfebaa1-0cdb-5a42-a333-9ffba99d7181")
 	)
 	(label "GND"
 		(at 119.38 146.05 270)
@@ -5391,7 +5387,7 @@
 			)
 			(justify right bottom)
 		)
-		(uuid "2dfd71da-bed4-5b36-9024-3f2f01e0df2d")
+		(uuid "157be906-d086-5f72-95b0-1e2957c6a7ca")
 	)
 	(symbol
 		(lib_id "Device:R")
@@ -5401,8 +5397,8 @@
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
-		(uuid "f0401837-be6f-560e-b1a4-7dc7b86a7815")
-		(property "Reference" "R19"
+		(uuid "ad07b07a-ef01-501f-8058-a951de07cd99")
+		(property "Reference" "R15"
 			(at 134.62 132.08 0)
 			(effects
 				(font
@@ -5446,6 +5442,442 @@
 			)
 		)
 		(pin "1"
+			(uuid "a6ee8aba-18e9-558c-8597-22debbd39096")
+		)
+		(pin "2"
+			(uuid "b7253db3-b184-5dce-9a35-1dc31d94404a")
+		)
+		(instances
+			(project "TL-TEST-001"
+				(path "/9e021e9c-8f9d-517b-920e-82daea435b21"
+					(reference "R15")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(wire
+		(pts
+			(xy 134.62 135.89)
+			(xy 134.62 133.35)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "5e8e7fc4-a4cc-5c1d-809e-7dfd12fed15f")
+	)
+	(label "EXP_NC1"
+		(at 134.62 133.35 90)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "00d423e0-7e61-525d-a6b9-8821107a0e77")
+	)
+	(wire
+		(pts
+			(xy 134.62 143.51)
+			(xy 134.62 146.05)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "f33db22e-6d55-5d64-9007-aea5373fb31b")
+	)
+	(label "GND"
+		(at 134.62 146.05 270)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right bottom)
+		)
+		(uuid "190f8bba-d122-54a3-879f-5fc73cd190eb")
+	)
+	(symbol
+		(lib_id "Device:R")
+		(at 149.86 139.7 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "5789afdd-0a75-54f4-bff1-5bf1a22b046e")
+		(property "Reference" "R16"
+			(at 149.86 132.08 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "10k"
+			(at 149.86 147.32 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" "Resistor_SMD:R_0402_1005Metric"
+			(at 149.86 139.7 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" "~"
+			(at 149.86 139.7 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Talos_Note" "unused expander input held low"
+			(at 149.86 139.7 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "e870b724-6c0d-517c-8d02-3e2ec5fc64a7")
+		)
+		(pin "2"
+			(uuid "b1b14dcf-e80a-5ea7-963b-89710650df68")
+		)
+		(instances
+			(project "TL-TEST-001"
+				(path "/9e021e9c-8f9d-517b-920e-82daea435b21"
+					(reference "R16")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(wire
+		(pts
+			(xy 149.86 135.89)
+			(xy 149.86 133.35)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "f1dccf8c-671f-5a7c-b19e-f507caf4946e")
+	)
+	(label "EXP_NC2"
+		(at 149.86 133.35 90)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "37658cb4-51f6-5369-b7d9-9e9880736de4")
+	)
+	(wire
+		(pts
+			(xy 149.86 143.51)
+			(xy 149.86 146.05)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "f89b9e20-ddf6-581f-b753-7f6feee26057")
+	)
+	(label "GND"
+		(at 149.86 146.05 270)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right bottom)
+		)
+		(uuid "fcb4b5de-2433-5391-a794-a656852ad41a")
+	)
+	(symbol
+		(lib_id "Device:R")
+		(at 165.1 139.7 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "fad2ef0e-f390-538e-b192-25d0231af341")
+		(property "Reference" "R17"
+			(at 165.1 132.08 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "10k"
+			(at 165.1 147.32 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" "Resistor_SMD:R_0402_1005Metric"
+			(at 165.1 139.7 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" "~"
+			(at 165.1 139.7 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Talos_Note" "unused expander input held low"
+			(at 165.1 139.7 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "9f92b0a8-4d76-5946-910d-13f8f355cc32")
+		)
+		(pin "2"
+			(uuid "7d47ff28-c0fe-58e1-af86-4d1b48cdeb55")
+		)
+		(instances
+			(project "TL-TEST-001"
+				(path "/9e021e9c-8f9d-517b-920e-82daea435b21"
+					(reference "R17")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(wire
+		(pts
+			(xy 165.1 135.89)
+			(xy 165.1 133.35)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "cf51a06f-12c7-51e2-b675-70b6870fcc2a")
+	)
+	(label "EXP_NC3"
+		(at 165.1 133.35 90)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "aaad1d5e-ccbb-5777-9e0e-881707710820")
+	)
+	(wire
+		(pts
+			(xy 165.1 143.51)
+			(xy 165.1 146.05)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "8ab777d5-307e-570a-843d-9ba1517c491d")
+	)
+	(label "GND"
+		(at 165.1 146.05 270)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right bottom)
+		)
+		(uuid "7222a9d0-79d0-5d0f-9178-3533771eb055")
+	)
+	(symbol
+		(lib_id "Device:R")
+		(at 180.34 139.7 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "045e8369-1905-5021-b8e2-05481472d029")
+		(property "Reference" "R18"
+			(at 180.34 132.08 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "10k"
+			(at 180.34 147.32 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" "Resistor_SMD:R_0402_1005Metric"
+			(at 180.34 139.7 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" "~"
+			(at 180.34 139.7 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Talos_Note" "unused expander input held low"
+			(at 180.34 139.7 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "8d288ca4-f74c-5c80-a0bc-54fddaab7d5f")
+		)
+		(pin "2"
+			(uuid "fccd2870-cc21-5e5b-98aa-bf533a2c7135")
+		)
+		(instances
+			(project "TL-TEST-001"
+				(path "/9e021e9c-8f9d-517b-920e-82daea435b21"
+					(reference "R18")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(wire
+		(pts
+			(xy 180.34 135.89)
+			(xy 180.34 133.35)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "7be3c05b-d954-50b6-b2c9-ea163c28ce96")
+	)
+	(label "EXP_NC4"
+		(at 180.34 133.35 90)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "5ad102a2-e0ce-5f9f-bd36-01e3b7dcadfc")
+	)
+	(wire
+		(pts
+			(xy 180.34 143.51)
+			(xy 180.34 146.05)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "af2ecb6b-73cf-50e5-86e5-778e44461943")
+	)
+	(label "GND"
+		(at 180.34 146.05 270)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right bottom)
+		)
+		(uuid "2dfd71da-bed4-5b36-9024-3f2f01e0df2d")
+	)
+	(symbol
+		(lib_id "Device:R")
+		(at 195.58 139.7 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "f0401837-be6f-560e-b1a4-7dc7b86a7815")
+		(property "Reference" "R19"
+			(at 195.58 132.08 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "10k"
+			(at 195.58 147.32 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" "Resistor_SMD:R_0402_1005Metric"
+			(at 195.58 139.7 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" "~"
+			(at 195.58 139.7 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Talos_Note" "unused expander input held low"
+			(at 195.58 139.7 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
 			(uuid "248b018c-32ed-50cf-8faa-fb5cb8c01c05")
 		)
 		(pin "2"
@@ -5462,8 +5894,8 @@
 	)
 	(wire
 		(pts
-			(xy 134.62 135.89)
-			(xy 134.62 133.35)
+			(xy 195.58 135.89)
+			(xy 195.58 133.35)
 		)
 		(stroke
 			(width 0)
@@ -5472,7 +5904,7 @@
 		(uuid "70ca5ffb-3af8-5a88-be7a-a3000cbb2f51")
 	)
 	(label "EXP_NC5"
-		(at 134.62 133.35 90)
+		(at 195.58 133.35 90)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -5483,8 +5915,8 @@
 	)
 	(wire
 		(pts
-			(xy 134.62 143.51)
-			(xy 134.62 146.05)
+			(xy 195.58 143.51)
+			(xy 195.58 146.05)
 		)
 		(stroke
 			(width 0)
@@ -5493,7 +5925,7 @@
 		(uuid "6131098d-b8ae-5277-a073-032b7555f034")
 	)
 	(label "GND"
-		(at 134.62 146.05 270)
+		(at 195.58 146.05 270)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -5504,7 +5936,7 @@
 	)
 	(symbol
 		(lib_id "Connector:TestPoint")
-		(at 149.86 127 0)
+		(at 210.82 127 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom no)
@@ -5512,310 +5944,6 @@
 		(dnp no)
 		(uuid "697c8874-c00d-52ad-848e-0d84c66efe0b")
 		(property "Reference" "TP1"
-			(at 149.86 119.38 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Value" "V3V3_AON"
-			(at 149.86 134.62 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Footprint" "TestPoint:TestPoint_Pad_D1.0mm"
-			(at 149.86 127 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Datasheet" "~"
-			(at 149.86 127 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(pin "1"
-			(uuid "2f161bfd-5650-5b94-b632-145327e36385")
-		)
-		(instances
-			(project "TL-TEST-001"
-				(path "/9e021e9c-8f9d-517b-920e-82daea435b21"
-					(reference "TP1")
-					(unit 1)
-				)
-			)
-		)
-	)
-	(wire
-		(pts
-			(xy 149.86 127)
-			(xy 149.86 129.54)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "003998ce-c49a-59eb-b6e9-581fa7739e6e")
-	)
-	(label "V3V3_AON"
-		(at 149.86 129.54 270)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify right bottom)
-		)
-		(uuid "82f55a7d-5d53-5ec8-b171-97701ce90385")
-	)
-	(symbol
-		(lib_id "Connector:TestPoint")
-		(at 165.1 127 0)
-		(unit 1)
-		(exclude_from_sim no)
-		(in_bom no)
-		(on_board yes)
-		(dnp no)
-		(uuid "ea31a10c-17fd-53fd-8457-01bcc80e5b95")
-		(property "Reference" "TP2"
-			(at 165.1 119.38 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Value" "GND"
-			(at 165.1 134.62 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Footprint" "TestPoint:TestPoint_Pad_D1.0mm"
-			(at 165.1 127 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Datasheet" "~"
-			(at 165.1 127 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(pin "1"
-			(uuid "97c36ea0-4df7-5db6-a731-5a53c51ca5e4")
-		)
-		(instances
-			(project "TL-TEST-001"
-				(path "/9e021e9c-8f9d-517b-920e-82daea435b21"
-					(reference "TP2")
-					(unit 1)
-				)
-			)
-		)
-	)
-	(wire
-		(pts
-			(xy 165.1 127)
-			(xy 165.1 129.54)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "46496060-2353-524a-a6e4-dff764d4a9f2")
-	)
-	(label "GND"
-		(at 165.1 129.54 270)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify right bottom)
-		)
-		(uuid "41c7293b-3dcc-5a5b-bbdd-0cf7b316e965")
-	)
-	(symbol
-		(lib_id "Connector:TestPoint")
-		(at 180.34 127 0)
-		(unit 1)
-		(exclude_from_sim no)
-		(in_bom no)
-		(on_board yes)
-		(dnp no)
-		(uuid "b7966a0b-0b33-59f9-90f0-444120f7e4b7")
-		(property "Reference" "TP3"
-			(at 180.34 119.38 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Value" "V3V3_SW"
-			(at 180.34 134.62 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Footprint" "TestPoint:TestPoint_Pad_D1.0mm"
-			(at 180.34 127 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Datasheet" "~"
-			(at 180.34 127 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(pin "1"
-			(uuid "5eef7868-354b-5f20-958b-59bbcf5c9ff0")
-		)
-		(instances
-			(project "TL-TEST-001"
-				(path "/9e021e9c-8f9d-517b-920e-82daea435b21"
-					(reference "TP3")
-					(unit 1)
-				)
-			)
-		)
-	)
-	(wire
-		(pts
-			(xy 180.34 127)
-			(xy 180.34 129.54)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "75ce852f-0629-5d7f-9ff9-c168bb2f4156")
-	)
-	(label "V3V3_SW"
-		(at 180.34 129.54 270)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify right bottom)
-		)
-		(uuid "bcaa2a7d-3905-595e-a7b1-88f690369439")
-	)
-	(symbol
-		(lib_id "Connector:TestPoint")
-		(at 195.58 127 0)
-		(unit 1)
-		(exclude_from_sim no)
-		(in_bom no)
-		(on_board yes)
-		(dnp no)
-		(uuid "eec0d472-a70d-501d-ae2e-b6482441dcc9")
-		(property "Reference" "TP4"
-			(at 195.58 119.38 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Value" "WAKE"
-			(at 195.58 134.62 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Footprint" "TestPoint:TestPoint_Pad_D1.0mm"
-			(at 195.58 127 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Datasheet" "~"
-			(at 195.58 127 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(pin "1"
-			(uuid "59c91e83-c439-5238-ba16-af98fd9037ca")
-		)
-		(instances
-			(project "TL-TEST-001"
-				(path "/9e021e9c-8f9d-517b-920e-82daea435b21"
-					(reference "TP4")
-					(unit 1)
-				)
-			)
-		)
-	)
-	(wire
-		(pts
-			(xy 195.58 127)
-			(xy 195.58 129.54)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "70b58560-c86c-5944-9720-f8130b24b185")
-	)
-	(label "WAKE"
-		(at 195.58 129.54 270)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify right bottom)
-		)
-		(uuid "717945b3-7404-5e43-b8b9-66ea8217f55a")
-	)
-	(symbol
-		(lib_id "Connector:TestPoint")
-		(at 210.82 127 0)
-		(unit 1)
-		(exclude_from_sim no)
-		(in_bom no)
-		(on_board yes)
-		(dnp no)
-		(uuid "ab5616df-b3bd-59de-8916-0d4fdafb6686")
-		(property "Reference" "TP5"
 			(at 210.82 119.38 0)
 			(effects
 				(font
@@ -5823,7 +5951,7 @@
 				)
 			)
 		)
-		(property "Value" "SDA"
+		(property "Value" "V3V3_AON"
 			(at 210.82 134.62 0)
 			(effects
 				(font
@@ -5850,12 +5978,12 @@
 			)
 		)
 		(pin "1"
-			(uuid "954eb24f-37eb-5647-9dde-079b5bcf18b9")
+			(uuid "2f161bfd-5650-5b94-b632-145327e36385")
 		)
 		(instances
 			(project "TL-TEST-001"
 				(path "/9e021e9c-8f9d-517b-920e-82daea435b21"
-					(reference "TP5")
+					(reference "TP1")
 					(unit 1)
 				)
 			)
@@ -5870,9 +5998,9 @@
 			(width 0)
 			(type default)
 		)
-		(uuid "2f6c629c-3a4a-5aae-b58e-5fc63129bd9f")
+		(uuid "003998ce-c49a-59eb-b6e9-581fa7739e6e")
 	)
-	(label "SDA"
+	(label "V3V3_AON"
 		(at 210.82 129.54 270)
 		(effects
 			(font
@@ -5880,7 +6008,7 @@
 			)
 			(justify right bottom)
 		)
-		(uuid "c72db3cc-1970-52a2-a10d-0ec00cc90edc")
+		(uuid "82f55a7d-5d53-5ec8-b171-97701ce90385")
 	)
 	(symbol
 		(lib_id "Connector:TestPoint")
@@ -5890,8 +6018,8 @@
 		(in_bom no)
 		(on_board yes)
 		(dnp no)
-		(uuid "16c918a4-ebeb-5365-9c90-d439c4dd6a0e")
-		(property "Reference" "TP6"
+		(uuid "ea31a10c-17fd-53fd-8457-01bcc80e5b95")
+		(property "Reference" "TP2"
 			(at 226.06 119.38 0)
 			(effects
 				(font
@@ -5899,7 +6027,7 @@
 				)
 			)
 		)
-		(property "Value" "SCL"
+		(property "Value" "GND"
 			(at 226.06 134.62 0)
 			(effects
 				(font
@@ -5926,12 +6054,12 @@
 			)
 		)
 		(pin "1"
-			(uuid "f384fd54-426d-54bd-a480-11565b277e1f")
+			(uuid "97c36ea0-4df7-5db6-a731-5a53c51ca5e4")
 		)
 		(instances
 			(project "TL-TEST-001"
 				(path "/9e021e9c-8f9d-517b-920e-82daea435b21"
-					(reference "TP6")
+					(reference "TP2")
 					(unit 1)
 				)
 			)
@@ -5946,9 +6074,9 @@
 			(width 0)
 			(type default)
 		)
-		(uuid "04700876-5cf3-5dcd-9670-5ce77a79e62e")
+		(uuid "46496060-2353-524a-a6e4-dff764d4a9f2")
 	)
-	(label "SCL"
+	(label "GND"
 		(at 226.06 129.54 270)
 		(effects
 			(font
@@ -5956,7 +6084,7 @@
 			)
 			(justify right bottom)
 		)
-		(uuid "df88977b-88d9-5e44-a20e-65a045dfa293")
+		(uuid "41c7293b-3dcc-5a5b-bbdd-0cf7b316e965")
 	)
 	(symbol
 		(lib_id "Connector:TestPoint")
@@ -5966,8 +6094,8 @@
 		(in_bom no)
 		(on_board yes)
 		(dnp no)
-		(uuid "85b39c59-a6b5-525f-aadf-1d8792c391f7")
-		(property "Reference" "TP7"
+		(uuid "b7966a0b-0b33-59f9-90f0-444120f7e4b7")
+		(property "Reference" "TP3"
 			(at 241.3 119.38 0)
 			(effects
 				(font
@@ -5975,7 +6103,7 @@
 				)
 			)
 		)
-		(property "Value" "ALERT_N"
+		(property "Value" "V3V3_SW"
 			(at 241.3 134.62 0)
 			(effects
 				(font
@@ -6002,12 +6130,12 @@
 			)
 		)
 		(pin "1"
-			(uuid "3b77a79b-1c03-5b40-b690-1746b66cbba2")
+			(uuid "5eef7868-354b-5f20-958b-59bbcf5c9ff0")
 		)
 		(instances
 			(project "TL-TEST-001"
 				(path "/9e021e9c-8f9d-517b-920e-82daea435b21"
-					(reference "TP7")
+					(reference "TP3")
 					(unit 1)
 				)
 			)
@@ -6022,9 +6150,9 @@
 			(width 0)
 			(type default)
 		)
-		(uuid "3643bd80-e5e2-533f-9f87-424664528ba5")
+		(uuid "75ce852f-0629-5d7f-9ff9-c168bb2f4156")
 	)
-	(label "ALERT_N"
+	(label "V3V3_SW"
 		(at 241.3 129.54 270)
 		(effects
 			(font
@@ -6032,27 +6160,26 @@
 			)
 			(justify right bottom)
 		)
-		(uuid "fb72505b-4e3a-5454-b1ef-d0b1283103bf")
+		(uuid "bcaa2a7d-3905-595e-a7b1-88f690369439")
 	)
 	(symbol
-		(lib_id "power:PWR_FLAG")
+		(lib_id "Connector:TestPoint")
 		(at 256.54 127 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom no)
-		(on_board no)
+		(on_board yes)
 		(dnp no)
-		(uuid "fa0a2580-b7a6-5dc9-b198-82ac8afe8d20")
-		(property "Reference" "#FLG01"
+		(uuid "eec0d472-a70d-501d-ae2e-b6482441dcc9")
+		(property "Reference" "TP4"
 			(at 256.54 119.38 0)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
-				(hide yes)
 			)
 		)
-		(property "Value" "PWR_FLAG"
+		(property "Value" "WAKE"
 			(at 256.54 134.62 0)
 			(effects
 				(font
@@ -6060,7 +6187,7 @@
 				)
 			)
 		)
-		(property "Footprint" ""
+		(property "Footprint" "TestPoint:TestPoint_Pad_D1.0mm"
 			(at 256.54 127 0)
 			(effects
 				(font
@@ -6071,6 +6198,311 @@
 		)
 		(property "Datasheet" "~"
 			(at 256.54 127 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "59c91e83-c439-5238-ba16-af98fd9037ca")
+		)
+		(instances
+			(project "TL-TEST-001"
+				(path "/9e021e9c-8f9d-517b-920e-82daea435b21"
+					(reference "TP4")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(wire
+		(pts
+			(xy 256.54 127)
+			(xy 256.54 129.54)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "70b58560-c86c-5944-9720-f8130b24b185")
+	)
+	(label "WAKE"
+		(at 256.54 129.54 270)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right bottom)
+		)
+		(uuid "717945b3-7404-5e43-b8b9-66ea8217f55a")
+	)
+	(symbol
+		(lib_id "Connector:TestPoint")
+		(at 271.78 127 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom no)
+		(on_board yes)
+		(dnp no)
+		(uuid "ab5616df-b3bd-59de-8916-0d4fdafb6686")
+		(property "Reference" "TP5"
+			(at 271.78 119.38 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "SDA"
+			(at 271.78 134.62 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" "TestPoint:TestPoint_Pad_D1.0mm"
+			(at 271.78 127 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" "~"
+			(at 271.78 127 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "954eb24f-37eb-5647-9dde-079b5bcf18b9")
+		)
+		(instances
+			(project "TL-TEST-001"
+				(path "/9e021e9c-8f9d-517b-920e-82daea435b21"
+					(reference "TP5")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(wire
+		(pts
+			(xy 271.78 127)
+			(xy 271.78 129.54)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "2f6c629c-3a4a-5aae-b58e-5fc63129bd9f")
+	)
+	(label "SDA"
+		(at 271.78 129.54 270)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right bottom)
+		)
+		(uuid "c72db3cc-1970-52a2-a10d-0ec00cc90edc")
+	)
+	(symbol
+		(lib_id "Connector:TestPoint")
+		(at 287.02 127 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom no)
+		(on_board yes)
+		(dnp no)
+		(uuid "16c918a4-ebeb-5365-9c90-d439c4dd6a0e")
+		(property "Reference" "TP6"
+			(at 287.02 119.38 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "SCL"
+			(at 287.02 134.62 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" "TestPoint:TestPoint_Pad_D1.0mm"
+			(at 287.02 127 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" "~"
+			(at 287.02 127 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "f384fd54-426d-54bd-a480-11565b277e1f")
+		)
+		(instances
+			(project "TL-TEST-001"
+				(path "/9e021e9c-8f9d-517b-920e-82daea435b21"
+					(reference "TP6")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(wire
+		(pts
+			(xy 287.02 127)
+			(xy 287.02 129.54)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "04700876-5cf3-5dcd-9670-5ce77a79e62e")
+	)
+	(label "SCL"
+		(at 287.02 129.54 270)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right bottom)
+		)
+		(uuid "df88977b-88d9-5e44-a20e-65a045dfa293")
+	)
+	(symbol
+		(lib_id "Connector:TestPoint")
+		(at 302.26 127 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom no)
+		(on_board yes)
+		(dnp no)
+		(uuid "85b39c59-a6b5-525f-aadf-1d8792c391f7")
+		(property "Reference" "TP7"
+			(at 302.26 119.38 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "ALERT_N"
+			(at 302.26 134.62 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" "TestPoint:TestPoint_Pad_D1.0mm"
+			(at 302.26 127 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" "~"
+			(at 302.26 127 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "3b77a79b-1c03-5b40-b690-1746b66cbba2")
+		)
+		(instances
+			(project "TL-TEST-001"
+				(path "/9e021e9c-8f9d-517b-920e-82daea435b21"
+					(reference "TP7")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(wire
+		(pts
+			(xy 302.26 127)
+			(xy 302.26 129.54)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "3643bd80-e5e2-533f-9f87-424664528ba5")
+	)
+	(label "ALERT_N"
+		(at 302.26 129.54 270)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right bottom)
+		)
+		(uuid "fb72505b-4e3a-5454-b1ef-d0b1283103bf")
+	)
+	(symbol
+		(lib_id "power:PWR_FLAG")
+		(at 317.5 127 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom no)
+		(on_board no)
+		(dnp no)
+		(uuid "fa0a2580-b7a6-5dc9-b198-82ac8afe8d20")
+		(property "Reference" "#FLG01"
+			(at 317.5 119.38 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Value" "PWR_FLAG"
+			(at 317.5 134.62 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at 317.5 127 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" "~"
+			(at 317.5 127 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -6092,8 +6524,8 @@
 	)
 	(wire
 		(pts
-			(xy 256.54 127)
-			(xy 256.54 129.54)
+			(xy 317.5 127)
+			(xy 317.5 129.54)
 		)
 		(stroke
 			(width 0)
@@ -6102,7 +6534,7 @@
 		(uuid "44760913-6f93-5597-b5bd-37789f08730f")
 	)
 	(label "GND"
-		(at 256.54 129.54 270)
+		(at 317.5 129.54 270)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -6113,7 +6545,7 @@
 	)
 	(symbol
 		(lib_id "power:PWR_FLAG")
-		(at 271.78 127 0)
+		(at 332.74 127 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom no)
@@ -6121,7 +6553,7 @@
 		(dnp no)
 		(uuid "9f34aece-20da-50a7-87ca-1d266127760c")
 		(property "Reference" "#FLG02"
-			(at 271.78 119.38 0)
+			(at 332.74 119.38 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -6130,7 +6562,7 @@
 			)
 		)
 		(property "Value" "PWR_FLAG"
-			(at 271.78 134.62 0)
+			(at 332.74 134.62 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -6138,7 +6570,7 @@
 			)
 		)
 		(property "Footprint" ""
-			(at 271.78 127 0)
+			(at 332.74 127 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -6147,7 +6579,7 @@
 			)
 		)
 		(property "Datasheet" "~"
-			(at 271.78 127 0)
+			(at 332.74 127 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -6169,8 +6601,8 @@
 	)
 	(wire
 		(pts
-			(xy 271.78 127)
-			(xy 271.78 129.54)
+			(xy 332.74 127)
+			(xy 332.74 129.54)
 		)
 		(stroke
 			(width 0)
@@ -6179,7 +6611,7 @@
 		(uuid "76bac2e3-a4ac-5604-9853-7ce759620948")
 	)
 	(label "V3V3_AON"
-		(at 271.78 129.54 270)
+		(at 332.74 129.54 270)
 		(effects
 			(font
 				(size 1.27 1.27)

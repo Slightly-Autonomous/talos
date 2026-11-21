@@ -24,13 +24,15 @@ class Gpio final : public IGpio {
  public:
   // Also parks the board's shared SPI lines (BoardSupport::spi_*): nothing
   // drives SPI yet, and after reset GPIO4 (MTCK) has its weak pull-up on and
-  // MISO floats, which would idle SCK high into every seated card.
+  // MISO floats, which would idle SCK high into every seated card. Configures
+  // EXP_WAKE as an input and the status LED as an output, off.
   explicit Gpio(const BoardSupport& b);
   bool read(std::uint8_t line) override;
   bool write(std::uint8_t line, bool level) override;
 
  private:
-  std::uint8_t output_ = 0xFF;  // the only output line (mux reset)
+  std::uint8_t mux_reset_ = 0xFF;  // output lines the board declares; nothing else is driven
+  std::uint8_t status_led_ = 0xFF;
 };
 
 class I2c final : public II2c {
@@ -86,7 +88,8 @@ class Store final : public IStore {
 // Reset cause, ext1 wake lines and LP RAM for NodeRuntime (deep-sleep wakes are
 // resets on the ESP32-H2). Sleep entry itself is not wired yet: main.cc still
 // light-polls. The ext1 mask is kept armed so entering deep sleep needs no
-// further setup. Per-pin wake levels on the H2 are unverified (HD-004).
+// further setup. Every wake line on TL-SN-001 is active high (slot WAKE, and
+// EXP_WAKE through the inverter), so one ANY_HIGH mask serves them all (HD-034).
 class Sleep final : public ISleep {
  public:
   Sleep();

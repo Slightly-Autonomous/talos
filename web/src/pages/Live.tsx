@@ -4,18 +4,20 @@ import { ArmMode } from "@talos/contracts/talos/v1/rule_pb";
 import { FloorPlan } from "../components/FloorPlan";
 import { useHub } from "../hub/HubProvider";
 import { CommandList } from "../components/CommandList";
-import { armLabel, describeEntry, deviceHealth } from "../model/view";
+import {
+  armLabel,
+  describeEntry,
+  deviceHealth,
+  deviceTone,
+  formatRemaining,
+  maintenanceFor,
+  tamperLabel,
+  tamperStatus,
+} from "../model/view";
+import { endMaintenanceCommandRequest, maintenanceCommandRequest } from "../model/commands";
 import type { Health } from "@talos/contracts/talos/v1/health_pb";
 import { HealthStatus } from "@talos/contracts/talos/v1/health_pb";
-
-const HEALTH_LABEL: Record<number, [string, "fresh" | "stale" | "unknown"]> = {
-  [HealthStatus.HEALTHY]: ["healthy", "fresh"],
-  [HealthStatus.DEGRADED]: ["degraded", "stale"],
-  [HealthStatus.OFFLINE]: ["offline", "unknown"],
-  [HealthStatus.LOW_POWER]: ["low power", "stale"],
-  [HealthStatus.FAULTED]: ["faulted", "stale"],
-  [HealthStatus.MAINTENANCE]: ["updating", "stale"],
-};
+import { CommandStatus } from "@talos/contracts/talos/v1/command_pb";
 
 // Hub health projection (ADR 0014), refreshed periodically.
 function useDeviceHealth(): Map<string, Health> {
@@ -51,6 +53,21 @@ export function Live() {
   const { client, property, state, entries } = useHub();
   const now = useNow();
   const [armError, setArmError] = useState<string>();
+  const [maintError, setMaintError] = useState<string>();
+
+  async function maintenance(deviceId: string, start: boolean) {
+    setMaintError(undefined);
+    try {
+      const r = await client.requestCommand(
+        start ? maintenanceCommandRequest(deviceId) : endMaintenanceCommandRequest(deviceId),
+      );
+      if (r.status === CommandStatus.DENIED) {
+        setMaintError(`Maintenance refused: ${r.reason}`);
+      }
+    } catch (e) {
+      setMaintError(e instanceof HubError ? e.message : String(e));
+    }
+  }
   const health = useDeviceHealth();
 
   async function arm(mode: ArmMode) {
@@ -96,24 +113,61 @@ export function Live() {
         </section>
         <section className="panel">
           <h3>Devices</h3>
+          {maintError && (
+            <p role="alert" className="error" data-testid="maint-error">
+              {maintError}
+            </p>
+          )}
           <ul className="devices">
             {property.devices.map((d) => {
               const projected = health.get(d.id);
               const fallback = deviceHealth(state, d.id);
-              const [label, tone] = projected
-                ? (HEALTH_LABEL[projected.status] ?? ["unknown", "unknown"])
-                : [
-                    fallback === "fresh"
-                      ? "reporting"
-                      : fallback === "stale"
-                        ? "stale"
-                        : "no reports",
-                    fallback,
-                  ];
+              const tamper = tamperStatus(property, state, d.id);
+              const maint = maintenanceFor(state, d.id, now);
+              const [label, tone] = deviceTone(
+                projected?.status,
+                fallback,
+                tamper?.display === "open",
+                maint !== undefined || projected?.status === HealthStatus.MAINTENANCE,
+              );
               return (
                 <li key={d.id} data-testid={`health-${d.id}`}>
                   <span className={`dot dot-${tone}`} aria-hidden /> {d.id}
                   <span className="muted"> · {label}</span>
+                  {tamper && (
+                    <div
+                      className={tamper.display === "open" ? "error small" : "muted small"}
+                      data-testid={`tamper-${d.id}`}
+                      data-tamper={tamper.display}
+                      role={tamper.display === "open" ? "alert" : undefined}
+                    >
+                      {tamperLabel(tamper)}
+                    </div>
+                  )}
+                  {tamper && (
+                    <div className="small">
+                      {maint ? (
+                        <>
+                          <span data-testid={`maint-${d.id}`} data-maintenance="on">
+                            maintenance: tamper alarm off for {formatRemaining(maint.remainingMs)}
+                          </span>{" "}
+                          <button
+                            data-testid={`maint-end-${d.id}`}
+                            onClick={() => void maintenance(d.id, false)}
+                          >
+                            End maintenance
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          data-testid={`maint-start-${d.id}`}
+                          onClick={() => void maintenance(d.id, true)}
+                        >
+                          Maintenance (30 min)
+                        </button>
+                      )}
+                    </div>
+                  )}
                   {projected?.recommendedAction && (
                     <div className="muted small">
                       {projected.evidence.join("; ")} · {projected.recommendedAction}

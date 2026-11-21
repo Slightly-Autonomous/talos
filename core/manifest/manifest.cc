@@ -1,5 +1,6 @@
 #include "core/manifest/manifest.h"
 
+#include <algorithm>
 #include <set>
 
 namespace talos {
@@ -48,6 +49,8 @@ std::string_view to_string(ManifestIssueCode c) {
       return "i2c_root_conflict";
     case ManifestIssueCode::kUartOversubscribed:
       return "uart_oversubscribed";
+    case ManifestIssueCode::kSlotNotAllowed:
+      return "slot_not_allowed";
   }
   return "invalid";
 }
@@ -118,6 +121,20 @@ ValidationResult validate_configuration(const BoardManifest& board, const Module
       continue;
     }
     placed.push_back({slot, &m});
+
+    for (const auto& lim : board.module_slot_limits) {
+      if (lim.module != m.id) continue;
+      if (std::find(lim.allowed_slots.begin(), lim.allowed_slots.end(), a.slot) ==
+          lim.allowed_slots.end()) {
+        std::string allowed;
+        for (auto s : lim.allowed_slots) {
+          allowed += (allowed.empty() ? "" : ", ") + std::to_string(s);
+        }
+        issue(ManifestIssueCode::kSlotNotAllowed, a.slot,
+              m.id.str() + " is only allowed in slots " + allowed + " on " + board.id.str() +
+                  (lim.reason.empty() ? "" : " (" + lim.reason + ")"));
+      }
+    }
 
     if (m.needs_wake && !slot->wake) {
       issue(ManifestIssueCode::kMissingWake, a.slot, m.id.str() + " needs a wake line");

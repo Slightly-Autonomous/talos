@@ -63,6 +63,23 @@ TEST(Wire, UplinkRoundTripAndTamperDetection) {
             DecodeError::kBadLength);
 }
 
+TEST(Wire, TamperKindRoundTripsAndUnknownKindsAreRefused) {
+  DeviceEvent e = sample(3);
+  e.slot = kNoSlot;
+  e.kind = EventKind::kTamper;  // appended after kPowerMode: older kinds keep their numbers
+  EXPECT_EQ(static_cast<int>(EventKind::kTamper), 10);
+  std::uint8_t buf[kMaxFrame];
+  auto n = encode_uplink(&e, 1, kKey, buf, sizeof buf);
+  std::vector<DeviceEvent> got;
+  ASSERT_EQ(decode_uplink(buf, n, kKey, nullptr, [&](const DeviceEvent& d) { got.push_back(d); }),
+            DecodeError::kNone);
+  ASSERT_EQ(got.size(), 1u);
+  EXPECT_EQ(got[0], e);
+  e.kind = static_cast<EventKind>(11);
+  n = encode_uplink(&e, 1, kKey, buf, sizeof buf);
+  EXPECT_NE(decode_uplink(buf, n, kKey, nullptr, [](const DeviceEvent&) {}), DecodeError::kNone);
+}
+
 TEST(Wire, DownlinkIsBoundToItsRequest) {
   Tag req1{}, req2{};
   req1[0] = 1;

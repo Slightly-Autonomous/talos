@@ -125,3 +125,75 @@ test("layout and rule edits are versioned and take effect", async ({ page }) => 
   await expect(page.getByTestId("zone-patio")).toContainText("Patio");
   await expect(page.getByTestId("zone-patio")).not.toContainText("Back patio");
 });
+
+// HD-032: an open enclosure is an alarm in every mode and shows as a fault, never healthy.
+test("enclosure tamper alarms even disarmed and shows as a fault until closed", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page.getByTestId("hub-token").fill("dev-owner-token");
+  await page.getByTestId("connect").click();
+  await expect(page.getByTestId("connection")).toContainText("Live");
+  await page.getByTestId("disarm").click();
+  await expect(page.getByTestId("arm-mode")).toHaveText("Disarmed");
+  // devsim reported the lid closed at boot.
+  await expect(page.getByTestId("tamper-node-12")).toHaveAttribute("data-tamper", "closed");
+
+  await page.getByRole("tab", { name: "Simulation" }).click();
+  await page.getByTestId("sim-node-12-lid-open").click();
+  await page.getByRole("tab", { name: "Live" }).click();
+  const tamper = page.getByTestId("tamper-node-12");
+  await expect(tamper).toHaveAttribute("data-tamper", "open");
+  await expect(tamper).toContainText("TAMPER");
+  await expect(page.getByTestId("health-node-12")).not.toContainText("healthy");
+  await expect(page.getByTestId("device-node-12").locator("circle")).toHaveClass(/device-fault/);
+  // The 24-hour tamper rule fired while disarmed (dev config: the patio speaker).
+  await expect(page.getByTestId("recent-events")).toContainText("tamper.opened from node-12");
+  await expect(page.getByTestId("command-audio.speak").first().getByTestId("outcome")).toHaveText(
+    "Verified",
+  );
+
+  await page.getByRole("tab", { name: "Simulation" }).click();
+  await page.getByTestId("sim-node-12-lid-close").click();
+  await page.getByRole("tab", { name: "Live" }).click();
+  await expect(page.getByTestId("tamper-node-12")).toHaveAttribute("data-tamper", "closed");
+  await expect(page.getByTestId("recent-events")).toContainText("tamper.closed from node-12");
+});
+
+// Owner decision 2026-11-21: maintenance suppresses one node's tamper alarm for a bounded time;
+// cancelling it with the lid still open raises the alarm then.
+test("maintenance suppresses the tamper alarm, and ending it with the lid open alarms", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page.getByTestId("hub-token").fill("dev-owner-token");
+  await page.getByTestId("connect").click();
+  await expect(page.getByTestId("connection")).toContainText("Live");
+  await expect(page.getByTestId("tamper-node-12")).toHaveAttribute("data-tamper", "closed");
+
+  await page.getByTestId("maint-start-node-12").click();
+  await expect(page.getByTestId("maint-node-12")).toContainText("30 min");
+  await expect(page.getByTestId("health-node-12")).toContainText("maintenance");
+  await expect(page.getByTestId("health-node-12")).not.toContainText("healthy");
+  const speaks = page.getByTestId("command-audio.speak");
+  const before = await speaks.count();
+
+  await page.getByRole("tab", { name: "Simulation" }).click();
+  await page.getByTestId("sim-node-12-lid-open").click();
+  await page.getByRole("tab", { name: "Live" }).click();
+  await expect(page.getByTestId("tamper-node-12")).toHaveAttribute("data-tamper", "open");
+  await expect(page.getByTestId("recent-events")).toContainText(
+    "tamper alarm for node-12 suppressed",
+  );
+  await expect(speaks).toHaveCount(before);
+
+  await page.getByTestId("maint-end-node-12").click();
+  await expect(page.getByTestId("maint-start-node-12")).toBeVisible();
+  await expect(speaks).toHaveCount(before + 1);
+  await expect(speaks.first().getByTestId("outcome")).toHaveText("Verified");
+
+  await page.getByRole("tab", { name: "Simulation" }).click();
+  await page.getByTestId("sim-node-12-lid-close").click();
+  await page.getByRole("tab", { name: "Live" }).click();
+  await expect(page.getByTestId("tamper-node-12")).toHaveAttribute("data-tamper", "closed");
+});

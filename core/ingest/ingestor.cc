@@ -1,5 +1,7 @@
 #include "core/ingest/ingestor.h"
 
+#include <string>
+
 namespace talos {
 
 namespace {
@@ -18,6 +20,7 @@ bool payload_fits(const CapabilityId& capability, const ObservationPayload& p) {
   if (c == "audio.speak") return std::holds_alternative<AudioPlayback>(p);
   if (c == "camera.detection") return std::holds_alternative<ObjectDetected>(p);
   if (c == "device.health") return std::holds_alternative<Heartbeat>(p);
+  if (c == "tamper.enclosure") return std::holds_alternative<TamperState>(p);
   return true;
 }
 
@@ -42,6 +45,9 @@ bool event_type_fits(const std::string& t, const ObservationPayload& p) {
   if (std::holds_alternative<TemperatureHumidity>(p)) return t == "environment.reading";
   if (std::holds_alternative<ObjectDetected>(p)) return t == "camera.object_detected";
   if (std::holds_alternative<Heartbeat>(p)) return t == "device.heartbeat";
+  if (const auto* x = std::get_if<TamperState>(&p)) {
+    return t == "tamper.state" || t == (x->open ? "tamper.opened" : "tamper.closed");
+  }
   return false;
 }
 
@@ -61,6 +67,19 @@ IngestResult Ingestor::ingest(const ObservationEnvelope& env, Timestamp received
   if (!device) {
     return {IngestStatus::kRejected, std::nullopt,
             Error{"unknown_device", "device " + env.source.device.str()}};
+  }
+  // An event id names its source ("<device>:..."): rule command keys and the
+  // maintenance re-evaluation are keyed on it, so a device that could use
+  // another's ids could pre-claim them and make that device's alarm dedupe
+  // to a command it already spent.
+  {
+    const std::string& dev = env.source.device.str();
+    const std::string& id = env.event_id.str();
+    if (id.size() <= dev.size() + 1 || id.compare(0, dev.size(), dev) != 0 ||
+        id[dev.size()] != ':') {
+      return {IngestStatus::kRejected, std::nullopt,
+              Error{"event_id_not_owned_by_source", "event_id must start with \"" + dev + ":\""}};
+    }
   }
   if (!device->declares(env.source.capability)) {
     return {IngestStatus::kRejected, std::nullopt,

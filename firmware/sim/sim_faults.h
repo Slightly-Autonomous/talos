@@ -49,6 +49,23 @@ inline bool apply_fault(Node& n, const std::string& fault) {
     n.rev_a().exp_b.nack = true;
   } else if (fault == "charger_nack" && n.has_board_io()) {
     n.rev_a().charger.nack = true;
+  } else if (fault == "expc_nack" && n.has_board_io()) {
+    n.rev_a().exp_c.nack = true;
+  } else if (fault == "lid_open" && n.has_board_io()) {
+    n.rev_a().lid_open = true;  // J9 loop open: lid off or the wire cut
+  } else if (fault == "lid_closed" && n.has_board_io()) {
+    n.rev_a().lid_open = false;
+  } else if (fault == "exp_int_stuck" && n.has_board_io()) {
+    n.rev_a().exp_int_stuck = true;
+  } else if (fault == "exp_wake_dead" && n.has_board_io()) {
+    n.rev_a().exp_wake_dead = true;
+  } else if (fault == "expc_bridge" && n.has_board_io()) {
+    n.rev_a().exp_c.bridged_high = 1u << 10;  // EXP_C P12 (unused) bridged to V3V3
+  } else if (slot_of("flipped", s)) {
+    // Card inserted upside down (HD-025): it grounds PRESENT_N through the swapped
+    // contact, loads no rail, and none of its devices line up with the slot's I2C.
+    for (std::uint8_t addr = 0; addr < 0x80; ++addr)
+      n.i2c.detach(n.board.slots[s].i2c_branch, addr);
   } else if (fault == "no_vin" && n.has_board_io()) {
     n.rev_a().charger.vin_good = false;
     n.rev_a().source = RevABoard::Source::kBatteryOnly;

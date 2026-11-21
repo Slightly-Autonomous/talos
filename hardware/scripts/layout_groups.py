@@ -27,6 +27,10 @@ BLOCKS = [(f"slot{n}", "interface", f"J{4 + n}", ["bus", "regulator"],
            f"slot {n}: HSEC8 socket, AON switch with CT cap and EN pull-down, SW current-limit switch with ILIM, "
            f"bleed and input cap, branch pull-ups, UART series and pull-ups, TVS")
           for n in range(4)] + [
+    # M-06: every lamp on one edge strip, so one light pipe can serve them later
+    ("leds", "interface", "D1", ["mcu", "bus"], [r"^STATUS_LED", r"^LED_K$", r"_LED_K$", r"^SLOT_LED"],
+     "indicators: STAT (D1), PWR (D8, USB present) and the slot lamps S0-S3 with their resistors"),
+    ("tamper", "interface", "J9", ["bus"], [r"^TAMPER_N$"], "enclosure tamper loop connector, pull-up, RC"),
     ("usb_in", "interface", "J1", ["pmux", "mcu"], [r"^USB_", r"^MCU_USB_"],
      "USB-C receptacle, CC pull-downs, USBLC6 ESD, USB data 0R links and DNP shunt caps"),
     ("pv_in", "interface", "J2", ["pmux"], [r"^PV_RAW$"], "PV input: connector, reverse diode, TVS"),
@@ -39,10 +43,10 @@ BLOCKS = [(f"slot{n}", "interface", f"J{4 + n}", ["bus", "regulator"],
      "TPS63900 buck-boost with inductor, CFG straps, input/output caps and the meter splits"),
     ("mcu", "core", "U1", ["bus", "usb_in"],
      [r"^CHIP_EN$", r"^BOOT_N$", r"^STATUS_LED", r"^LED_K$", r"^U0(RX|TX)D$", r"^VBAT_SENSE$"],
-     "ESP32-H2 module with enable/boot strapping, status LED, VBAT divider, UART0 header and buttons"),
+     "ESP32-H2 module with enable/boot strapping, VBAT divider, Tag-Connect pads and buttons"),
     ("bus", "core", "U14", ["mcu", "slot0", "slot1", "slot2", "slot3"],
      [r"^I2C_", r"^EXP_", r"^MUX_RESET_N$", r"^UART", r"^SPI_", r"^PRESENT_PROBE$", r"^SW_FAULT_N$"],
-     "I2C mux, two expanders, UART mux, root pull-ups and their decaps"),
+     "I2C mux, three expanders, interrupt inverter, UART mux, root and SPI pulls and their decaps"),
 ]
 
 
@@ -50,7 +54,8 @@ BLOCKS = [(f"slot{n}", "interface", f"J{4 + n}", ["bus", "regulator"],
 # and parts whose only nets are planes (core-rail decaps, the input cap of each SW switch, test pads).
 PINNED = {"U1": "mcu", "C1": "mcu", "C2": "mcu", "U2": "usb_in", "U3": "pmux", "U4": "charger",
           "U5": "regulator", "U14": "bus", "U15": "bus", "U16": "bus", "U17": "bus",
-          "C21": "bus", "C22": "bus", "C23": "bus", "C24": "bus",
+          "C21": "bus", "C22": "bus", "C23": "bus", "C24": "bus", "U18": "bus", "C37": "bus", "C36": "bus",
+          "C35": "charger",  # BQ25186 IN decoupling (HD-037): it shares CHG_IN with the mux, belongs at U4
           "TP1": "regulator", "TP2": "mcu", "TP25": "bus", "TP26": "charger", "TP27": "pmux",
           **{f"C{31 + n}": f"slot{n}" for n in range(4)}}
 

@@ -26,6 +26,8 @@ std::string kind_name(fw::EventKind k) {
       return "ota.state";
     case fw::EventKind::kPowerMode:
       return "power.mode";
+    case fw::EventKind::kTamper:
+      return "tamper";
   }
   return "unknown";
 }
@@ -98,6 +100,10 @@ void DeviceRegistry::observe(const DeviceId& device, const fw::DeviceEvent& e, T
     case fw::EventKind::kConfigApplied:
       t.applied_config_revision = static_cast<std::uint32_t>(e.a);
       break;
+    case fw::EventKind::kTamper:
+      // Journaled tamper lives in the engine's state (ordered by source
+      // position); only the unjournaled path below keeps a copy here.
+      break;
     default:
       break;
   }
@@ -105,7 +111,9 @@ void DeviceRegistry::observe(const DeviceId& device, const fw::DeviceEvent& e, T
   d.set_device_id(device.str());
   d.set_at_unix_ms(at.unix_ms);
   d.set_kind(kind_name(e.kind));
-  d.set_value(e.kind == fw::EventKind::kModuleFault ? e.a : static_cast<std::int64_t>(e.a));
+  d.set_value(e.kind == fw::EventKind::kTamper        ? (e.flag ? 1 : 0)
+              : e.kind == fw::EventKind::kModuleFault ? e.a
+                                                      : static_cast<std::int64_t>(e.a));
   d.set_unit(e.kind == fw::EventKind::kHeartbeat ? "mV" : "");
   d.set_correlation_id(device.str() + ":" + std::to_string(e.boot_epoch) + ":" +
                        std::to_string(e.seq));
@@ -122,6 +130,11 @@ bool DeviceRegistry::observe_unjournaled(const DeviceId& device, const fw::Devic
   if (seen.size() >= kSeenPerDevice && pos < *seen.begin()) return false;
   seen.insert(pos);
   while (seen.size() > kSeenPerDevice) seen.erase(seen.begin());
+  // Only the newest tamper report counts: a late "closed" can't clear an open lid.
+  if (e.kind == fw::EventKind::kTamper && (!t.tamper_pos || pos > *t.tamper_pos)) {
+    t.tamper_open = e.flag;
+    t.tamper_pos = pos;
+  }
   observe(device, e, at);
   return true;
 }
@@ -163,38 +176,17 @@ std::vector<talos::v1::Diagnostic> DeviceRegistry::diagnostics(const DeviceId& d
   return {t->recent.begin(), t->recent.end()};
 }
 
-talos::v1::Health project_health(const DeviceId& device, const DeviceTelemetry* t,
-                                 Freshness health_freshness,
-                                 std::optional<Timestamp> health_last_seen, Timestamp now,
-                                 Millis offline_after, const SourceAnomaly* anomaly) {
-  talos::v1::Health h;
-  h.set_device_id(device.str());
-  std::optional<Timestamp> seen = t && t->last_seen ? t->last_seen : health_last_seen;
-  if (seen) h.set_last_seen_unix_ms(seen->unix_ms);
+namespace {
+
+// What the device's own telemetry says, past the reporting checks: OTA, power,
+// slot faults. Tamper and maintenance are handled by the caller.
+talos::v1::Health telemetry_findings(talos::v1::Health h, const DeviceTelemetry* t) {
   auto status = [&](talos::v1::HealthStatus s, std::string evidence, std::string action) {
     h.set_status(s);
     h.add_evidence(std::move(evidence));
     h.set_recommended_action(std::move(action));
     return h;
   };
-  if (!seen) {
-    return status(talos::v1::HEALTH_STATUS_OFFLINE, "never reported",
-                  "Check power and that the device is paired");
-  }
-  const bool stale = (now - *seen) > offline_after || (!t && health_freshness != Freshness::kFresh);
-  if (stale) {
-    return status(talos::v1::HEALTH_STATUS_OFFLINE,
-                  "no report for " + std::to_string((now - *seen).count / 1000) + " s",
-                  "Check power, battery and radio coverage");
-  }
-  if (anomaly && anomaly->last && now - *anomaly->last <= offline_after) {
-    return status(talos::v1::HEALTH_STATUS_FAULTED,
-                  std::to_string(anomaly->behind) + " reports ignored as late, " +
-                      std::to_string(anomaly->out_of_range) +
-                      " refused: the hub holds a newer source position than the device sends",
-                  "Check the device's credentials, then reset its sequence state "
-                  "(POST /v1/devices/<id>/sequence/reset)");
-  }
   if (!t) return status(talos::v1::HEALTH_STATUS_HEALTHY, "reporting", "");
   if (t->ota_state && (*t->ota_state == 1 || *t->ota_state == 2 || *t->ota_state == 3)) {
     return status(talos::v1::HEALTH_STATUS_MAINTENANCE, "firmware update in progress",
@@ -227,6 +219,73 @@ talos::v1::Health project_health(const DeviceId& device, const DeviceTelemetry* 
     return h;
   }
   return status(talos::v1::HEALTH_STATUS_HEALTHY, "reporting", "");
+}
+
+}  // namespace
+
+talos::v1::Health project_health(const DeviceId& device, const DeviceTelemetry* t,
+                                 Freshness health_freshness,
+                                 std::optional<Timestamp> health_last_seen, Timestamp now,
+                                 Millis offline_after, const SourceAnomaly* anomaly,
+                                 bool tamper_open, std::optional<Timestamp> maintenance_until) {
+  talos::v1::Health h;
+  h.set_device_id(device.str());
+  std::optional<Timestamp> seen = t && t->last_seen ? t->last_seen : health_last_seen;
+  if (seen) h.set_last_seen_unix_ms(seen->unix_ms);
+  // Tamper from the journal (tamper.enclosure state, any device API) or from a
+  // node whose config does not declare the capability (registry only).
+  const bool lid_open = tamper_open || (t && t->tamper_open.value_or(false));
+  auto status = [&](talos::v1::HealthStatus s, std::string evidence, std::string action) {
+    h.set_status(s);
+    h.add_evidence(std::move(evidence));
+    h.set_recommended_action(std::move(action));
+    return h;
+  };
+  if (!seen) {
+    return status(talos::v1::HEALTH_STATUS_OFFLINE, "never reported",
+                  "Check power and that the device is paired");
+  }
+  const bool stale = (now - *seen) > offline_after || (!t && health_freshness != Freshness::kFresh);
+  if (stale) {
+    // Offline wins, but an enclosure last reported open is still named.
+    if (lid_open) h.add_evidence("enclosure last reported open");
+    return status(talos::v1::HEALTH_STATUS_OFFLINE,
+                  "no report for " + std::to_string((now - *seen).count / 1000) + " s",
+                  "Check power, battery and radio coverage");
+  }
+  if (anomaly && anomaly->last && now - *anomaly->last <= offline_after) {
+    if (lid_open) h.add_evidence("enclosure open");
+    return status(talos::v1::HEALTH_STATUS_FAULTED,
+                  std::to_string(anomaly->behind) + " reports ignored as late, " +
+                      std::to_string(anomaly->out_of_range) +
+                      " refused: the hub holds a newer source position than the device sends",
+                  "Check the device's credentials, then reset its sequence state "
+                  "(POST /v1/devices/<id>/sequence/reset)");
+  }
+  // Maintenance (device.maintenance) covers the tamper alarm only. Never
+  // "healthy"; any other finding (slot fault, low power, OTA) still shows,
+  // with the maintenance noted.
+  if (maintenance_until && now < *maintenance_until) {
+    const std::string note = "maintenance for " +
+                             std::to_string((*maintenance_until - now).count / 60'000) +
+                             " more min: tamper alarm suppressed";
+    talos::v1::Health rest = telemetry_findings(h, t);
+    if (rest.status() != talos::v1::HEALTH_STATUS_HEALTHY) {
+      rest.add_evidence(note);
+      if (lid_open) rest.add_evidence("enclosure open");
+      return rest;
+    }
+    h.set_status(talos::v1::HEALTH_STATUS_MAINTENANCE);
+    h.add_evidence(note);
+    if (lid_open) h.add_evidence("enclosure open");
+    h.set_recommended_action("Close the enclosure and end maintenance when done");
+    return h;
+  }
+  if (lid_open) {
+    return status(talos::v1::HEALTH_STATUS_FAULTED, "enclosure tamper: lid open or loop cut",
+                  "Check the enclosure lid and its tamper switch wiring (J9)");
+  }
+  return telemetry_findings(h, t);
 }
 
 }  // namespace talos::server

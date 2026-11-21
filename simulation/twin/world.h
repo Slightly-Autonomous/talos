@@ -76,6 +76,14 @@ class World {
     return effects_;
   }
 
+  // Enclosure tamper loops (ground truth per device): open = lid off or loop cut.
+  void set_enclosure(std::int64_t t_ms, const std::string& device, bool open);
+  // The loop opens for `ms` and closes again (a bounce), starting at t_ms.
+  void enclosure_bounce(std::int64_t t_ms, const std::string& device, std::uint32_t ms);
+  bool enclosure_open(const std::string& device) const;
+  // Bounces raised since the last call for this device: durations in ms.
+  std::vector<std::uint32_t> take_enclosure_bounces(const std::string& device);
+
   std::optional<std::string> zone_at(Vec2 p) const;
   const std::vector<Segment>& walls() const { return walls_; }
   const std::map<std::string, Actor>& actors() const { return actors_; }
@@ -96,6 +104,8 @@ class World {
   std::vector<std::pair<std::string, std::uint32_t>> pending_impacts_;
   std::map<std::pair<std::string, std::string>, std::uint32_t> effects_;
   std::vector<TruthEvent> truth_;
+  std::map<std::string, bool> enclosures_;
+  std::map<std::string, std::vector<std::uint32_t>> bounces_;
 };
 
 }  // namespace talos::sim

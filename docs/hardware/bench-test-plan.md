@@ -66,6 +66,45 @@ The virtual board was kinder than the real chips in these places, so each needs 
 | Protected 1S Li-ion cell, fuse, LiPo bag | only after emulator tests pass | real charge test |
 | RP2040 Pico on a card-edge breakout | later (HIL tier H4) | scripted fake sensor |
 
+### Bring-up reference (TL-SN-001 Rev A, practices review D-10)
+
+Matches the silk labels. Pins and parts are provisional until the schematic is built and checked.
+
+| What | Where | Use |
+|---|---|---|
+| Console | USB-C J1: USB Serial/JTAG (303A:1001), 115200 nominal (USB CDC ignores the rate) | Boot log, `@T` diag console (`help`), CoAP datagrams over serial (`@F`), flashing with `idf.py -p` |
+| Console, fallback | Tag-Connect TC2030-NL **J10**: 1 V3V3_CORE, 2 CHIP_EN, 3 GND, 4 U0TXD, 5 BOOT_N, 6 U0RXD; UART0 at 115200 8N1 | ROM boot log and flashing when USB is dead or its pins were reconfigured. U0RXD also drives MUX_RESET_N through R65 (0R). While the app runs, firmware drives that pin, so a host must not transmit on pin 6: it would fight the output. Use J10 TX-only, or download mode. J10 replaces the DNP header J8 |
+| Straps | GPIO9 = BOOT_N (pull-up, SW2 to GND); GPIO8 = D1 cathode (10k pull-up) | BOOT held low at reset gives download mode; released gives SPI boot. GPIO8 must read high at reset, which the LED pull-up guarantees; firmware drives D1 only after boot. Check against the ESP32-H2 datasheet strapping table on the first board |
+| Buttons | **RST** SW1 (CHIP_EN to GND), **BOOT** SW2 (BOOT_N to GND) | Download mode: hold BOOT, tap RST, release BOOT. Once running, a press of BOOT toggles slot-LED service mode (10 min), no laptop needed |
+| LED **PWR** | D8, green, USB_VBUS to GND (hardware only) | Lit = USB 5 V present. Dark on battery and PV |
+| LED **STAT** | D1, GPIO8, active low, 20 ms pulses (`firmware/portable/indicators.h`) | Blink codes below |
+| LEDs **S0–S3** | EXP_C (0x22) P00–P03, green, active low | Dark on battery. On USB/PV, or for 10 min after `led service on`: solid = card running, slow blink (1 s on / 1 s off) = fault or quarantine, a 150 ms inverted flash = wake event from that slot |
+| Tamper | J9 to TAMPER_N (EXP_C P04, 1 MΩ pull-up + 10 nF: τ = 10 ms, about 12 ms to V_IH); TP44 | Lid switch, optionally in series with a wall-removal switch. Closed loop = low. Open lid, wall removal or a cut wire = high, which is a P0 `kTamper`, also from deep sleep through EXP_WAKE (TP45, GPIO14). Fit a jumper on J9 for bench work without a lid |
+
+STAT blink codes (priority order; one code at a time; each pulse 20 ms):
+
+| Code | Pattern | Meaning |
+|---|---|---|
+| Fault | 4 pulses every 5 s | Board did not take its safe state (an expander or the charger not answering), or the boot epoch could not be saved |
+| Boot | 1 pulse every 250 ms, first 3 s after a cold boot | Firmware started (a deep-sleep wake does not replay it) |
+| Card error | 3 pulses every 5 s | A slot has a fault: unknown or blank ID, removed card, quarantine, stuck wake line, and so on |
+| OTA | 3 pulses every 2 s | Firmware download, or a trial image waiting for the hub's confirmation |
+| Low battery | 2 pulses every 15 s | Power mode low-power or critical |
+| Joining | 1 pulse every 1 s | No answer from the hub yet, or the link is failing |
+| Charging | 2 pulses every 4 s | Joined, on external power (CHG_PG_N low: USB or PV) |
+| Joined | 1 pulse every 10 s | Normal |
+
+Test-pad groups (net names on the fab drawing, practices review D-05):
+
+| Group | Pads |
+|---|---|
+| Power | TP1 V3V3_CORE, TP7 VBAT, TP8 SYS_PATH, TP12 USB_VBUS, TP13 CHG_IN, TP14 PV_IN, TP23 V3V3_REG, TP24 SYS_REG, TP43 VBAT_SENSE; GND TP2, TP25–TP27 |
+| Charger and source | TP15 PMUX_ST, TP16 BAT_NTC, TP17 CHG_INT_N, TP18 CHG_PG_N |
+| MCU and console | TP3 CHIP_EN, TP4 BOOT_N, TP5 U0TXD, TP6 U0RXD, TP21/TP22 USB D+/D− |
+| Root bus and expanders | TP9 I2C_SDA, TP10 I2C_SCL, TP19 EXP_INT_N, TP45 EXP_WAKE, TP20 MUX_RESET_N, TP11 SW_FAULT_N, TP44 TAMPER_N |
+| Slot rails | TP28–TP31 V3V3_AON_0..3, TP32–TP35 V3V3_SW_0..3 |
+| Slot signals | TP36–TP39 SLOT_WAKE0..3, TP40–TP42 SPI_SCK/MOSI/MISO (100 kΩ pull-downs, HD-027) |
+
 ## 3. Test layers
 
 1. **Host unit tests** (Bazel, pytest): drivers against register-accurate fakes, including busy-NACK, pulsed
@@ -98,6 +137,7 @@ Order is smallest power first. **A** = fully automated from the Mac. Datasheet n
 | P0-07 | CHIP_EN, BOOT_N with button up/down | high / 0 Ω | SW1/SW2 |
 | P0-08 | Visual: every ESD part, D3 band, U-part pin 1, EKMB leads (GND = can continuity) | present and oriented | parts with no electrical signature |
 | P0-09 | Card fingers: each contact to its neighbours | > 1 MΩ (PRESENT_N to GND is shorted by design) | finger bridges |
+| P0-10 | At delivery, loupe/microscope: every via under a thermal pad (TPS63900, BQ25186, TPS2121, ESP32-H2 module GND) and every via-in-pad | filled and capped flat (POFV, FAB-NOTES.txt), no dimple or open hole, no solder wicked through to the back (HD-039). Photograph one board per lot | vendor skipped POFV: solder starved from thermal pads |
 
 ### Stage 1: TL-DBG-001 alone (it is the instrument for everything after)
 
@@ -112,6 +152,7 @@ Order is smallest power first. **A** = fully automated from the Mac. Datasheet n
 | D-07 | Baseline AON current, PPK2 across JP1, empty slot | < 10 µA; subtract from every card | A |
 | D-08 | Replug ×10 | flash survives, rails never come on | A |
 | D-09 | TP10 with CDC sending 0x55, AON on/off | ~½ AON; < 0.1 V and TP3 < 0.2 V | meter |
+| D-10 | Lamps (practices review L-07..L-09): USB in, then `power aon on/off`, `power sw on/off`, then a SW overload (TL-TEST-001 SW pad to GND through 10 Ω, PPK2 limiting) | PWR (D3) lit on USB; AON (D4) and SW (D5) follow exactly what the bench commanded; FLT (D6, red) dark, lit at once on the TPS2553 trip, dark again after `power sw off`; IN (D1, card seated) lit while a card grounds PRESENT_N, dark with the slot empty. Every lamp visible from the bench position | look + A |
 
 ### Stage 2: TL-TEST-001 on TL-DBG-001 (proves the fixture)
 
@@ -123,12 +164,17 @@ Order is smallest power first. **A** = fully automated from the Mac. Datasheet n
 | T-04 | DRV_ALERT low → GP3 | 0 | A |
 | T-05 | UART TX: CDC 300 baud 0x00 stream, poll P14 | sees 0 and 1; idle all 1 | A |
 | T-06 | UART RX: P03 low 10 ms | ≥ 1 byte arrives; none when idle | A |
-| T-07 | SW on, PPK2 across JP2 | 10.0 mA ±3 % (330 Ω); off < 1 µA | A |
+| T-07 | SW on, PPK2 across JP2 | 10.2–11.8 mA: 330 Ω = 10.0 mA ±3 %, plus the green SW LED ≈ 0.5–1.5 mA (provisional until the LED and its resistor are fixed); off < 1 µA | A |
 | T-08 | AON current across JP1 | < baseline + 5 µA | A |
 | T-09 | AON cycle ×20 with SW on | no USB disconnect | A |
 | T-10 | AON off until SDA = 0, then on | TCA9535 config back at 0xFF (card really reset) | A |
+| T-11 | (tools/bench judges `--measure T-11=<mA>`) Lamp: the green SW LED D1 on V3V3_SW | dark with SW off, lit with SW on; its current is inside T-07's 10.2–11.8 mA | look + A |
 
 ### Stage 3: each sensor card on TL-DBG-001, then in every SN slot
+
+| ID | Card | Test | Pass |
+|---|---|---|---|
+| C0-01 | every card | (tools/bench checks a node slot with `--flipped SLOT=CARD`; TL-DBG-001 part manual) Flipped card (HD-025): insert it upside down in TL-DBG-001, then `power aon on` | no current-limit trip (FLT dark, USB stays up), no fault reported, PRESENT reads seated, card current at the D-07 baseline. Repeat once in a TL-SN-001 slot: no brown-out, no quarantine |
 
 Common to every card: ID programmed and read back (`id program`), scan equals the manifest's address set, AON
 current within the budget line after the D-07 baseline.
@@ -189,10 +235,10 @@ PPK2 source mode on J3 (3.7 V) with the 10 kΩ NTC cable; no USB; ESP held in re
 | S-M02 | `esptool chip_id flash_id`; `espefuse summary` (read-only, never burn) | ESP32-H2, 4 MB; JTAG fuses clear | A |
 | S-M03 | 4 MB random image write/read SHA | match | A |
 | S-M04 | Boot log; SW2+SW1 download mode | POWERON, SPI boot; DOWNLOAD | A + one manual press |
-| S-M05 | Root scan; mux mask 0x0–0xF read-back | exactly {0x20, 0x21, 0x6A, 0x70}; equal | A |
+| S-M05 | Root scan; mux mask 0x0–0xF read-back | exactly {0x20, 0x21, 0x22, 0x6A, 0x70}; equal | A |
 | S-M06 | Expanders: POR values; write output then config; read back every pin | Config 0xFFFF, Output 0xFFFF at POR; match | A |
 | S-M07 | ESP warm reset with non-default expander outputs | safe state (SW off, mux off) within 50 ms | A |
-| S-M08 | PRESENT_PROBE high/low, no cards | PRESENT_N follow; EXP_INT_N falls then clears after reading all ports | A |
+| S-M08 | PRESENT_PROBE high/low, no cards | PRESENT_N follow; EXP_INT_N falls and EXP_WAKE (TP45, GPIO14) rises, both clear after reading all ports | A |
 | S-M09 | LED step | +1.4–1.9 mA | A |
 | S-M10 | VBAT ADC at 3.0/3.6/4.2 V after one-point cal | ±50 mV | A |
 | S-M11 | USB D+ backfeed: battery only, USB unplugged, awake and asleep | USB_VBUS < 0.5 V | A |
@@ -200,6 +246,12 @@ PPK2 source mode on J3 (3.7 V) with the 10 kΩ NTC cable; no USB; ESP held in re
 | S-M13 | OTA slot write/read/erase; image size headroom | SHA match; ≥ 15 % free | A |
 | S-M14 | Deep sleep, empty slots, then 4 reference cards (IT-08) | within +20 % of `power_budget.py`; ≤ 40 µA | A |
 | S-M15 | Second-master check: TL-DBG-001 on the SN root bus with the ESP held in reset | same scan as S-M05 | A |
+| S-M16 | Board identity (D-09): `id` after `talos_dbg program-id --node` | board `TL-SN-001`, rev `A`, serial = label; a second `board-id` with other values is refused | A |
+| S-M17 | Tamper loop (HD-032): J9 closed, then open (lid switch or jumper) | `id` tamper 0, then 1; TP44 ≈ 0 V closed, ≈ 3.3 V open, rising with τ ≈ 10 ms (1 MΩ / 10 nF), V_IH reached ≈ 12 ms after opening; a P0 `kTamper` ≈ 65 ms after opening (≈ 12 ms RC + the 50 ms firmware debounce + polling), always < 100 ms; a 20 ms knock on the lid sends nothing | A + scope |
+| S-M17a | Wall-removal switch in series with the lid switch on J9 | opening either switch alone gives the same P0 as S-M17; closing both restores (P1) | A |
+| S-M17b | Known limitation: J9 loop shorted to GND (wire bridged past both switches) | reads closed and no event: expected for a single-ended loop, recorded, not a fail (an end-of-line resistor would need an ADC, none free) | A |
+| S-M18 | (tools/bench automates the EXP_C and service-mode part; looking stays manual) Lamp check, TL-SN-001: EXP_C unused pins and every lamp | P05–P07, P10–P17 outputs at 0; PWR (D8) lit only with USB; STAT (D1) shows the boot code then joining (table above); on battery S0–S3 dark; `led service on` lights the seated slots, off again after 10 min. Every lamp visible through the enclosure light path | A + look |
+| S-M19 | (tools/bench on the virtual board; manual on a real board until deep-sleep entry is wired) Tamper from deep sleep (HD-034): open J9 while asleep | wake cause ext1 with GPIO14 set; P0 sent; EXP_INT_N released after the boot reads; ext1 mask = slot WAKEs + GPIO14, all ANY_HIGH | A |
 
 ### Stage 6: per-slot tests with TL-TEST-001 (H1, run by the node's firmware)
 
@@ -209,9 +261,9 @@ For each slot n, all other mux channels off. Every step reports per contact.
 |---|---|---|
 | L-01 | Branch n scan; other branches; mask 0 (IT-01) | {0x27, 0x50} only on n; nothing elsewhere |
 | L-02 | AON_n / SW_n switching, card TP1/TP3 and SW sense | on within 50 mV of core; off < 0.1 V in 1 ms; other slots unchanged |
-| L-03 | SW current step on battery (PPK2) | ΔI ≈ 9.9 mA ±10 % |
+| L-03 | SW current step on battery (PPK2) | ΔI ≈ 11 mA ±15 % (TL-TEST-001 330 Ω load + SW LED) |
 | L-04 | Idle: WAKE 0, ALERT 1, PRESENT 0 with probe high | exact |
-| L-05 | WAKE drive high/low; deep-sleep wake and latency (IT-02) | only GPIO(10+n) follows; wake mask bit n; < 5 ms |
+| L-05 | WAKE drive high/low; deep-sleep wake and latency (IT-02) | only GPIO(10+n) follows (GPIO14 stays low); wake mask bit n; < 5 ms |
 | L-06 | ALERT low → EXP_B bit and EXP_INT_N (IT-04) | follows within 4 µs; read clears |
 | L-07 | MISO and UART_RX driven both ways against internal pulls | follow |
 | L-08 | Walking 1/0 on SCK, MOSI, CS_N, RESET_N, UART_TX | card inputs follow |
@@ -269,7 +321,7 @@ current high (bisect by AON_n off one slot at a time, then by the core split lin
 |---|---|
 | Portable firmware | **Done:** `board_io` (TCA9535, BQ25186, rails with S-2/S-3, presence, source), ID block v1 with CRC, driver fixes FW-B1..B11, `PowerSource::kUnknown`, `diag` console (`@T {json}` lines; self-tests for the root bus, the TL-TEST-001 slot loopback, LIS2DW12 self-test and SHT40 heater). **Open:** mux reset line (needs the board decision), SPI/UART loopback lines (need GPIO output in the HAL) |
 | ESP-IDF | **Done:** console and diag on USB-serial-JTAG, reset cause in the boot line, brown-out detector, battery ADC, `BoardIo` for source and rails. **Done:** CoAP over the console (`serial_link.h`, provisioned identity in NVS). **Open:** wake cause, coredump, custom partition table, never deep-sleep on USB |
-| Virtual board | **Done:** TCA9535 ×3, BQ25186, rail-gated branches, PRESENT/ALERT, busy-NACK, pulsed INT, polled stepping, per-device NACK, blank/corrupt IDs, `bench_node` with `--fault=` (`firmware/sim/sim_faults.h`). **Open:** EXP_INT line, stuck SDA, brown-out |
+| Virtual board | **Done:** TCA9535 ×3, BQ25186, rail-gated branches, PRESENT/ALERT, busy-NACK, pulsed INT, polled stepping, per-device NACK, blank/corrupt IDs, `bench_node` with `--fault=` (`firmware/sim/sim_faults.h`). **Done:** EXP_C (slot LEDs, tamper, unused pins), TCA9535 INT per chip and EXP_WAKE (wired-OR, inverted), status LED GPIO. **Open:** stuck SDA, brown-out |
 | Twin | **Done (ADR 0018):** `IDeviceBackend` (L1 behavioural, L2 firmware on the virtual board, L4 declared and skipped), `binding` in the site proto, `talos_sim --backend firmware`, skip reasons, `backend_parity_test` (29/29 scenarios, transitions match), PIR warm-up on reboot. **Open:** humidity, magnet field (TMAG contacts on L2), ODR-sampled impacts, L4 |
 | tools/dbg | **Done:** `selftest adapter|tl-test-001|tmag|imu|sht`, `program-id` (refuses overwrite without `--expect-current`), `id --raw`, `reg`, `watch` on the edge detector, AON cycle waits for SDA low, FW-B13. **Open:** `uart` passthrough and the UART loopback steps (T-05/T-06) |
 | tools/bench, tools/hil | **Done:** `tools/bench` runner (stages 5-6 and cards in slots, JSONL, blocked-not-failed, fault trees tested against every injected fault in CI); `tools/hil` serial bridge and console client. **Open:** PPK2 wrapper, scope steps, stage 4 power tests, end-to-end E-02..E-05 |
@@ -308,7 +360,7 @@ What the decisions became in hardware and firmware:
   - 0R between J1 VBUS and IN1.
   - DNP CT pads on all TPS22917s.
   - 100k pull-down on EXPB_SPARE, 1M pull-down on PRESENT_PROBE.
-  - DNP 1×6 UART0 header; silk labels; fiducials.
+  - DNP 1×6 UART0 header (J8; since replaced by the Tag-Connect TC2030-NL J10, practices review D-01); silk labels; fiducials.
 - **TL-TEST-001**
   - 10k TX→RX and MOSI→MISO loopbacks.
   - SW sense into a spare TCA9535 input.
@@ -351,5 +403,5 @@ What the decisions became in hardware and firmware:
 - BQ25186: datasheet default conflicts (VINDPM, IBAT_OCP, device ID); does an open TS still charge?
 - Does the TCA9535 catch the BQ25186's 128 µs /INT pulse?
 - Size of the USB D+ → VBUS backfeed on battery.
-- ESP32-H2 ext1 per-pin wake levels (HD-004).
+- ESP32-H2 ext1 with five active-high pins (GPIO10–14, ANY_HIGH). Per-pin levels are no longer needed on TL-SN-001: EXP_INT_N is inverted onto EXP_WAKE (HD-034).
 - Whether the HSEC8 socket mates odd fingers to odd pads given the mirrored footprint (HD-002, sample socket).

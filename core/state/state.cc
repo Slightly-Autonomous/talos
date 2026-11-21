@@ -41,6 +41,17 @@ struct Reducer {
     }
     s.commands.clear_baselines(r.device);
   }
+  void operator()(const MaintenanceChanged& m) const {
+    if (m.until) {
+      auto it = s.maintenance.find(m.device);
+      const bool chained = it != s.maintenance.end() && entry.received_at < it->second.until;
+      s.maintenance[m.device] =
+          MaintenanceWindow{*m.until, m.principal, chained ? it->second.since : entry.received_at};
+    } else {
+      s.maintenance.erase(m.device);
+    }
+  }
+  void operator()(const AlarmSuppressed&) const {}  // audit only
 };
 
 }  // namespace

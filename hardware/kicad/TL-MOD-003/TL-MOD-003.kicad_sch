@@ -1886,30 +1886,30 @@
 		(at 38.1 55.88)
 		(uuid "a41af6c9-c229-5884-b515-edc8b4af8701")
 	)
+	(no_connect
+		(at 50.8 55.88)
+		(uuid "9f59cea2-f248-59d5-b33c-feca62c3d3d3")
+	)
 	(wire
 		(pts
-			(xy 50.8 55.88)
-			(xy 53.34 55.88)
+			(xy 38.1 58.42)
+			(xy 35.56 58.42)
 		)
 		(stroke
 			(width 0)
 			(type default)
 		)
-		(uuid "f0869435-e8f7-52ae-b766-209c43857c39")
+		(uuid "a224ac76-b14b-5638-8cc1-3eb268bc9cd4")
 	)
 	(label "GND"
-		(at 53.34 55.88 0)
+		(at 35.56 58.42 180)
 		(effects
 			(font
 				(size 1.27 1.27)
 			)
-			(justify left bottom)
+			(justify right bottom)
 		)
-		(uuid "1f5e6cc1-aee6-5608-a219-6a2eb329c363")
-	)
-	(no_connect
-		(at 38.1 58.42)
-		(uuid "182f7078-7a04-5be8-a1d1-15f2ac111ded")
+		(uuid "16618807-9bc8-5622-853b-ebf5d70aac23")
 	)
 	(wire
 		(pts

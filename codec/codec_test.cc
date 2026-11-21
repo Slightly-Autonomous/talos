@@ -43,7 +43,8 @@ TEST(Codec, AllPayloadKindsRoundTrip) {
                                               LockState{true},
                                               AudioPlayback{true},
                                               ObjectDetected{"person", 870},
-                                              Heartbeat{3700}};
+                                              Heartbeat{3700},
+                                              TamperState{true}};
   for (const auto& p : payloads) {
     auto e = testing::motion("node-07", 1, 1);
     e.payload = p;

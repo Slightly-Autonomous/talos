@@ -10,6 +10,7 @@ idf_component_register(
     "${TALOS_ROOT}/firmware/portable/wire.cc"
     "${TALOS_ROOT}/common/coap/coap.cc"
     "${TALOS_ROOT}/firmware/portable/diag.cc"
+    "${TALOS_ROOT}/firmware/portable/indicators.cc"
     "${TALOS_ROOT}/firmware/portable/modules.cc"
     "${TALOS_ROOT}/firmware/portable/ota.cc"
     "${TALOS_ROOT}/firmware/portable/runtime.cc"

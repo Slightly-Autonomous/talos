@@ -1,0 +1,44 @@
+name: garage_enclosure_tamper
+description: >-
+  Armed away, someone takes the lid off node_garage: a debounced tamper.opened reaches the journal and the 24-hour tamper rule notifies the owner. Closing it is recorded. Disarmed, a second opening still alarms (alarm-panel convention).
+site: sites/garage_driveway.yaml
+seed: 42
+start_unix_ms: 1794740400000
+duration_ms: 40000
+principals:
+  - {id: owner, kind: PRINCIPAL_KIND_HUMAN, max_risk: RISK_CLASS_SECURITY_CRITICAL}
+rules:
+  - id: enclosure_tamper_alarm
+    revision: 1
+    property_id: garage-01
+    principal_id: "rule:enclosure_tamper_alarm"
+    enabled: true
+    # Tamper is a 24-hour condition (ADR 0007 amendment): no armed_modes.
+    trigger_event_type: tamper.opened
+    actions:
+      - operation: notify
+        target: {device_id: notifier, capability_id: notify}
+        args: {notify: {recipient_role: owner, text: "Tamper: node_garage enclosure opened"}}
+        ttl_ms: 5000
+        verification: VERIFICATION_MODE_ACK_ONLY
+        verification_window_ms: 3000
+stimuli:
+  - {at_ms: 0, arm_mode_set: {principal_id: owner, mode: ARM_MODE_ARMED_AWAY}}
+  - {at_ms: 5000, enclosure_set: {device_id: node_garage, open: true}}
+  - {at_ms: 15000, enclosure_set: {device_id: node_garage, open: false}}
+  - {at_ms: 20000, arm_mode_set: {principal_id: owner, mode: ARM_MODE_DISARMED}}
+  - {at_ms: 25000, enclosure_set: {device_id: node_garage, open: true}}
+  - {at_ms: 30000, enclosure_set: {device_id: node_garage, open: false}}
+expect:
+  - name: boot state closed
+    observation: {event_type: tamper.state, device_id: node_garage, to_ms: 1000, min_count: 1, max_count: 1}
+  - name: opened while armed
+    observation: {event_type: tamper.opened, device_id: node_garage, from_ms: 5000, to_ms: 6000, min_count: 1, max_count: 1}
+  - name: closed
+    observation: {event_type: tamper.closed, device_id: node_garage, from_ms: 15000, to_ms: 16000, min_count: 1, max_count: 1}
+  - name: opened while disarmed
+    observation: {event_type: tamper.opened, device_id: node_garage, from_ms: 25000, to_ms: 26000, min_count: 1, max_count: 1}
+  - name: alarmed both times, in every mode
+    command: {operation: notify, final_status_in: [COMMAND_STATUS_COMPLETED_UNVERIFIED], count: 2}
+  - name: one notification per opening
+    physical_effects: {device_id: notifier, count: 2}

@@ -29,6 +29,10 @@ enum class EventKind : std::uint8_t {
   kConfigApplied,  // a = applied config revision
   kOtaStatus,      // a = OtaState, b = next byte wanted (downloading), else running version
   kPowerMode,      // a = PowerMode
+  // Enclosure tamper loop (HD-032), slot = kNoSlot. flag = open (lid open or
+  // loop cut); b = 1 for a state report (cold boot), 0 for a transition.
+  // Opening is P0, a restore P1. Appended: never renumber the kinds above.
+  kTamper,
 };
 
 struct DeviceEvent {
@@ -71,6 +75,7 @@ enum class ModuleFault : std::int32_t {
   kPowerQuarantined = 13,  // the node reset while powering this slot; held off until cleared
   kCardRemoved = 14,    // a card that was running is gone (PRESENT_N or its ID stopped answering)
   kWakeLineFault = 15,  // the sensor latched an event but its WAKE line never rose (stuck low/open)
+  // Node-level tamper is not a module fault: see EventKind::kTamper.
 };
 // kBusError with b = kFaultDetailUnarmed: a sensor that could not be re-armed
 // after bounded retries (parked in sleep). A detail, not a new ModuleFault, so

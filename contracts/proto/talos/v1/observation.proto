@@ -41,6 +41,12 @@ message Heartbeat {
   uint32 battery_mv = 1;
 }
 
+// Enclosure tamper loop of a device (lid switch, wall-removal switch).
+// open = lid open or loop cut.
+message TamperState {
+  bool open = 1;
+}
+
 message ObservationPayload {
   oneof kind {
     ContactState contact = 1;
@@ -51,6 +57,7 @@ message ObservationPayload {
     AudioPlayback audio_playback = 6;
     ObjectDetected object_detected = 7;
     Heartbeat heartbeat = 8;
+    TamperState tamper = 9;
   }
 }
 

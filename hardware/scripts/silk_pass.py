@@ -22,6 +22,21 @@ EDGE_MM = 0.3
 SIZES_MM = (0.8,)  # the project minimum text height is 0.8 mm
 MIN_THICK_MM = 0.12  # JLCPCB minimum silk line width is 0.15 at 1 mm, 0.1 absolute; keep 0.12
 
+# S-01/S-03 and the light rules: what a connector, button or lamp is for, printed next to it. Labels are
+# placed before references, so where room is short the label wins and the reference goes to the fab layer.
+LABELS = {
+    "TL-SN-001": {"J1": "USB", "J2": "PV 1+ 2-", "J3": "BAT 1+ 2NTC 3-", "J9": "TAMPER",
+                  "J4": "SLOT 0", "J5": "SLOT 1", "J6": "SLOT 2", "J7": "SLOT 3",
+                  "SW1": "RST", "SW2": "BOOT", "J10": "PROG", "D1": "STAT", "D8": "PWR",
+                  "D9": "S0", "D10": "S1", "D11": "S2", "D12": "S3"},
+    "TL-DBG-001": {"J1": "USB", "J2": "CARD", "JP1": "AON mA", "JP2": "SW mA", "D1": "IN",
+                   "D3": "PWR", "D4": "AON", "D5": "SW", "D6": "FLT", "TP20": "GND", "TP21": "GND"},
+    "TL-TEST-001": {"D1": "SW"},
+}
+# Parts whose orientation matters at assembly: after this pass each must still carry some silk outline
+# (pin-1 dot, polarity bar or body outline), or the check below reports it (S-02).
+POLARISED = ("U", "D", "Q", "J", "SW")
+
 
 def mm(v: float) -> int:
     return pcbnew.FromMM(v)
@@ -70,13 +85,32 @@ def courtyard(fp):
     return box or _box(fp.GetBoundingBox(False))
 
 
+def _spots(x0, y0, x1, y1, gap, on_body):
+    cx, cy = (x0 + x1) // 2, (y0 + y1) // 2
+    spots = [(cx, cy, 0)] if on_body else []
+    for k in (1, 2, 3):  # rings further out, both orientations on every side
+        g = gap * k
+        spots += [(cx, y0 - g, 0), (cx, y1 + g, 0), (x0 - g, cy, 90), (x1 + g, cy, 90),
+                  (x0 - g, cy, 0), (x1 + g, cy, 0), (cx, y0 - g, 90), (cx, y1 + g, 90),
+                  (x0, y0 - g, 0), (x1, y0 - g, 0), (x0, y1 + g, 0), (x1, y1 + g, 0),
+                  (x0 - g, y0, 90), (x0 - g, y1, 90), (x1 + g, y0, 90), (x1 + g, y1, 90)]
+    return spots
+
+
 def finish(path: str) -> dict:
+    import pathlib
+
     board = pcbnew.LoadBoard(path)
+    name = pathlib.Path(path).stem
     edge = board.GetBoardEdgesBoundingBox()
     ex0, ey0, ex1, ey1 = _box(edge, -mm(EDGE_MM))
     outline = pcbnew.SHAPE_POLY_SET()
     board.GetBoardPolygonOutlines(outline, True)
     sides = {pcbnew.F_SilkS: Grid(), pcbnew.B_SilkS: Grid()}
+    texts = set(LABELS.get(name, {}).values())
+    for d in list(board.GetDrawings()):  # labels from an earlier run are placed again
+        if d.GetClass() == "PCB_TEXT" and d.GetLayer() in sides and d.GetText() in texts:
+            board.Delete(d)
     pads = {pcbnew.F_SilkS: Grid(), pcbnew.B_SilkS: Grid()}
     fps = sorted(board.GetFootprints(), key=lambda f: (re.sub(r"\d", "", f.GetReference()),
                                                        int(re.sub(r"\D", "", f.GetReference()) or 0)))
@@ -94,11 +128,52 @@ def finish(path: str) -> dict:
     for d in board.GetDrawings():  # board-level text (name, revision, S/N box)
         if d.GetLayer() in sides:
             sides[d.GetLayer()].add(_box(d.GetBoundingBox(), mm(CLEAR_MM)))
+    def fits(b, layer, ignore=None) -> bool:
+        if b[0] < ex0 or b[1] < ey0 or b[2] > ex1 or b[3] > ey1:
+            return False
+        if not all(outline.Contains(pcbnew.VECTOR2I(px, py)) for px, py in
+                   ((b[0], b[1]), (b[2], b[1]), (b[0], b[3]), (b[2], b[3]))):
+            return False
+        return not (pads[layer].hits(b) or sides[layer].hits(b, ignore=ignore))
+
+    labelled = 0
+    by_ref = {f.GetReference(): f for f in fps}
+    for ref_name, text in sorted(LABELS.get(name, {}).items()):
+        fp = by_ref.get(ref_name)
+        if fp is None:
+            continue
+        layer = pcbnew.B_SilkS if fp.GetLayer() == pcbnew.B_Cu else pcbnew.F_SilkS
+        t = pcbnew.PCB_TEXT(board)
+        t.SetText(text)
+        t.SetLayer(layer)
+        t.SetMirrored(layer == pcbnew.B_SilkS)
+        s = mm(SIZES_MM[0])
+        t.SetTextSize(pcbnew.VECTOR2I(s, s))
+        t.SetTextThickness(max(mm(MIN_THICK_MM), int(s * 0.15)))
+        t.SetKeepUpright(True)
+        x0, y0, x1, y1 = courtyard(fp)
+        pb = None
+        for pad in fp.Pads():
+            b = _box(pad.GetBoundingBox())
+            pb = b if pb is None else (min(pb[0], b[0]), min(pb[1], b[1]), max(pb[2], b[2]), max(pb[3], b[3]))
+        if pb and (x1 - x0) * (y1 - y0) > 2 * (pb[2] - pb[0]) * (pb[3] - pb[1]):
+            x0, y0, x1, y1 = pb
+        for x, y, ang in _spots(x0, y0, x1, y1, mm(0.25) + s // 2, False):
+            t.SetTextAngle(pcbnew.EDA_ANGLE(ang, pcbnew.DEGREES_T))
+            t.SetPosition(pcbnew.VECTOR2I(int(x), int(y)))
+            b = _box(t.GetBoundingBox())
+            if fits(b, layer):
+                board.Add(t)
+                sides[layer].add(_box(t.GetBoundingBox(), mm(CLEAR_MM)))
+                labelled += 1
+                break
+        else:
+            print(f"  {name}: no room for the label '{text}' at {ref_name}")
     placed = hidden = 0
     for fp in fps:
         ref = fp.Reference()
         layer = pcbnew.B_SilkS if fp.GetLayer() == pcbnew.B_Cu else pcbnew.F_SilkS
-        if fp.IsBoardOnly() and fp.GetReference().startswith("FID"):
+        if fp.IsBoardOnly() and fp.GetReference().startswith(("FID", "H")):  # fiducials, mounting holes
             ref.SetVisible(False)
             continue
         ref.SetLayer(layer)
@@ -153,14 +228,20 @@ def finish(path: str) -> dict:
     for d in board.GetDrawings():  # board text on the back reads from the back
         if d.GetLayer() == pcbnew.B_SilkS and d.GetClass() == "PCB_TEXT":
             d.SetMirrored(True)
+    bare = sorted(fp.GetReference() for fp in fps
+                  if fp.GetReference().startswith(POLARISED) and not fp.IsBoardOnly()
+                  and "CardEdge" not in str(fp.GetFPID().GetLibItemName())  # gold fingers: copper, not a part
+                  and not any(g.GetLayer() in sides for g in fp.GraphicalItems()))
     board.Save(path)
-    return {"placed": placed, "fab_only": hidden}
+    return {"placed": placed, "fab_only": hidden, "labels": labelled, "no_outline": bare}
 
 
 def main() -> int:
     for p in sys.argv[1:]:
         r = finish(p)
-        print(f"{p}: {r['placed']} references on silk, {r['fab_only']} on fab only")
+        print(f"{p}: {r['labels']} labels, {r['placed']} references on silk, {r['fab_only']} on fab only")
+        if r["no_outline"]:
+            print(f"  polarised parts with no silk outline (S-02): {', '.join(r['no_outline'])}")
     return 0
 
 

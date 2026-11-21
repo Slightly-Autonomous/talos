@@ -38,6 +38,8 @@ const char* key_name(StoreKey k) {
       return "p7";
     case StoreKey::kPendingAcks:
       return "pack";
+    case StoreKey::kBoardInfo:
+      return "board";
   }
   // Ring slots between the two named ends: "p1".."p6".
   const auto i = static_cast<unsigned>(k) - static_cast<unsigned>(StoreKey::kPendingRing0);
@@ -70,15 +72,38 @@ Gpio::Gpio(const BoardSupport& b) {
     io.pull_down_en = GPIO_PULLDOWN_DISABLE;
     gpio_config(&io);
   }
-  if (b.mux_reset_line != 0xFF) {
-    // Level first, then direction: the reset line never glitches low at boot.
-    gpio_set_level(static_cast<gpio_num_t>(b.mux_reset_line), 1);
+  if (b.service_button_line != 0xFF) {
+    // BOOT (GPIO9): the strap was sampled at reset, long before this runs, so
+    // configuring it now cannot change the boot mode. Input with a pull-up
+    // (the board has its own too), never an output.
     gpio_config_t io{};
-    io.pin_bit_mask = 1ULL << b.mux_reset_line;
+    io.pin_bit_mask = 1ULL << b.service_button_line;
+    io.mode = GPIO_MODE_INPUT;
+    io.pull_up_en = GPIO_PULLUP_ENABLE;
+    io.pull_down_en = GPIO_PULLDOWN_DISABLE;
+    gpio_config(&io);
+  }
+  if (b.expander_wake_line != 0xFF) {
+    // EXP_WAKE is driven push-pull by the SN74AUP1G04: no pull either way.
+    gpio_config_t io{};
+    io.pin_bit_mask = 1ULL << b.expander_wake_line;
+    io.mode = GPIO_MODE_INPUT;
+    io.pull_up_en = GPIO_PULLUP_DISABLE;
+    io.pull_down_en = GPIO_PULLDOWN_DISABLE;
+    gpio_config(&io);
+  }
+  // Level first, then direction: neither line glitches low at boot (a mux
+  // reset, or a status LED flash).
+  for (const std::uint8_t line : {b.mux_reset_line, b.status_led_line}) {
+    if (line == 0xFF) continue;
+    gpio_set_level(static_cast<gpio_num_t>(line), 1);
+    gpio_config_t io{};
+    io.pin_bit_mask = 1ULL << line;
     io.mode = GPIO_MODE_OUTPUT;
     gpio_config(&io);
-    output_ = b.mux_reset_line;
   }
+  mux_reset_ = b.mux_reset_line;
+  status_led_ = b.status_led_line;
   // Shared SPI (sn-mcu-slots M3): SCK and MOSI driven low with no pull, MISO an
   // input with the internal pull-down so it never floats. GPIO0-5 are digital
   // pads that do not keep this in deep sleep (H2 datasheet §2.2): the board
@@ -106,7 +131,8 @@ Gpio::Gpio(const BoardSupport& b) {
 bool Gpio::read(std::uint8_t line) { return gpio_get_level(static_cast<gpio_num_t>(line)) != 0; }
 
 bool Gpio::write(std::uint8_t line, bool level) {
-  if (line != output_) return false;  // only the board's declared output may be driven
+  // Only the board's declared outputs may be driven.
+  if (line == 0xFF || (line != mux_reset_ && line != status_led_)) return false;
   return gpio_set_level(static_cast<gpio_num_t>(line), level ? 1 : 0) == ESP_OK;
 }
 
@@ -271,7 +297,8 @@ bool Sleep::set_wake_enabled(std::uint8_t line, bool enabled) {
     (void)esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_EXT1);  // fails if never enabled
     return true;
   }
-  // Active-high slot WAKE lines (EXP_INT_N is active-low and not included: HD-004).
+  // Slot WAKE lines and EXP_WAKE (EXP_INT_N inverted on the board) are all
+  // active high: one ANY_HIGH mask, whichever lines the runtime armed (HD-034).
   return esp_sleep_enable_ext1_wakeup(mask_, ESP_EXT1_WAKEUP_ANY_HIGH) == ESP_OK;
 #else
   (void)line;

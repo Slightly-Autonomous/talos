@@ -18,6 +18,11 @@
 //   through the card's pull-ups), and the mux never selects an unpowered slot.
 // - The charger's push-button action is disabled (no button on this board), so
 //   a shorted NTC can never send the node into ship mode.
+// - Slot LEDs (EXP_C, active low) start dark; unused expander pins are outputs
+//   driven low (TI guidance), never floating inputs.
+// - The expanders' wired-OR INT wakes the MCU (EXP_WAKE). Every input read
+//   releases that chip's INT, so a presence probe re-reads its port afterwards:
+//   the probe's own edge must not leave INT asserted and wake the node again.
 //
 // Register maps follow TI SCPS201F (TCA9535) and SLUSF69A (BQ25186).
 // PROVISIONAL until measured on the bench.
@@ -120,6 +125,9 @@ class BoardIo final : public IPower {
   std::optional<bool> slot_present(std::uint8_t slot) override;
   void service() override;
   std::uint8_t take_sw_faults() override;
+  std::optional<bool> tamper_open() override;
+  bool set_slot_led(std::uint8_t slot, bool on) override;
+  void service_interrupt() override;
 
   bool rail_on(std::uint8_t slot, Rail rail) const;
   // True once every expander took its safe state (begin() or a later retry).
@@ -152,12 +160,16 @@ class BoardIo final : public IPower {
     std::uint16_t output_mask = 0;  // 1 = driven by the expander
   };
 
+  static constexpr std::size_t kMaxExpanders = 3;  // EXP_A, EXP_B, EXP_C
   II2c& i2c_;
   IClock& clock_;
   IBatteryAdc& adc_;
   const BoardSupport& board_;
-  std::array<std::optional<Tca9535>, 2> expanders_;
-  std::array<Plan, 2> safe_{};  // per expander, same order as expanders_
+  std::array<std::optional<Tca9535>, kMaxExpanders> expanders_;
+  std::array<Plan, kMaxExpanders> safe_{};  // per expander, same order as expanders_
+  // Slot LED pins per expander: their level is not part of the safe state, so
+  // a lit LED never makes resume() distrust the board.
+  std::array<std::uint16_t, kMaxExpanders> led_mask_{};
   bool expanders_ready_ = false;
   std::optional<Bq25186> charger_;
   std::array<std::array<bool, 2>, kSlots> rails_{};  // [slot][AON, SW]

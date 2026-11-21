@@ -8,6 +8,13 @@
 		(descr "")
 	)
 	(lib
+		(name "LED_SMD")
+		(type "KiCad")
+		(uri "${KICAD10_FOOTPRINT_DIR}/LED_SMD.pretty")
+		(options "")
+		(descr "")
+	)
+	(lib
 		(name "Package_SO")
 		(type "KiCad")
 		(uri "${KICAD10_FOOTPRINT_DIR}/Package_SO.pretty")

@@ -32,7 +32,15 @@ struct OperationSpec {
   // Index of the CommandArgs alternative this operation takes.
   std::size_t args_index = 0;
   std::string_view target_capability;
+  // Executed by the hub itself (no device): verified by the journaled state
+  // change, never handed to a transport.
+  bool hub_internal = false;
 };
+
+// device.maintenance bounds (owner decision 2026-11-21).
+inline constexpr Millis kDefaultMaintenance{30 * 60 * 1000};
+inline constexpr Millis kMinMaintenance{60 * 1000};
+inline constexpr Millis kMaxMaintenance{4 * 60 * 60 * 1000};
 
 // nullptr for operations that are not in the catalog.
 const OperationSpec* find_operation(std::string_view operation);

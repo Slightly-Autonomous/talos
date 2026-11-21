@@ -26,7 +26,8 @@ class IGpio {
  public:
   virtual ~IGpio() = default;
   virtual bool read(std::uint8_t line) = 0;
-  // Drive an output line (mux reset). Boards without one return false.
+  // Drive an output line (mux reset, status LED). Lines the board does not
+  // declare as outputs return false.
   virtual bool write(std::uint8_t /*line*/, bool /*level*/) { return false; }
 };
 
@@ -68,6 +69,16 @@ class IPower {
   // Slots whose switched rail a current-limit fault shut off since the last
   // call (bit n = slot n). The board turns the rails off itself; this reports it.
   virtual std::uint8_t take_sw_faults() { return 0; }
+  // Enclosure tamper loop (TAMPER_N): true = lid open or loop cut, false =
+  // closed, nullopt = the board has no tamper input or it could not be read.
+  virtual std::optional<bool> tamper_open() { return std::nullopt; }
+  // Green slot LED S0..S3. False if the board has none or the write failed.
+  virtual bool set_slot_led(std::uint8_t /*slot*/, bool /*on*/) { return false; }
+  // The wired-OR expander interrupt is asserted (EXP_WAKE high): read every
+  // expander's input ports so each one releases INT. The runtime calls it
+  // whenever the line is high; a line that stays high afterwards is masked as
+  // a wake source like a stuck slot WAKE line.
+  virtual void service_interrupt() {}
 };
 
 // Battery voltage measurement (ADC behind the VBAT divider on the ESP32).
@@ -94,11 +105,24 @@ enum class StoreKey : std::uint8_t {
   kPendingRing0 = 6,
   kPendingRingLast = 13,  // kPendingRing0 + NodeRuntime::kMaxPendingCritical - 1
   kPendingAcks = 14,      // which ring records the hub has acknowledged
+  // Board name, revision and serial (BoardInfo, diag `board-id`), written once
+  // at program time (D-09) and checked by the bench runner.
+  kBoardInfo = 15,
 };
 
 inline constexpr bool is_permanent(StoreKey k) {
-  return k == StoreKey::kBootEpoch || k == StoreKey::kIdentity;
+  return k == StoreKey::kBootEpoch || k == StoreKey::kIdentity || k == StoreKey::kBoardInfo;
 }
+
+// What the board is, as programmed into the permanent partition (talos_id).
+// NUL-terminated strings; an all-zero record means "never programmed".
+struct BoardInfo {
+  static constexpr std::size_t kMaxName = 15, kMaxRevision = 3, kMaxSerial = 23;
+  char board[kMaxName + 1] = {};         // e.g. "TL-SN-001"
+  char revision[kMaxRevision + 1] = {};  // e.g. "A"
+  char serial[kMaxSerial + 1] = {};      // unit serial, printed on the label
+  bool valid() const { return board[0] != 0 && revision[0] != 0 && serial[0] != 0; }
+};
 
 class IStore {
  public:
@@ -214,6 +238,14 @@ struct SlotIoPins {
   ExpanderPin alert_n;     // card open-drain, pulled up to the slot's AON
 };
 
+// Expander pins with nothing connected (TL-SN-001 EXP_C P05-P07, P10-P17):
+// TI's guidance for unused TCA9535 pins is outputs driven low, never floating
+// inputs. Bit n = pin n of the expander at `address`.
+struct UnusedExpanderPins {
+  std::uint8_t address = 0;
+  std::uint16_t mask = 0;
+};
+
 struct BoardSupport {
   std::array<SlotWiring, kSlots> slots{};
   std::uint8_t mux_address = 0x70;  // TCA9546A-style mux (provisional)
@@ -229,7 +261,18 @@ struct BoardSupport {
   ExpanderPin present_probe;  // drives the PRESENT_N pull-ups while probing
   ExpanderPin uart_sel0, uart_sel1, uart_mux_en_n;
   ExpanderPin charger_int_n, charger_pg_n, source_st;  // BQ25186 /INT, /PG; TPS2121 ST
-  ExpanderPin sw_fault_n;                   // wired-OR FAULT_N of the current-limited SW switches
+  ExpanderPin sw_fault_n;  // wired-OR FAULT_N of the current-limited SW switches
+  ExpanderPin tamper_n;    // enclosure lid loop, high = open or cut
+  std::array<ExpanderPin, kSlots> slot_led_n{};  // green slot LEDs, active low (high = off)
+  std::array<UnusedExpanderPins, 3> unused_pins{};
+  // EXP_WAKE: the expanders' wired-OR INT (EXP_INT_N) through an inverter,
+  // ACTIVE HIGH, so it shares the slot WAKE lines' ext1 ANY_HIGH mask. 0xFF = none.
+  std::uint8_t expander_wake_line = 0xFF;
+  // Status LED D1, active low (driven low = on). 0xFF = none.
+  std::uint8_t status_led_line = 0xFF;
+  // Service button (TL-SN-001: BOOT, GPIO9), active low with a pull-up. A strap
+  // pin: read only after boot, never driven. 0xFF = none.
+  std::uint8_t service_button_line = 0xFF;
   std::uint8_t charger_address = 0;         // BQ25186 on the root bus, 0 = none
   std::uint32_t battery_sustained_mw = 15;  // provisional budgets per source
   std::uint32_t usb_sustained_mw = 2500;

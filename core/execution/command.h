@@ -65,7 +65,13 @@ struct Notify {
   std::string text;
   auto operator<=>(const Notify&) const = default;
 };
-using CommandArgs = std::variant<std::monostate, AudioSpeak, SetLocked, Notify>;
+// Hub-side maintenance window for one node (device.maintenance): its tamper
+// alarm is suppressed for duration_ms (0 = the default, 30 min; at most 4 h).
+struct SetMaintenance {
+  std::uint32_t duration_ms = 0;
+  auto operator<=>(const SetMaintenance&) const = default;
+};
+using CommandArgs = std::variant<std::monostate, AudioSpeak, SetLocked, Notify, SetMaintenance>;
 
 enum class VerificationMode : std::uint8_t {
   kAckOnly,        // best outcome is completed_unverified (e.g. notify)

@@ -50,10 +50,17 @@ FirmwareDevice::FirmwareDevice(const v1::SiteDevice& spec, PropertyId property, 
       property_(std::move(property)),
       position_(to_vec(spec.position())),
       rng_(Rng::stream(seed, spec.id())),
-      node_(std::make_unique<fw::sim::Node>(fw::sim::default_board())) {
+      node_(std::make_unique<fw::sim::Node>(spec.has_enclosure() ? fw::sim::tl_sn_001_board()
+                                                                 : fw::sim::default_board())),
+      enclosure_(spec.has_enclosure()) {
   if (spec.battery_mv() > 0) {
     node_->power.battery_mv_ = spec.battery_mv();
     node_->power.source_ = fw::PowerSource::kBatteryOnly;
+    if (node_->has_board_io()) {
+      node_->adc.mv = spec.battery_mv();
+      node_->rev_a().charger.vin_good = false;
+      node_->rev_a().source = fw::sim::RevABoard::Source::kBatteryOnly;
+    }
   }
   config_.revision = 1;
   config_.heartbeat_interval_ms = spec.heartbeat_interval_ms();
@@ -78,6 +85,7 @@ void FirmwareDevice::apply_inputs(const World& world) {
   for (const auto& c : contacts_) {
     if (const Portal* p = world.portal(c.portal)) node_->gpio.set(c.line, p->open);
   }
+  if (enclosure_) node_->rev_a().lid_open = world.enclosure_open(id_);
   const auto zone = world.zone_at(position_).value_or("");
   for (const auto& e : environments_) {
     node_->sht(e.slot).temperature_c = (world.temperature(zone) + e.spec.bias_milli_c()) / 1000.0;
@@ -142,7 +150,18 @@ void FirmwareDevice::sample(std::int64_t t_ms, Timestamp, World& world,
       node_->imu(imp.slot).impact(static_cast<std::int32_t>(mg * imp.spec.coupling()));
     }
   }
-  if (t_ms > last_t_ms_) node_->run_for(static_cast<fw::TimeMs>(t_ms - last_t_ms_));
+  fw::TimeMs left = t_ms > last_t_ms_ ? static_cast<fw::TimeMs>(t_ms - last_t_ms_) : 0;
+  if (enclosure_) {
+    // A bounce: the loop opens for its duration inside this tick, the firmware debounces it.
+    for (const std::uint32_t ms : world.take_enclosure_bounces(id_)) {
+      const bool steady = node_->rev_a().lid_open;
+      node_->rev_a().lid_open = true;
+      node_->run_for(ms);
+      node_->rev_a().lid_open = steady;
+      left = left > ms ? left - ms : 0;
+    }
+  }
+  if (left > 0) node_->run_for(left);
   last_t_ms_ = t_ms;
   drain(out);
 }

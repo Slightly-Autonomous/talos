@@ -1,0 +1,4 @@
+ref,net,x_mm,y_mm,side
+TP2,GND,3.150,5.512,top
+TP3,MAG_INT_N,5.427,8.812,top
+TP1,V3V3_AON,4.062,4.354,top

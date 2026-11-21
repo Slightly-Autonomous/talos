@@ -133,6 +133,9 @@ class VirtualDevice final : public IDeviceBackend {
   std::optional<talos::sim::v1::SpeakerSpec> speaker_;
   std::optional<talos::sim::v1::LockSpec> lock_;
   std::optional<talos::sim::v1::NotifierSpec> notifier_;
+  // Enclosure tamper loop: last reported state and the debounce.
+  std::optional<talos::sim::v1::EnclosureSpec> enclosure_;
+  bool enclosure_last_ = false;
   talos::sim::v1::ActuatorFault fault_ = talos::sim::v1::ACTUATOR_FAULT_NONE;
   std::vector<PendingAction> pending_;
   std::set<std::string> executed_;  // device-side idempotency by command id

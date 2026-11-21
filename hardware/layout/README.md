@@ -113,3 +113,22 @@ Autorouted is not reviewed. A layout engineer still has to review the power sect
 6. **Card fingers:** Samtec asks for 30 µin hard gold (130–200 Knoop) and a 30° edge chamfer. Order the cards with JLCPCB's gold-finger option and bevel, not ENIG.
 7. **JLCPCB order:** run `jlc_sourcing.py refresh` and `check` the day you order, since stock moves. Upload `-jlc-bom.csv` and `-jlc-cpl.csv`. **Check every part's rotation in JLCPCB's placement preview** (no rotation corrections have been verified yet; record any you find in `ROTATION_FIX`). Parts in `-not-assembled.csv` are not placed by JLCPCB.
 8. **Assembly:** everything is on one side except the bottom-layer finger pads. Check DFM with the assembler: 0402 parts, the 0.4 mm-pitch WSON, LGA-12 and DFN-4.
+
+## Checkpoint 2026-11-21: board practices applied, then a change of direction
+
+- **Additions:** lamps, a third expander, tamper loop, test pads, Tag-Connect, mounting holes, regulator
+  and charger templates, 0.65 mm vias with 0.5 mm hole-to-hole, and the HD-025..041 fixes. TL-SN-001
+  grew to **84 × 72 mm**, because 80 × 70 no longer routed.
+- **TL-SN-001:** routing is **partial**, with 2 connections open after Freerouting, the new
+  completion pass and maze repair. Two layout rules are waived with reasons in `layout-status.json`.
+- **The six small boards:** DRC-clean, and they pass `layout_rules.py`.
+- **Router changes:**
+  - a Freerouting completion pass before repair;
+  - every finishing step keeps the better board (repair rounds that built on each other went from 8 to
+    110 errors);
+  - stale-reference crash fixes;
+  - stitching keeps clear of large holes.
+- **Direction change:** the owner then chose to replace the modular node with a self-contained,
+  fully JLCPCB-assembled board (`hardware/sourcing/cost-study.md`,
+  `hardware/sourcing/zero-touch-assembly-plan.md`). The modular boards stay in the repo as this
+  checkpoint and are not being hand-finished.

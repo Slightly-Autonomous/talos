@@ -99,6 +99,24 @@ void Tca9535Model::power_on_reset() {
   regs.fill(0);
   regs[0x02] = regs[0x03] = 0xFF;  // outputs
   regs[0x06] = regs[0x07] = 0xFF;  // all inputs
+  snapshot_ = 0xFFFF;
+}
+
+void Tca9535Model::after_read(std::uint8_t reg) {
+  if (reg > 1) return;
+  for (std::uint8_t b = 0; b < 8; ++b) {
+    const auto pin = static_cast<std::uint8_t>(reg * 8 + b);
+    const auto bit = static_cast<std::uint16_t>(1u << pin);
+    snapshot_ = level(pin) ? static_cast<std::uint16_t>(snapshot_ | bit)
+                           : static_cast<std::uint16_t>(snapshot_ & ~bit);
+  }
+}
+
+bool Tca9535Model::int_asserted() const {
+  for (std::uint8_t pin = 0; pin < 16; ++pin) {
+    if (!is_output(pin) && level(pin) != (((snapshot_ >> pin) & 1u) != 0)) return true;
+  }
+  return false;
 }
 
 bool Tca9535Model::write(const std::uint8_t* data, std::size_t n) {
@@ -117,6 +135,7 @@ bool Tca9535Model::is_output(std::uint8_t pin) const {
 }
 
 bool Tca9535Model::level(std::uint8_t pin) const {
+  if (bridged_high & (1u << pin)) return true;
   if (is_output(pin)) return (regs[0x02 + pin / 8] >> (pin % 8)) & 1u;
   return external(pin);
 }
@@ -475,10 +494,28 @@ RevABoard::RevABoard(const BoardSupport& board, const Clock* clock) : board_(boa
         return false;
     }
   };
+  exp_c.external = [this](std::uint8_t pin) {
+    // P00-P03 slot LED cathodes: pulled to V3V3_CORE through LED + 2.2k when undriven.
+    if (pin < 4) return true;
+    if (pin == 4) return lid_open;  // TAMPER_N: 1M pull-up, the closed loop grounds it
+    return false;                   // not connected (floating; firmware drives them low)
+  };
+}
+
+bool RevABoard::exp_wake() const {
+  if (exp_wake_dead) return false;
+  return exp_int_stuck || exp_a.int_asserted() || exp_b.int_asserted() || exp_c.int_asserted();
+}
+
+bool RevABoard::slot_led(std::uint8_t slot) const {
+  const ExpanderPin& p = board_.slot_led_n[slot];
+  return p.wired() && exp_c.is_output(p.pin) && !exp_c.level(p.pin);
 }
 
 bool RevABoard::expander_pin(const ExpanderPin& p, bool undriven) const {
-  const Tca9535Model& chip = p.address == exp_a_address() ? exp_a : exp_b;
+  const Tca9535Model& chip = p.address == exp_a_address()           ? exp_a
+                             : p.address == board_.tamper_n.address ? exp_c
+                                                                    : exp_b;
   return chip.is_output(p.pin) ? chip.level(p.pin) : undriven;
 }
 
@@ -538,6 +575,10 @@ Node::Node(BoardSupport b, std::uint32_t flash_capacity, ILink* link_override)
 }
 
 IPower& Node::select_power() {
+  for (const std::uint8_t line : {board.mux_reset_line, board.status_led_line}) {
+    if (line < 32) gpio.outputs |= 1u << line;
+  }
+  if (board.service_button_line < 32) gpio.set(board.service_button_line, true);  // pull-up
   if (board.mux_reset_line != 0xFF) {
     gpio.on_write = [this](std::uint8_t line, bool level) {
       if (line == board.mux_reset_line && !level) {
@@ -550,6 +591,13 @@ IPower& Node::select_power() {
   rev_a_.emplace(board, &clock);
   i2c.attach(I2cBus::kRoot, board.slot_io[0].aon_enable.address, &rev_a_->exp_a);
   i2c.attach(I2cBus::kRoot, board.slot_io[0].present_n.address, &rev_a_->exp_b);
+  if (board.tamper_n.wired()) i2c.attach(I2cBus::kRoot, board.tamper_n.address, &rev_a_->exp_c);
+  if (board.expander_wake_line < 32) {
+    gpio.live = [this](std::uint8_t line) -> std::optional<bool> {
+      if (line == board.expander_wake_line) return rev_a_->exp_wake();
+      return std::nullopt;
+    };
+  }
   if (board.charger_address) i2c.attach(I2cBus::kRoot, board.charger_address, &rev_a_->charger);
   i2c.branch_powered = [this](std::uint8_t branch) {
     for (std::uint8_t s = 0; s < kSlots; ++s) {
@@ -611,6 +659,7 @@ void Node::boot() {
   watchdog.last_feed_ms = clock.now_ms();  // the ESP port arms it right before boot()
   runtime_->boot();
   sleep.info = WakeInfo{};  // the next reset is a plain one unless a test says otherwise
+
   for (std::uint8_t l = 0; l < 32; ++l) last_lines_[l] = gpio.read(l);
 }
 
@@ -625,6 +674,7 @@ void Node::run_for(TimeMs ms) {
   while (clock.now_ms() < end) {
     clock.advance(1);
     for (auto& [slot, imu] : imus_) imu->tick();
+
     bool edge = false;
     for (std::uint8_t l = 0; l < 32; ++l) {
       const bool v = gpio.read(l);

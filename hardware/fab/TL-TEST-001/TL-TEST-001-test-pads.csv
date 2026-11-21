@@ -1,0 +1,8 @@
+ref,net,x_mm,y_mm,side
+TP7,ALERT_N,1.888,9.731,top
+TP2,GND,7.283,6.299,top
+TP6,SCL,1.160,8.655,top
+TP5,SDA,7.334,8.510,top
+TP1,V3V3_AON,0.902,6.200,top
+TP3,V3V3_SW,7.313,7.423,top
+TP4,WAKE,1.272,7.417,top

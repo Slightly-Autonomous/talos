@@ -18,16 +18,23 @@
 //   selftest i2c
 //   selftest slot|imu|sht <slot>
 //   provision <device_id> <key hex, 16-32 bytes> | identity | reboot
+//   board-id [<board> <revision> <serial>]   write-once board identity (D-09)
+//   led | led service on|off                 indicator state; slot LEDs on battery (L-03)
 #pragma once
 
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 
 #include "firmware/portable/board_io.h"
 #include "firmware/portable/hal.h"
 #include "firmware/portable/runtime.h"
 
 namespace talos::fw {
+
+// Board identity in the permanent partition (StoreKey::kBoardInfo, D-09).
+std::optional<BoardInfo> load_board_info(IStore& store);
+bool save_board_info(IStore& store, const BoardInfo& info);
 
 class IDiagOut {
  public:
@@ -80,6 +87,8 @@ class Diag {
   bool cmd_uart(const Args& a, IDiagOut& out, const char*& err);
   bool cmd_provision(const Args& a, IDiagOut& out, const char*& err);
   bool cmd_identity(IDiagOut& out);
+  bool cmd_board_id(const Args& a, IDiagOut& out, const char*& err);
+  bool cmd_led(const Args& a, IDiagOut& out, const char*& err);
   bool selftest_i2c(IDiagOut& out);
   bool selftest_slot(std::uint8_t slot, IDiagOut& out, const char*& err);
   bool selftest_imu(std::uint8_t slot, IDiagOut& out, const char*& err);

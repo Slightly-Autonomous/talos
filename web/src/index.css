@@ -244,6 +244,9 @@ main {
 .device-unknown {
   fill: var(--muted);
 }
+.device-fault {
+  fill: var(--bad);
+}
 .device-label {
   font-size: 0.45px;
   fill: var(--text);
@@ -328,6 +331,12 @@ main {
 }
 .dot-unknown {
   background: var(--muted);
+}
+.dot-fault {
+  background: var(--bad);
+}
+.dot-maintenance {
+  background: var(--accent);
 }
 .scrubber {
   display: flex;

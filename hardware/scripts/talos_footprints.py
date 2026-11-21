@@ -11,8 +11,8 @@ Sources:
 - sensor_edge_v1 card fingers: Samtec "recommended mating card layout for HSEC8-1XX-XX-X-D-EMX"
   rev K sheet 3, -10 column: 0.55 mm fingers at 0.80 mm (odd top, even bottom), 2.80 mm contact zone
   ending 1.00 mm from the card edge, 1.57 mm card, 9.25 mm wide mating tongue (no polarising slot
-  for -10), 30 deg edge chamfer. The finger copper continues to 0.15 mm from the edge as the
-  full-width plating tie the drawing asks for.
+  for -10), 30 deg edge chamfer. The drawing continues the copper to 0.15 mm from the edge as a
+  plating tie; Talos stops it 0.65 mm from the edge so the bevel can't grind into it (HD-040).
 - HSEC8-110-01-S-D-EM2: Samtec "recommended PCB layout for HSEC8-1XX-XX-X-D-EMX" rev K sheet 1,
   Fig. 1 (-10/-20/-30) and product drawing HSEC8-1XX-XX-X-D-EMXX rev M (-EM2: 1.57 mm host).
   Read from the drawings (kept locally in hardware/vendor-docs/, not committed):
@@ -119,14 +119,16 @@ HSEC8_SLOT = {"x": HSEC8_PIN1_X + 3.75, "width": 1.549, "depth": 4.375}
 HSEC8_KEEPOUT_DEPTH = 5.0
 HSEC8_E_MIN = 23.2
 HSEC8_BODY_OUT = 7.8  # body beyond the host edge, card side (REF)
+FINGER_PULLBACK_MM = 0.65  # finger copper to card edge (bevel clearance, HD-040)
 CARD_TONGUE_WIDTH = 9.25
 CARD_TONGUE_DEPTH = 8.5  # > HSEC8_BODY_OUT: the card's shoulders stay clear of the socket body
 
 
 def card_fingers() -> str:
     body = ""
-    # Contact zone 1.0-3.8 mm from the edge; copper runs on to 0.15 mm from the edge (plating tie).
-    y0, y1 = 1.65 - 3.8, 1.65 - 0.15
+    # Contact zone 1.0-3.8 mm from the edge. Samtec's drawing runs the copper on to 0.15 mm (plating
+    # tie), but a 30 deg bevel then grinds into it (HD-040): the copper stops 0.65 mm from the edge.
+    y0, y1 = 1.65 - 3.8, 1.65 - FINGER_PULLBACK_MM
     for i in range(10):
         x = -HSEC8_PIN1_X + HSEC8_PITCH * i
         for num, side in ((2 * i + 1, "F"), (2 * i + 2, "B")):

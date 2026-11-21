@@ -116,10 +116,14 @@ BoardIo::BoardIo(II2c& i2c, IClock& clock, IBatteryAdc& adc, const BoardSupport&
       add(*p);
     }
   }
-  for (const auto* p :
-       {&board_.present_probe, &board_.uart_sel0, &board_.uart_sel1, &board_.uart_mux_en_n,
-        &board_.charger_int_n, &board_.charger_pg_n, &board_.source_st, &board_.sw_fault_n}) {
+  for (const auto* p : {&board_.present_probe, &board_.uart_sel0, &board_.uart_sel1,
+                        &board_.uart_mux_en_n, &board_.charger_int_n, &board_.charger_pg_n,
+                        &board_.source_st, &board_.sw_fault_n, &board_.tamper_n}) {
     add(*p);
+  }
+  for (const auto& p : board_.slot_led_n) add(p);
+  for (const auto& u : board_.unused_pins) {
+    if (u.address && u.mask) add(ExpanderPin{u.address, 0});
   }
   if (board_.charger_address) charger_.emplace(i2c_, board_.charger_address);
 
@@ -148,6 +152,20 @@ BoardIo::BoardIo(II2c& i2c, IClock& clock, IBatteryAdc& adc, const BoardSupport&
   plan(board_.uart_mux_en_n, true);   // UART mux parked
   plan(board_.uart_sel0, false);
   plan(board_.uart_sel1, false);
+  for (const auto& led : board_.slot_led_n) {
+    plan(led, true);  // active low: dark
+    for (std::size_t i = 0; i < expanders_.size(); ++i) {
+      if (expanders_[i] && led.wired() && expanders_[i]->address() == led.address) {
+        led_mask_[i] = static_cast<std::uint16_t>(led_mask_[i] | (1u << led.pin));
+      }
+    }
+  }
+  for (const auto& u : board_.unused_pins) {
+    for (std::uint8_t pin = 0; pin < 16; ++pin) {
+      if (u.address && (u.mask & (1u << pin))) plan(ExpanderPin{u.address, pin}, false);
+    }
+  }
+  // TAMPER_N stays an input (1 MOhm pull-up, 10 nF: tau 10 ms): nothing to plan.
   // Until begin() writes it, a read-modify-write must start from the safe
   // pattern: the chip may still hold outputs from before an MCU reset.
   for (std::size_t i = 0; i < expanders_.size(); ++i) {
@@ -186,6 +204,7 @@ bool BoardIo::configure_expanders() {
     if (!expanders_[i]) continue;
     ok &= expanders_[i]->configure(safe_[i].outputs,
                                    static_cast<std::uint16_t>(~safe_[i].output_mask));
+    (void)expanders_[i]->read_inputs();  // baseline for INT: releases any change seen so far
   }
   expanders_ready_ = ok;
   return ok;
@@ -210,7 +229,7 @@ bool BoardIo::begin() {
 bool BoardIo::resume(std::uint8_t aon_on, bool& board_ok) {
   // What the expanders must hold if only the AON rails in aon_on were on: the
   // safe pattern plus AON_EN, RESET_N and CS_N high for those slots (set_rail).
-  std::array<std::uint16_t, 2> want{};
+  std::array<std::uint16_t, kMaxExpanders> want{};
   for (std::size_t i = 0; i < expanders_.size(); ++i) want[i] = safe_[i].outputs;
   auto set = [&](const ExpanderPin& p) {
     for (std::size_t i = 0; i < expanders_.size(); ++i) {
@@ -232,11 +251,13 @@ bool BoardIo::resume(std::uint8_t aon_on, bool& board_ok) {
     if (!expanders_[i]) continue;
     const auto outs = expanders_[i]->read_register_pair(Tca9535::kOutput0);
     const auto cfg = expanders_[i]->read_register_pair(Tca9535::kConfig0);
-    const auto mask = safe_[i].output_mask;
-    if (!outs || !cfg || *cfg != static_cast<std::uint16_t>(~mask) ||
+    // Slot LEDs may be lit (external power, service mode): adopt them as they are.
+    const auto mask = static_cast<std::uint16_t>(safe_[i].output_mask & ~led_mask_[i]);
+    if (!outs || !cfg || *cfg != static_cast<std::uint16_t>(~safe_[i].output_mask) ||
         (*outs & mask) != (want[i] & mask)) {
       return false;
     }
+    want[i] = static_cast<std::uint16_t>((want[i] & ~led_mask_[i]) | (*outs & led_mask_[i]));
   }
   for (std::size_t i = 0; i < expanders_.size(); ++i) {
     if (expanders_[i]) expanders_[i]->set_shadow(want[i]);
@@ -309,6 +330,9 @@ std::optional<bool> BoardIo::slot_present(std::uint8_t slot) {
   if (!drive(board_.present_probe, true)) return std::nullopt;
   const auto level = sense(board_.slot_io[slot].present_n);
   drive(board_.present_probe, false);
+  // The probe falling moves every empty slot's PRESENT_N: read the port again so
+  // that edge does not hold EXP_INT_N asserted (it would wake the node at once).
+  if (auto* chip = ref(board_.slot_io[slot].present_n).chip) (void)chip->read_inputs();
   if (!level) return std::nullopt;
   return !*level;  // the card ties PRESENT_N to GND
 }
@@ -343,6 +367,25 @@ std::uint8_t BoardIo::take_sw_faults() {
     if (on & (1u << i)) set_rail(i, Rail::kSwitched3v3, false);
   }
   return on;
+}
+
+std::optional<bool> BoardIo::tamper_open() {
+  if (!board_.tamper_n.wired()) return std::nullopt;
+  const auto level = sense(board_.tamper_n);  // also releases EXP_C's INT
+  if (!level) return std::nullopt;
+  return *level;  // 1 MOhm pull-up: high = lid open or loop cut
+}
+
+bool BoardIo::set_slot_led(std::uint8_t slot, bool on) {
+  if (slot >= kSlots || !board_.slot_led_n[slot].wired() || !ensure_ready()) return false;
+  return drive(board_.slot_led_n[slot], !on);  // active low
+}
+
+void BoardIo::service_interrupt() {
+  // TCA9535: INT clears when the port that changed is read; read both ports of each chip.
+  for (auto& e : expanders_) {
+    if (e) (void)e->read_inputs();
+  }
 }
 
 bool BoardIo::select_uart(std::optional<std::uint8_t> slot) {

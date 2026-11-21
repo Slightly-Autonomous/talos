@@ -16,6 +16,9 @@ World::World(const talos::sim::v1::Site& site) {
     zones_.push_back(std::move(shape));
   }
   for (const auto& w : site.walls()) walls_.push_back({to_vec(w.a()), to_vec(w.b())});
+  for (const auto& d : site.devices()) {
+    if (d.has_enclosure()) enclosures_[d.id()] = d.enclosure().open_at_start();
+  }
   for (const auto& p : site.portals()) {
     portals_[p.id()] = Portal{p.id(),
                               p.type(),
@@ -24,6 +27,27 @@ World::World(const talos::sim::v1::Site& site) {
                               p.initially_open(),
                               p.initially_locked()};
   }
+}
+
+void World::set_enclosure(std::int64_t t_ms, const std::string& device, bool open) {
+  enclosures_[device] = open;
+  record(t_ms, open ? "enclosure.opened" : "enclosure.closed", device);
+}
+
+void World::enclosure_bounce(std::int64_t t_ms, const std::string& device, std::uint32_t ms) {
+  bounces_[device].push_back(ms);
+  record(t_ms, "enclosure.bounce", device, std::to_string(ms) + " ms");
+}
+
+bool World::enclosure_open(const std::string& device) const {
+  auto it = enclosures_.find(device);
+  return it != enclosures_.end() && it->second;
+}
+
+std::vector<std::uint32_t> World::take_enclosure_bounces(const std::string& device) {
+  std::vector<std::uint32_t> out;
+  if (auto it = bounces_.find(device); it != bounces_.end()) out.swap(it->second);
+  return out;
 }
 
 std::optional<std::string> World::zone_at(Vec2 p) const {

@@ -25,6 +25,7 @@ Deterministic for a given seed (CLAUDE.md: no unseeded randomness).
 from __future__ import annotations
 
 import math
+import os
 import random
 from dataclasses import dataclass, field
 
@@ -57,6 +58,10 @@ class Problem:
     w_congestion: float = 4.0
     w_overlap: float = 200.0
     w_group: float = 0.0  # group cohesion weight; 0 ignores groups
+
+
+def _overlap(a, b) -> bool:
+    return min(a[2], b[2]) > max(a[0], b[0]) and min(a[3], b[3]) > max(a[1], b[1])
 
 
 class Placer:
@@ -279,37 +284,53 @@ class Placer:
     def legal(self, r: str) -> bool:
         return self.overlap_of(r) == 0.0
 
+    def _legalize_one(self, r: str) -> bool:
+        """Move one illegal part to the cheapest legal spot nearby (spiral search)."""
+        part = self.parts[r]
+        ox, oy, orot = part.x, part.y, part.rot
+        best = None
+        for ring in range(1, 160):
+            rad = 0.25 * ring
+            steps = max(8, int(2 * math.pi * rad / 0.25))
+            for k in range(steps):
+                a = 2 * math.pi * k / steps
+                for rot in (orot,) + tuple(x for x in ROTS if x != orot):
+                    cand = (round((ox + rad * math.cos(a)) * 20) / 20, round((oy + rad * math.sin(a)) * 20) / 20, rot)
+                    nets = self.part_nets[r]
+                    self._apply({r: cand}, nets)
+                    if self.legal(r):
+                        c, _ = self._local_cost({r})
+                        if best is None or c < best[0]:
+                            best = (c, cand)
+                    self._apply({r: (ox, oy, orot)}, nets)
+            if best and ring > 4:
+                break
+        if best:
+            self._apply({r: best[1]}, self.part_nets[r])
+        return best is not None
+
     def legalize(self) -> list[str]:
-        """Move every illegal part to the cheapest legal spot nearby (spiral search). Returns failures."""
+        """Move every illegal part to the cheapest legal spot nearby. A part with no free spot big enough
+        (a rigid block template) stays where the anneal left it and the small parts under it move instead.
+        Returns failures."""
         failed = []
         order = sorted(self.movable, key=lambda r: -self.overlap_of(r))
         for r in order:
-            if self.legal(r):
-                continue
-            part = self.parts[r]
-            ox, oy, orot = part.x, part.y, part.rot
-            best = None
-            for ring in range(1, 160):
-                rad = 0.25 * ring
-                steps = max(8, int(2 * math.pi * rad / 0.25))
-                for k in range(steps):
-                    a = 2 * math.pi * k / steps
-                    for rot in (orot,) + tuple(x for x in ROTS if x != orot):
-                        cand = (round((ox + rad * math.cos(a)) * 20) / 20, round((oy + rad * math.sin(a)) * 20) / 20, rot)
-                        nets = self.part_nets[r]
-                        self._apply({r: cand}, nets)
-                        if self.legal(r):
-                            c, _ = self._local_cost({r})
-                            if best is None or c < best[0]:
-                                best = (c, cand)
-                        self._apply({r: (ox, oy, orot)}, nets)
-                if best and ring > 4:
-                    break
-            if best:
-                self._apply({r: best[1]}, self.part_nets[r])
-            else:
+            if not self.legal(r) and not self._legalize_one(r):
                 failed.append(r)
-        return failed
+        still = []
+        for r in failed:
+            under = [o for o in self.movable if o != r and o not in failed
+                     and _overlap(self.box(r, halo=False), self.box(o))]
+            for o in sorted(under, key=lambda o: self._area(o)):
+                self._legalize_one(o)
+            if not self.legal(r) and not self._legalize_one(r):
+                still.append(r)
+        return still
+
+    def _area(self, r: str) -> float:
+        b = self.box(r, halo=False)
+        return (b[2] - b[0]) * (b[3] - b[1])
 
     def solution(self) -> dict[str, tuple[float, float, int]]:
         return {r: (p.x, p.y, p.rot) for r, p in self.parts.items() if p.movable}
@@ -323,6 +344,9 @@ def optimize(prob: Problem, seed: int = 1, iterations: int = 150_000, log=print,
     log(f"  place: annealed {fmt(pl.total())}")
     failed = pl.legalize()
     if failed:
+        if os.environ.get("TALOS_PLACE_DEBUG"):  # keep the illegal board for layout_view.py
+            log(f"  place: NOT legal, kept for inspection: {failed}")
+            return pl.solution()
         raise SystemExit(f"placement could not legalise {failed}")
     final = pl.total()
     log(f"  place: legal {fmt(final)}")

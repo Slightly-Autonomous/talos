@@ -51,8 +51,11 @@ class HubEngine {
   // journaled as history and flagged in the result.
   IngestResult on_observation(const ObservationEnvelope& env, IngestOptions options = {});
   Result<std::vector<CommandTransition>> on_ack(const CommandAck& ack);
-  // Closes TTLs and verification windows that have elapsed.
+  // Closes TTLs and verification windows that have elapsed, and ends
+  // maintenance windows whose time is up (a lid still open then alarms).
   Status tick();
+  // True while the device's maintenance window is open at the engine's clock.
+  bool in_maintenance(const DeviceId& device) const;
 
   Status set_arm_mode(ArmMode mode, const PrincipalId& principal);
 
@@ -97,6 +100,13 @@ class HubEngine {
   Status journal_all(const std::vector<CommandTransition>& ts);
   enum class Origin { kRequest, kRule };
   RequestResult submit(const Command& command, Origin origin, bool record_denial = true);
+  // Runs rules for a current observation; suppresses tamper alarms of nodes in
+  // maintenance (journaled as AlarmSuppressed).
+  void run_rules(const ObservationEnvelope& env, IngestResult& r);
+  // Executes an accepted hub-internal command (device.maintenance*).
+  Status execute_internal(const CommandId& id);
+  // Maintenance ended: if the node's lid is still open, the tamper alarm fires now.
+  Status alarm_if_tamper_open(const DeviceId& device);
   Authorization authorize(const Command& command, Origin origin, Command& normalized) const;
   std::vector<Command> hand_off(const DeviceId* device);
   const Principal* find_principal(const PrincipalId& id) const;

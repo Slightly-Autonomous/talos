@@ -11,7 +11,7 @@ Checks, per board:
   2. Netlist round-trip: KiCad's exported netlist must equal the generator's intended
      netlist pin for pin (intended-netlist.json). Intended no-connects must be unconnected.
   3. Cross-board: every card's edge contacts, and every other host socket (the debug adapter), must
-     agree with the main board slot pinout (sensor_edge_v1); PRESENT_N must be grounded on every card.
+     agree with the main board slot pinout (sensor_edge_v1); PRESENT_N (contact 19) must be grounded on every card.
   4. Safe defaults (HWR-007): power/reset/CS/mux control nets have a defining resistor.
   5. Footprint audit: assigned footprints exist in the KiCad library; missing ones are listed.
   6. PCB DRC with schematic parity: errors fail; each warning type must be listed with a count and a
@@ -44,6 +44,8 @@ CARDS = ["TL-MOD-001", "TL-MOD-002", "TL-MOD-003", "TL-MOD-004", "TL-TEST-001"]
 # Boards that host a card in a slot socket besides the main board: (board, socket ref).
 HOSTS = [("TL-DBG-001", "J2")]
 
+
+PRESENT_CONTACT = "19"  # sensor_edge_v1 PRESENT_N (moved from 18 by HD-025)
 
 def kicad_cli() -> str:
     for c in (os.environ.get("KICAD_CLI"), shutil.which("kicad-cli"),
@@ -191,9 +193,9 @@ def cross_board(intended: dict[str, dict]) -> list[str]:
         fingers = intended[card]["parts"]["J1"]["pins"]
         for c, net in fingers.items():
             want = slot0[c]
-            if c == "18":
+            if c == PRESENT_CONTACT:
                 if net != "GND":
-                    problems.append(f"{card} contact 18 PRESENT_N must be GND, is {net}")
+                    problems.append(f"{card} contact {PRESENT_CONTACT} PRESENT_N must be GND, is {net}")
                 continue
             if net is not None and role(net) != want:
                 problems.append(f"{card} contact {c}: card role {role(net)} vs main board {want}")
@@ -319,7 +321,7 @@ def main() -> int:
     report.append("\n## Cross-board connector check (sensor_edge_v1)\n")
     report += [f"- {p}" for p in xb] or [
         "- All four main-board slots and the debug adapter's socket share one pinout; every card's used contacts "
-        "match it, reserved contacts (5, 19) are unused, and PRESENT_N (18) is grounded on all five cards."]
+        "match it, reserved contacts (5, 18) are unused, and PRESENT_N (19, HD-025) is grounded on all five cards."]
     report += details
     report.append(f"\n**Overall: {'PASS' if all_ok else 'FAIL'}**\n")
     RESULTS.mkdir(parents=True, exist_ok=True)

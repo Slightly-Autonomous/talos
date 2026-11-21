@@ -9,7 +9,8 @@ CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y
 CONFIG_COMPILER_CXX_EXCEPTIONS=n
 CONFIG_COMPILER_CXX_RTTI=n
 # Console and the bench diag protocol on the built-in USB-serial-JTAG (the
-# board's only USB port); UART0 is a test pad only.
+# board's only USB port). UART0 (115200) is on the Tag-Connect J10 for the
+# ROM boot log, flashing and recovery.
 CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
 # Brown-outs must reset and be reported (bench-test-plan S-P15/S-P16).
 CONFIG_ESP_BROWNOUT_DET=y

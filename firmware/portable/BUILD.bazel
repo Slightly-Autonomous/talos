@@ -17,6 +17,7 @@ cc_library(
         "board_io.cc",
         "coap_link.cc",
         "diag.cc",
+        "indicators.cc",
         "modules.cc",
         "ota.cc",
         "runtime.cc",
@@ -29,6 +30,7 @@ cc_library(
         "diag.h",
         "event_queue.h",
         "hal.h",
+        "indicators.h",
         "modules.h",
         "ota.h",
         "runtime.h",
@@ -52,6 +54,17 @@ cc_test(
     deps = [
         ":portable",
         "//common/sha256",
+        "@googletest//:gtest_main",
+    ],
+)
+
+cc_test(
+    name = "indicators_test",
+    size = "small",
+    srcs = ["indicators_test.cc"],
+    copts = TALOS_COPTS,
+    deps = [
+        ":portable",
         "@googletest//:gtest_main",
     ],
 )

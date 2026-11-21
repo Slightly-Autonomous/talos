@@ -44,6 +44,11 @@ FP_HDR2 = "Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical"
 FP_C = "Capacitor_SMD:C_0402_1005Metric"
 FP_C_BULK = "Capacitor_SMD:C_0805_2012Metric"
 FP_TP = "TestPoint:TestPoint_Pad_D1.0mm"
+FP_LED = "LED_SMD:LED_0603_1608Metric"
+FP_TAG = "Connector:Tag-Connect_TC2030-IDC-NL_2x03_P1.27mm_Vertical"
+FP_HOOK = "TestPoint:TestPoint_Keystone_5000-5004_Miniature"
+# Footprints that are copper/holes only (nothing to buy): kept out of the BOM like the test pads.
+BOARD_FEATURES = (FP_TP, FP_TAG)
 
 
 @dataclass
@@ -87,12 +92,22 @@ def TP(ref, net):
     return Part(ref, "Connector:TestPoint", net, {"1": net}, FP_TP)
 
 
+def LED(d_ref, r_ref, label, anode, drive, ohms, colour="LED_GREEN", note=""):
+    """Indicator: LED from `anode`, cathode through `ohms` to `drive` (a sink, or GND for a lamp that is lit
+    whenever `anode` is up). High-efficiency 0603 at 0.5-1 mA (board-practices-review.md, light rules)."""
+    k = f"{label}_LED_K"
+    return [Part(d_ref, "Device:LED", colour, {"2": anode, "1": k}, FP_LED, note or f"{label} indicator"),
+            R(r_ref, ohms, k, drive, f"{label} LED current")]
+
+
 # ---- sensor_edge_v1 -------------------------------------------------------------------
-# contact -> role (interfaces/sensor_edge_v1.md). Same table for main board and cards.
+# contact -> role (interfaces/sensor_edge_v1.md). Same table for main board and cards. PRESENT_N is on
+# contact 19 (HD-025): a card inserted upside down maps contact c to 21 - c, so its grounded PRESENT_N
+# lands on host GND (2) instead of the slot's AON rail (3, as it did from contact 18).
 EDGE = {
     1: "GND", 2: "GND", 3: "AON", 4: "SW", 5: "V5_RSVD", 6: "GND", 7: "SDA", 8: "SCL",
     9: "WAKE", 10: "ALERT_N", 11: "SCK", 12: "MOSI", 13: "MISO", 14: "CS_N", 15: "UART_TX",
-    16: "UART_RX", 17: "RESET_N", 18: "PRESENT_N", 19: "ANALOG_RSVD", 20: "GND",
+    16: "UART_RX", 17: "RESET_N", 18: "ANALOG_RSVD", 19: "PRESENT_N", 20: "GND",
 }
 
 
@@ -144,7 +159,7 @@ def sensor_node() -> Board:
         "3": core, "15": core, "8": "CHIP_EN", "9": "SPI_MISO", "10": "VBAT_SENSE",
         "5": "I2C_SDA", "6": "I2C_SCL", "18": "SPI_SCK", "19": "SPI_MOSI", "22": "STATUS_LED_N",
         "23": "BOOT_N", "20": "SLOT_WAKE0", "21": "SLOT_WAKE1", "16": "SLOT_WAKE2",
-        "12": "SLOT_WAKE3", "13": "EXP_INT_N", "24": "UART1_TX", "25": "UART1_RX",
+        "12": "SLOT_WAKE3", "13": "EXP_WAKE", "24": "UART1_TX", "25": "UART1_RX",
         "30": "U0RXD", "31": "U0TXD", "26": "MCU_USB_DN", "27": "MCU_USB_DP",
     }
     for n in ("4", "7", "17", "28", "29", "32", "33", "34", "35"):
@@ -160,7 +175,7 @@ def sensor_node() -> Board:
         R("R2", "10k", core, "BOOT_N", "GPIO9 strap pull-up (SPI boot)"),
         Part("SW2", "Switch:SW_Push", "BOOT", {"1": "BOOT_N", "2": "GND"}, "Button_Switch_SMD:SW_SPST_PTS810"),
         R("R3", "10k", core, "STATUS_LED_N", "GPIO8 strap held high"),
-        Part("D1", "Device:LED", "STATUS", {"2": core, "1": "LED_K"}, "LED_SMD:LED_0603_1608Metric"),
+        Part("D1", "Device:LED", "STATUS", {"2": core, "1": "LED_K"}, FP_LED, "STAT: firmware blink codes (L-01)"),
         R("R4", "1k", "LED_K", "STATUS_LED_N"),
         R("R5", "4.7k", core, "I2C_SDA"), R("R6", "4.7k", core, "I2C_SCL"),
         R("R7", "4.7M", "VBAT", "VBAT_SENSE"), R("R8", "4.7M", "VBAT_SENSE", "GND"),
@@ -168,15 +183,18 @@ def sensor_node() -> Board:
         R("R9", "47k", core, "EXP_INT_N"),
         # Stuck-bus recovery (owner decision 1): GPIO23 drives the mux reset. Lift R65 to use
         # U0RXD as a console instead (R33 then holds the mux out of reset).
-        R("R65", "0R", "U0RXD", "MUX_RESET_N", "GPIO23 -> TCA9546A RESET_N; lift for UART0 RX"),
+        R("R65", "0R", "U0RXD", "MUX_RESET_N", "GPIO23 -> TCA9546A RESET_N; lift for UART0 RX on J10"),
         # USB D+/D-: 0R links with DNP shunt-C pads on the module side (Espressif HW design guide)
         R("R66", "0R", "MCU_USB_DP", "USB_DP"), R("R67", "0R", "MCU_USB_DN", "USB_DN"),
         C("C25", "DNP", "MCU_USB_DP", dnp=True, note="USB D+ shunt C option (Espressif)"),
         C("C26", "DNP", "MCU_USB_DN", dnp=True, note="USB D- shunt C option (Espressif)"),
-        Part("J8", "Connector_Generic:Conn_01x06", "DNP UART0",
-             {"1": "GND", "2": core, "3": "U0TXD", "4": "U0RXD", "5": "CHIP_EN", "6": "BOOT_N"},
-             "Connector_PinHeader_2.54mm:PinHeader_1x06_P2.54mm_Vertical",
-             "bench console/flash header; lift R65 before driving RX", dnp=True),
+        # D-01: Tag-Connect TC2030-NL pads (no part) replace the DNP UART0 header: pogo-pin flashing and
+        # recovery when USB is dead or the USB-JTAG pins were reconfigured. Lift R65 before driving RX.
+        Part("J10", "Connector_Generic:Conn_01x06", "TC2030 PROG",
+             {"1": core, "2": "CHIP_EN", "3": "GND", "4": "U0TXD", "5": "BOOT_N", "6": "U0RXD"}, FP_TAG,
+             "Tag-Connect TC2030-NL: 1 3V3, 2 EN, 3 GND, 4 U0TXD, 5 BOOT (GPIO9), 6 U0RXD"),
+        # L-02: USB-present lamp, lit straight from VBUS: free on battery, no GPIO
+        *LED("D8", "R94", "PWR", "USB_VBUS", "GND", "3.3k", note="PWR: USB present (hardware, ~0.9 mA from VBUS)"),
     )
 
     # Sheet B: USB-C, PV, power mux, charger, battery
@@ -211,6 +229,8 @@ def sensor_node() -> Board:
         R("R14", "10k", "PMUX_PR1", "GND", "priority divider (HD-007)"),
         R("R15", "10k", core, "PMUX_ST", "ST pull-up: datasheet range 6-20k"),
         C("C8", "4.7u/25V", "CHG_IN", bulk=True),
+        # HD-037: local input cap on the BQ25186 IN pin (C8 sits at the power mux)
+        C("C35", "1u/25V", "CHG_IN", note="BQ25186 IN local decoupling, at the pin (HD-037)"),
         Part("U4", "talos:BQ25186", "BQ25186DLHR",
              {"10": "CHG_IN", "1": "SYS_PATH", "2": "VBAT", "3": "CHG_PG_N", "4": "GND", "5": "GND",
               "6": "BAT_NTC", "7": "I2C_SDA", "8": "I2C_SCL", "9": "CHG_INT_N", "11": "GND"}, None,
@@ -218,6 +238,9 @@ def sensor_node() -> Board:
         # C10: 1 uF 0402 keeps only ~0.5 uF at 4.2 V; 2.2 uF 0805 (owner decision 5)
         C("C9", "10u", "SYS_PATH", bulk=True), C("C10", "2.2u/25V", "VBAT", bulk=True),
         R("R16", "100k", core, "CHG_PG_N"), R("R17", "10k", core, "CHG_INT_N"),
+        # HD-029: fit for a pack without an NTC (a floating TS reads as a fault and stops charging)
+        Part("R100", "Device:R", "10k", {"1": "BAT_NTC", "2": "GND"}, FP_R,
+             "fit only for an NTC-less pack (HD-029)", dnp=True),
         Part("J3", "Connector_Generic:Conn_01x03", "1S pack (BAT+, NTC, GND)",
              {"1": "VBAT_PACK", "2": "BAT_NTC", "3": "GND"},
              "Connector_JST:JST_PH_S3B-PH-SM4-TB_1x03-1MP_P2.00mm_Horizontal",
@@ -249,7 +272,8 @@ def sensor_node() -> Board:
     for n in range(4):
         b.add(
             Part(f"U{6 + n}", "Power_Management:TPS22917DBV", "TPS22917DBVR",
-                 {"1": core, "2": "GND", "3": f"SLOT_AON_EN{n}", "4": f"SLOT_AON_CT{n}", "5": None,
+                 # HD-028: QOD to VOUT, so the rail discharges on-chip when switched off
+                 {"1": core, "2": "GND", "3": f"SLOT_AON_EN{n}", "4": f"SLOT_AON_CT{n}", "5": f"V3V3_AON_{n}",
                   "6": f"V3V3_AON_{n}"},
                  note=f"slot {n} AON switch, default off; firmware powers seated slots one at a time"),
             # Owner decision 2: default off, so a shorted card can't hold the node in a boot loop
@@ -270,7 +294,12 @@ def sensor_node() -> Board:
             C(f"C{17 + n}", "1u", f"V3V3_SW_{n}"),
             C(f"C{31 + n}", "100n", core),
         )
-    b.add(R("R76", "100k", core, "SW_FAULT_N", "wired-OR FAULT_N pull-up"))
+    b.add(R("R76", "100k", core, "SW_FAULT_N", "wired-OR FAULT_N pull-up"),
+          # HD-027: SPI held low while the ESP32 can't hold GPIO0-5 (deep sleep), so an unpowered card is
+          # not back-powered through its SCK/MOSI/MISO clamps. GPIO4 boots with its pull-up on (~2.3 V
+          # against 100k) until firmware drives it.
+          R("R101", "100k", "SPI_SCK", "GND", "HD-027"), R("R102", "100k", "SPI_MOSI", "GND", "HD-027"),
+          R("R103", "100k", "SPI_MISO", "GND", "HD-027"))
 
     # Sheet D: I2C mux, expanders, UART mux
     mux = {"1": "GND", "2": "GND", "13": "GND", "3": "MUX_RESET_N", "14": "I2C_SCL", "15": "I2C_SDA",
@@ -307,6 +336,35 @@ def sensor_node() -> Board:
         R("R44", "100k", core, "UART_MUX_EN_N", "mux disabled by default (S-3)"),
         R("R77", "1M", "PRESENT_PROBE", "GND", "probe idles low before the expander is configured"),
     )
+    # EXP_C (L-03, HD-032): slot LEDs and the enclosure tamper loop. Unused pins: firmware drives them low.
+    exp_c = {"21": "GND", "2": core, "3": "GND", "22": "I2C_SCL", "23": "I2C_SDA", "24": core, "12": "GND",
+             "1": "EXP_INT_N"}
+    for pin in p0 + p1:
+        exp_c[pin] = None
+    for n in range(4):
+        exp_c[p0[n]] = f"SLOT_LED{n}_N"
+    exp_c[p0[4]] = "TAMPER_N"
+    b.add(Part("U18", "Interface_Expansion:TCA9535PWR", "TCA9535PWR", exp_c,
+               note="EXP_C root 0x22: P00-P03 slot LEDs (active low), P04 TAMPER_N, rest unused (driven low)"),
+          C("C37", "100n", core))
+    for n in range(4):
+        b.add(*LED(f"D{9 + n}", f"R{95 + n}", f"S{n}", core, f"SLOT_LED{n}_N", "2.2k",
+                   note=f"S{n}: slot {n} state, firmware-driven, dark on battery (L-03)"))
+    b.add(
+        # Lid switch closed = loop to GND. Open lid or cut wire reads high and interrupts (HD-032).
+        # 1M keeps the closed-loop cost at 3.3 uA.
+        Part("J9", "Connector_Generic:Conn_01x02", "TAMPER loop", {"1": "TAMPER_N", "2": "GND"},
+             "Connector_JST:JST_PH_S2B-PH-SM4-TB_1x02-1MP_P2.00mm_Horizontal",
+             "enclosure lid switch, closed when the lid is shut (HD-032)"),
+        R("R99", "1M", core, "TAMPER_N", "tamper loop pull-up: 3.3 uA while the lid is shut"),
+        # 1M x 10 nF: tau 10 ms, ~12 ms to the TCA9535 VIH (0.7 VCC) after the lid opens (B7 in spice_sim.py)
+        C("C38", "10n", "TAMPER_N", note="tamper RC: ESD and contact-bounce filter, tau 10 ms"),
+        # HD-034: EXP_INT_N is active low; inverted it joins the slot WAKEs in one ext1 ANY_HIGH mask
+        Part("U19", "74xGxx:74AUP1G04", "SN74AUP1G04DBVR",
+             {"1": None, "2": "EXP_INT_N", "3": "GND", "4": "EXP_WAKE", "5": core},
+             "Package_TO_SOT_SMD:SOT-23-5", "EXP_INT_N -> active-high EXP_WAKE on GPIO14 (HD-034)"),
+        C("C36", "100n", core),
+    )
     umux = {"5": "UART1_TX", "7": "UART1_RX", "12": "UART_SEL0", "16": "UART_SEL1",
             "15": "UART_MUX_EN_N", "13": "UART_MUX_EN_N", "14": core, "6": "GND"}
     for n, (s1, s2) in enumerate([("4", "8"), ("3", "9"), ("2", "10"), ("1", "11")]):
@@ -342,7 +400,11 @@ def sensor_node() -> Board:
                              "I2C_SDA", "I2C_SCL", "SW_FAULT_N", "USB_VBUS",
                              # bench §8 additions
                              "CHG_IN", "PV_IN", "PMUX_ST", "BAT_NTC", "CHG_INT_N", "CHG_PG_N", "EXP_INT_N",
-                             "MUX_RESET_N", "USB_DP", "USB_DN", "V3V3_REG", "SYS_REG", "GND", "GND", "GND"]):
+                             "MUX_RESET_N", "USB_DP", "USB_DN", "V3V3_REG", "SYS_REG", "GND", "GND", "GND",
+                             # D-02 slot rails, D-03 wake lines, shared SPI, battery sense, tamper
+                             *(f"V3V3_AON_{n}" for n in range(4)), *(f"V3V3_SW_{n}" for n in range(4)),
+                             *(f"SLOT_WAKE{n}" for n in range(4)), "SPI_SCK", "SPI_MOSI", "SPI_MISO",
+                             "VBAT_SENSE", "TAMPER_N", "EXP_WAKE"]):
         b.add(TP(f"TP{i + 1}", net))
     return b
 
@@ -450,11 +512,23 @@ def debug_adapter() -> Board:
         Part("D1", "Device:LED", "STATUS", {"2": v, "1": "SEATED_K"}, "LED_SMD:LED_0603_1608Metric",
              "lit when a card grounds PRESENT_N"),
         R("R16", "1k", "SEATED_K", "PRESENT_N"),
+        # L-07..L-09: bridge-side lamps; none sits on a metered rail, so PPK2 numbers are unaffected
+        *LED("D3", "R25", "PWR", v, "GND", "2.2k", note="PWR: adapter 3.3 V up"),
+        *LED("D4", "R26", "AON", "DBG_AON_EN", "GND", "2.2k",
+             note="AON: host asked for the card AON rail (lit from the MCP2221 GP0 drive, ~0.5 mA)"),
+        *LED("D5", "R27", "SW", "DBG_SW_EN", "GND", "2.2k",
+             note="SW: host asked for the card SW rail (lit from the MCP2221 GP2 drive, ~0.5 mA)"),
+        *LED("D6", "R28", "FLT", v, "DBG_SW_FAULT_N", "2.2k", colour="LED_RED",
+             note="FLT: TPS2553 current-limit trip"),
     )
     for i, net in enumerate([v, "GND", "V3V3_AON", "V3V3_SW", "SCK", "MOSI", "MISO", "CS_N", "RESET_N",
                              "UART_TX", "UART_RX", "SDA", "SCL", "WAKE", "ALERT_N", "GND",
                              "BRIDGE_TX", "USB_VBUS", "DBG_SW_FAULT_N"]):
         b.add(TP(f"TP{i + 1}", net))
+    # D-07: two scope-ground loops (THT), clip-on rather than 1 mm pads
+    for i in range(2):
+        b.add(Part(f"TP{20 + i}", "Connector:TestPoint", "GND hook", {"1": "GND"}, FP_HOOK,
+                   "Keystone 5001 miniature loop for scope/meter ground clips"))
     return b
 
 
@@ -516,6 +590,8 @@ def boards() -> list[Board]:
         R("R1", "1k", "DRV_WAKE", "WAKE"), R("R2", "1k", "DRV_ALERT", "ALERT_N", "test only; ALERT_N is open-drain"),
         R("R3", "1k", "DRV_MISO", "MISO"), R("R4", "1k", "DRV_UART_RX", "UART_RX"),
         R("R5", "330", "V3V3_SW", "GND", "~10 mA switched-rail load"),
+        # L-11: lamp on the switched rail; adds ~0.5 mA to the 10 mA load
+        *LED("D1", "R20", "SW", "V3V3_SW", "GND", "2.2k", note="SW: slot switched rail on"),
         # At-speed loopbacks (owner decision 9): weak enough that an expander drive through 1k wins
         R("R6", "10k", "UART_TX", "UART_RX", "UART loopback"),
         R("R7", "10k", "MOSI", "MISO", "SPI loopback"),
@@ -552,7 +628,8 @@ def place(board: Board, root: str, p: Part, sym, unit: int, upins, sx: float, sy
     items: list = []
     tag = p.ref if unit == 1 else f"{p.ref}#u{unit}"
     is_flag = p.ref.startswith("#")
-    in_bom = not is_flag and not p.ref.startswith("TP")  # test pads are bare copper, not purchased
+    # test pads and Tag-Connect pads are bare copper, not purchased (the THT ground hooks are)
+    in_bom = not is_flag and (p.footprint or "") not in BOARD_FEATURES
     props = [
         ["property", q("Reference"), q(p.ref), ["at", f"{sx:g}", f"{sy - 3 * G:g}", "0"], effects(hide=is_flag)],
         ["property", q("Value"), q(p.value), ["at", f"{sx:g}", f"{sy + 3 * G:g}", "0"], effects()],
@@ -600,10 +677,13 @@ def place(board: Board, root: str, p: Part, sym, unit: int, upins, sx: float, sy
 
 
 def _netclass(name: str, width: float) -> dict:
-    return {"name": name, "clearance": 0.15, "track_width": width, "via_diameter": 0.6, "via_drill": 0.3,
+    return {"name": name, "clearance": 0.15, "track_width": width, "via_diameter": 0.65, "via_drill": 0.3,
             "microvia_diameter": 0.3, "microvia_drill": 0.1, "diff_pair_gap": 0.2, "diff_pair_width": 0.2,
             "diff_pair_via_gap": 0.25, "wire_width": 6, "bus_width": 12, "line_style": 0, "priority": 0,
             "pcb_color": "rgba(0, 0, 0, 0.000)", "schematic_color": "rgba(0, 0, 0, 0.000)"}
+
+
+# Vias are 0.65/0.3 mm so two vias at 0.15 mm copper clearance keep JLCPCB's 0.5 mm hole-to-hole (HD-039).
 
 
 def project_file(name: str) -> dict:
@@ -612,11 +692,11 @@ def project_file(name: str) -> dict:
         "meta": {"filename": f"{name}.kicad_pro", "version": 3},
         "board": {"design_settings": {"rules": {
             "min_clearance": 0.15, "min_track_width": 0.1, "min_via_diameter": 0.5, "min_via_annular_width": 0.1,
-            "min_through_hole_diameter": 0.3, "min_hole_clearance": 0.15, "min_hole_to_hole": 0.2,
+            "min_through_hole_diameter": 0.3, "min_hole_clearance": 0.15, "min_hole_to_hole": 0.5,
             "min_copper_edge_clearance": 0.3, "min_silk_clearance": 0.0, "min_resolved_spokes": 1,
             "max_error": 0.005}}},
         "net_settings": {"classes": [{
-            "name": "Default", "clearance": 0.15, "track_width": 0.15, "via_diameter": 0.6, "via_drill": 0.3,
+            "name": "Default", "clearance": 0.15, "track_width": 0.15, "via_diameter": 0.65, "via_drill": 0.3,
             "microvia_diameter": 0.3, "microvia_drill": 0.1, "diff_pair_gap": 0.2, "diff_pair_width": 0.2,
             "diff_pair_via_gap": 0.25, "wire_width": 6, "bus_width": 12, "line_style": 0, "priority": 2147483647,
             "pcb_color": "rgba(0, 0, 0, 0.000)", "schematic_color": "rgba(0, 0, 0, 0.000)"},
@@ -713,6 +793,8 @@ def write_board(board: Board, libs: SymbolLibraries) -> dict:
                       for p in board.parts} - {""})
     if board.name == "TL-SN-001":  # board-only fiducials (gen_pcbs.py) come from the stock Fiducial library
         fp_libs = sorted(set(fp_libs) | {"Fiducial"})
+    if board.name in ("TL-SN-001", "TL-DBG-001"):  # board-only mounting holes (gen_pcbs.py)
+        fp_libs = sorted(set(fp_libs) | {"MountingHole"})
     fp_table = ["fp_lib_table", ["version", "7"]]
     for lib in fp_libs:
         uri = ("${KIPRJMOD}/../libraries/talos-footprints.pretty" if lib == "talos"

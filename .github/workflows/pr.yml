@@ -152,6 +152,10 @@ jobs:
         env:
           KICAD_FOOTPRINT_DIR: /usr/share/kicad/footprints
         run: python3 hardware/scripts/check_kicad.py
+      - name: Layout invariants (templates, thermal vias, holes, labels, power necks)
+        run: python3 hardware/scripts/layout_rules.py
+      - name: Hardware generator unit tests
+        run: python3 -m unittest discover -s hardware/scripts/tests -t hardware/scripts -v
       - name: Power budget model
         run: python3 hardware/scripts/power_budget.py --out /tmp/power-budget.md
       - name: Circuit simulation (ngspice from the KiCad image; verdicts match hardware/results/spice.md)

@@ -51,11 +51,18 @@ message Notify {
   string text = 2;
 }
 
+// device.maintenance: suppress one node's tamper alarm for duration_ms
+// (0 = 30 min default; 1 min to 4 h).
+message SetMaintenance {
+  uint32 duration_ms = 1;
+}
+
 message CommandArgs {
   oneof kind {
     AudioSpeak audio_speak = 1;
     SetLocked set_locked = 2;
     Notify notify = 3;
+    SetMaintenance set_maintenance = 4;
   }
 }
 

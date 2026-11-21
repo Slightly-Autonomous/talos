@@ -9,7 +9,9 @@
 // own queue.
 //
 // The firmware has no actuators or camera yet, so devices with those stay on L1
-// (unsupported_reason() says why).
+// (unsupported_reason() says why). A device with an enclosure (tamper loop) runs on the
+// TL-SN-001 board model, where the loop is EXP_C's TAMPER_N; the others on the plain
+// four-slot board.
 #pragma once
 
 #include <memory>
@@ -79,6 +81,7 @@ class FirmwareDevice final : public IDeviceBackend {
   std::vector<Contact> contacts_;
   std::vector<Impact> impacts_;
   std::vector<Environment> environments_;
+  bool enclosure_ = false;  // runs on the TL-SN-001 board model (EXP_C TAMPER_N)
   fw::ConfigUpdate config_;
   Timestamp start_{0};  // hub time at node clock 0
   std::int64_t last_t_ms_ = 0;

@@ -1,0 +1,48 @@
+name: garage_enclosure_maintenance
+description: >-
+  Armed away. The owner puts node_garage into maintenance for 60 s (device.maintenance) to change its battery. Its lid opening is journaled but the tamper alarm is suppressed; node_driveway's lid opening still alarms. The lid is still open when maintenance expires (hub clock), so the alarm fires then.
+site: sites/garage_driveway.yaml
+seed: 42
+start_unix_ms: 1794740400000
+duration_ms: 90000
+principals:
+  - {id: owner, kind: PRINCIPAL_KIND_HUMAN, max_risk: RISK_CLASS_SECURITY_CRITICAL}
+rules:
+  - id: enclosure_tamper_alarm
+    revision: 1
+    property_id: garage-01
+    principal_id: "rule:enclosure_tamper_alarm"
+    enabled: true
+    trigger_event_type: tamper.opened
+    actions:
+      - operation: notify
+        target: {device_id: notifier, capability_id: notify}
+        args: {notify: {recipient_role: owner, text: "Tamper: a node enclosure opened"}}
+        ttl_ms: 5000
+        verification: VERIFICATION_MODE_ACK_ONLY
+        verification_window_ms: 3000
+stimuli:
+  - {at_ms: 0, arm_mode_set: {principal_id: owner, mode: ARM_MODE_ARMED_AWAY}}
+  - at_ms: 1000
+    user_command:
+      command_id: battery-change
+      principal_id: owner
+      operation: device.maintenance
+      target: {device_id: node_garage, capability_id: device.health}
+      args: {set_maintenance: {duration_ms: 60000}}
+      ttl_ms: 10000
+  - {at_ms: 5000, enclosure_set: {device_id: node_garage, open: true}}
+  - {at_ms: 10000, enclosure_set: {device_id: node_driveway, open: true}}
+  - {at_ms: 15000, enclosure_set: {device_id: node_driveway, open: false}}
+  - {at_ms: 80000, enclosure_set: {device_id: node_garage, open: false}}
+expect:
+  - name: maintenance applied by the hub
+    command: {operation: device.maintenance, final_status_in: [COMMAND_STATUS_VERIFIED], count: 1}
+  - name: node_garage opening journaled during maintenance
+    observation: {event_type: tamper.opened, device_id: node_garage, from_ms: 5000, to_ms: 6000, min_count: 1, max_count: 1}
+  - name: other node still reports
+    observation: {event_type: tamper.opened, device_id: node_driveway, from_ms: 10000, to_ms: 11000, min_count: 1, max_count: 1}
+  - name: two alarms - node_driveway at once, node_garage at expiry with its lid still open
+    command: {operation: notify, final_status_in: [COMMAND_STATUS_COMPLETED_UNVERIFIED], count: 2}
+  - name: one notification each
+    physical_effects: {device_id: notifier, count: 2}

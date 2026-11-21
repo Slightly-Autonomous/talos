@@ -24,7 +24,14 @@ HubEngine::HubEngine(EngineConfig config, IJournal& journal, const IClock& clock
     return std::pair{a->command.created_at, a->command.id} <
            std::pair{b->command.created_at, b->command.id};
   });
-  for (const auto* rec : accepted) pending_.push_back(rec->command.id);
+  for (const auto* rec : accepted) {
+    // A hub-internal command (device.maintenance*) left accepted by a crash
+    // before its effect was journaled is never handed to a device: it expires
+    // by its TTL instead of being dispatched to a node that can't run it.
+    const OperationSpec* spec = find_operation(rec->command.operation);
+    if (spec && spec->hub_internal) continue;
+    pending_.push_back(rec->command.id);
+  }
 }
 
 Status HubEngine::journal(DomainEvent event) {
@@ -53,6 +60,14 @@ Freshness HubEngine::freshness_of(const CapabilityRef& ref) const {
 }
 
 IngestResult HubEngine::on_observation(const ObservationEnvelope& env, IngestOptions options) {
+  // The hub's tamper state before this report: a boot state report of an open
+  // lid that the hub last knew closed is an opening nobody reported.
+  std::optional<bool> prior_tamper;
+  if (std::holds_alternative<TamperState>(env.payload)) {
+    if (auto it = state_.capabilities.find(env.source); it != state_.capabilities.end()) {
+      if (const auto* t = std::get_if<TamperState>(&it->second.value)) prior_tamper = t->open;
+    }
+  }
   IngestResult r = ingestor_.ingest(env, clock_.now(), options);
   if (r.status != IngestStatus::kAccepted) return r;
   state_ = reduce(std::move(state_), *r.entry);
@@ -64,6 +79,11 @@ IngestResult HubEngine::on_observation(const ObservationEnvelope& env, IngestOpt
   if (it == state_.capabilities.end() || it->second.journal_seq != r.entry->journal_seq) {
     r.superseded = true;
     if (it != state_.capabilities.end()) r.held_position = it->second.position;
+    // Exception (ADR 0007 amendment): a late enclosure opening still alarms.
+    // The node's P0 opening can sit in retry backoff while its P1 restore
+    // overtakes it; as history it would never alarm, and a lid opened and
+    // closed again would go unannounced. It still verifies nothing.
+    if (env.event_type == "tamper.opened") run_rules(env, r);
     return r;
   }
 
@@ -73,10 +93,41 @@ IngestResult HubEngine::on_observation(const ObservationEnvelope& env, IngestOpt
     return r;
   }
 
+  if (const auto* t = std::get_if<TamperState>(&env.payload);
+      t && t->open && env.event_type == "tamper.state" && prior_tamper == false) {
+    // A cold boot (power loss, watchdog, brown-out) lost the opening's P0: the
+    // node can only send its state. The hub saw the lid closed, so this is an
+    // opening and alarms as one, under the report's own event id.
+    ObservationEnvelope opening = env;
+    opening.event_type = "tamper.opened";
+    run_rules(opening, r);
+    return r;
+  }
+  run_rules(env, r);
+  return r;
+}
+
+bool HubEngine::in_maintenance(const DeviceId& device) const {
+  auto it = state_.maintenance.find(device);
+  return it != state_.maintenance.end() && clock_.now() < it->second.until;
+}
+
+void HubEngine::run_rules(const ObservationEnvelope& env, IngestResult& r) {
   const RuleContext ctx{state_.arm_mode, config_.local_minute_of_day
                                              ? config_.local_minute_of_day(clock_.now())
                                              : std::uint16_t{0}};
+  const bool suppress = env.event_type == "tamper.opened" && in_maintenance(env.source.device);
   for (const auto& intent : evaluate_rules(config_.rules, config_.property, env, ctx)) {
+    if (suppress) {
+      const MaintenanceWindow& w = state_.maintenance.at(env.source.device);
+      if (Status s = journal(
+              AlarmSuppressed{env.source.device, intent.rule, env.event_id, w.until, w.principal});
+          !s) {
+        r.error = s.error();
+        return;
+      }
+      continue;
+    }
     Command c = to_command(intent, clock_.now());
     RequestResult req = submit(c, Origin::kRule);
     if (req.conflict) {
@@ -88,15 +139,14 @@ IngestResult HubEngine::on_observation(const ObservationEnvelope& env, IngestOpt
       req = submit(c, Origin::kRule);
       if (req.conflict) {
         r.error = Error{"rule_command_conflict", "rule command id " + c.id.str() + " is held"};
-        return r;
+        return;
       }
     }
     if (req.error) {
       r.error = req.error;
-      return r;
+      return;
     }
   }
-  return r;
 }
 
 RequestResult HubEngine::request(const Command& command, bool record_denial) {
@@ -124,7 +174,18 @@ Authorization HubEngine::authorize(const Command& command, Origin origin,
 
   // Freshness is always judged on what the command acts on.
   const Freshness f = freshness_of(normalized.target);
-  return evaluate(*principal, normalized, {clock_.now(), f == Freshness::kFresh});
+  Authorization auth = evaluate(*principal, normalized, {clock_.now(), f == Freshness::kFresh});
+  if (!auth.allowed) return auth;
+  // Maintenance windows can't be chained past kMaxMaintenance: a restart while
+  // one is open keeps its start, so an open lid alarms at most 4 h later.
+  if (const auto* m = std::get_if<SetMaintenance>(&normalized.args)) {
+    auto it = state_.maintenance.find(normalized.target.device);
+    if (it != state_.maintenance.end() && clock_.now() < it->second.until &&
+        clock_.now() + Millis{m->duration_ms} > it->second.since + kMaxMaintenance) {
+      return {false, "maintenance_limit"};
+    }
+  }
+  return auth;
 }
 
 RequestResult HubEngine::submit(const Command& command, Origin origin, bool record_denial) {
@@ -145,8 +206,66 @@ RequestResult HubEngine::submit(const Command& command, Origin origin, bool reco
     return req;
   }
   const CommandRecord* rec = state_.commands.find(command.id);
-  if (rec && rec->status == CommandStatus::kAccepted) pending_.push_back(command.id);
+  if (rec && rec->status == CommandStatus::kAccepted) {
+    const OperationSpec* spec = find_operation(rec->command.operation);
+    if (spec && spec->hub_internal) {
+      if (Status s = execute_internal(command.id); !s) req.error = s.error();
+    } else {
+      pending_.push_back(command.id);
+    }
+  }
   return req;
+}
+
+Status HubEngine::execute_internal(const CommandId& id) {
+  const Timestamp now = clock_.now();
+  const Command c = state_.commands.find(id)->command;
+  const DeviceId& device = c.target.device;
+  std::string evidence = "applied by the hub";
+  if (const auto* m = std::get_if<SetMaintenance>(&c.args)) {
+    const Timestamp until = now + Millis{m->duration_ms};
+    if (Status s = journal(MaintenanceChanged{device, until, c.principal, "started", c.id}); !s) {
+      return s;
+    }
+    evidence = "maintenance until " + std::to_string(until.unix_ms);
+  } else if (c.operation == "device.maintenance_end") {
+    if (state_.maintenance.contains(device)) {
+      if (Status s =
+              journal(MaintenanceChanged{device, std::nullopt, c.principal, "cancelled", c.id});
+          !s) {
+        return s;
+      }
+      evidence = "maintenance cancelled";
+      if (Status s = alarm_if_tamper_open(device); !s) return s;
+    } else {
+      evidence = "no maintenance to end";
+    }
+  }
+  auto ts = state_.commands.complete_internal(id, now, evidence);
+  if (!ts.ok()) return ts.error();
+  return journal_all(ts.value());
+}
+
+Status HubEngine::alarm_if_tamper_open(const DeviceId& device) {
+  const CapabilityRef ref{device, std::nullopt, CapabilityId("tamper.enclosure")};
+  auto it = state_.capabilities.find(ref);
+  if (it == state_.capabilities.end()) return Status::Ok();
+  const auto* t = std::get_if<TamperState>(&it->second.value);
+  if (!t || !t->open) return Status::Ok();
+  // The lid is still open: evaluate the alarm as for the opening it suppressed.
+  // Same event id, so an opening that already alarmed before maintenance began
+  // dedupes to the command it made (idempotency key) instead of a second one.
+  ObservationEnvelope env;
+  env.property = config_.property.id;
+  env.source = ref;
+  env.event_type = "tamper.opened";
+  env.event_id = it->second.last_event;
+  env.position = it->second.position;
+  env.payload = *t;
+  IngestResult r;
+  run_rules(env, r);
+  if (r.error) return *r.error;
+  return Status::Ok();
 }
 
 std::vector<Command> HubEngine::hand_off(const DeviceId* device) {
@@ -157,6 +276,10 @@ std::vector<Command> HubEngine::hand_off(const DeviceId* device) {
     const CommandId& id = pending_[i];
     const CommandRecord* rec = state_.commands.find(id);
     if (!rec || rec->status != CommandStatus::kAccepted) continue;  // expired/canceled
+    if (const OperationSpec* spec = find_operation(rec->command.operation);
+        spec && spec->hub_internal) {
+      continue;  // never a device's to run
+    }
     if (device && rec->command.target.device != *device) {
       keep.push_back(id);
       continue;
@@ -189,6 +312,15 @@ Result<std::vector<CommandTransition>> HubEngine::on_ack(const CommandAck& ack) 
 
 Status HubEngine::tick() {
   Status s = journal_all(state_.commands.tick(clock_.now()));
+  std::vector<DeviceId> expired;
+  for (const auto& [device, w] : state_.maintenance) {
+    if (w.until <= clock_.now()) expired.push_back(device);
+  }
+  for (const auto& device : expired) {
+    if (!s) break;
+    s = journal(MaintenanceChanged{device, std::nullopt, kMaintenanceExpiry, "expired", {}});
+    if (s) s = alarm_if_tamper_open(device);
+  }
   std::erase_if(pending_, [&](const CommandId& id) {
     const CommandRecord* rec = state_.commands.find(id);
     return !rec || rec->status != CommandStatus::kAccepted;

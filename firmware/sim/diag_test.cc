@@ -89,7 +89,7 @@ TEST(Diag, RootScanAndI2cSelftestOnAHealthyBoard) {
   Bench b;
   b.boot();
   auto scan = b.run("i2c scan");
-  EXPECT_NE(scan.text.find("\"found\":[32,33,106]"), std::string::npos) << scan.text;
+  EXPECT_NE(scan.text.find("\"found\":[32,33,34,106]"), std::string::npos) << scan.text;
   auto st = b.run("selftest i2c");
   EXPECT_TRUE(passed(st, "i2c.root_scan")) << st.text;
   EXPECT_TRUE(passed(st, "i2c.mux_readback"));
@@ -104,8 +104,9 @@ TEST(Diag, I2cSelftestNamesAMissingCharger) {
   b.boot();
   auto st = b.run("selftest i2c");
   EXPECT_FALSE(passed(st, "i2c.root_scan"));
-  EXPECT_NE(record(st, "i2c.root_scan").find("\"found\":[32,33,112],\"want\":[32,33,106,112]"),
-            std::string::npos)
+  EXPECT_NE(
+      record(st, "i2c.root_scan").find("\"found\":[32,33,34,112],\"want\":[32,33,34,106,112]"),
+      std::string::npos)
       << st.text;
   EXPECT_FALSE(done_ok(st));
 }
@@ -205,6 +206,42 @@ TEST(Diag, RawI2cReadOnASlotBranch) {
   auto c = b.run("i2c rd 0x50 0 4 slot=1");
   EXPECT_NE(c.text.find("\"data\":[3,2,1,1]"), std::string::npos) << c.text;  // 0x0302 rev 1 v1
   EXPECT_EQ(b.node.i2c.mask(), 0);                                            // left deselected
+}
+
+TEST(Diag, BoardIdIsWrittenOnceAndSurvivesAWorkingPartitionErase) {
+  Bench b;
+  b.boot();
+  EXPECT_NE(b.run("id").text.find("\"board\":\"\",\"rev\":\"\",\"serial\":\"\""),
+            std::string::npos);
+  auto w = b.run("board-id TL-SN-001 A SN-A-0001");
+  EXPECT_TRUE(done_ok(w)) << w.text;
+  EXPECT_NE(record(w, "board_id").find("\"board\":\"TL-SN-001\",\"rev\":\"A\""), std::string::npos);
+  EXPECT_TRUE(done_ok(b.run("board-id TL-SN-001 A SN-A-0001")));  // same values: fine
+  auto again = b.run("board-id TL-SN-001 B SN-A-0001");
+  EXPECT_FALSE(done_ok(again));
+  EXPECT_NE(again.text.find("write-once"), std::string::npos);
+  EXPECT_FALSE(done_ok(b.run("board-id TL-SN-001 A bad/serial")));
+  b.node.store.erase_working_partition();  // talos_id is a different partition
+  b.boot();
+  EXPECT_NE(b.run("id").text.find("\"board\":\"TL-SN-001\",\"rev\":\"A\",\"serial\":\"SN-A-0001\""),
+            std::string::npos);
+}
+
+TEST(Diag, LedServiceModeLightsSlotLedsOnBattery) {
+  Bench b({{0, ModuleCode::kTlMod004Env}});
+  apply_fault(b.node, "no_vin");
+  b.boot();
+  EXPECT_NE(record(b.run("led"), "led").find("\"slot_lit\":[0,0,0,0]"), std::string::npos);
+  EXPECT_TRUE(done_ok(b.run("led service on")));
+  b.node.run_for(5);
+  auto on = b.run("led");
+  EXPECT_NE(record(on, "led").find("\"service\":true"), std::string::npos) << on.text;
+  EXPECT_NE(record(on, "led").find("\"slot_lit\":[1,0,0,0]"), std::string::npos) << on.text;
+  EXPECT_TRUE(b.node.rev_a().slot_led(0));
+  EXPECT_TRUE(done_ok(b.run("led service off")));
+  b.node.run_for(5);
+  EXPECT_FALSE(b.node.rev_a().slot_led(0));
+  EXPECT_FALSE(done_ok(b.run("led blink")));
 }
 
 }  // namespace

@@ -32,7 +32,11 @@ V_BAT_NOM = 3.7
 SLEEP_LOADS = [
     Load("ESP32-H2 deep sleep (LP timer + LP mem on)", 7.0, "3v3", "SRC MINI-1 v1.6 Table 16"),
     Load("TCA9546A standby", 1.0, "3v3", "SRC SCPS205B ICC standby typ @3.6 V"),
-    Load("TCA9535 x2 standby", 2 * 0.9, "3v3", "SRC SCPS201F ICC standby typ @3.6 V"),
+    Load("TCA9535 x3 standby (EXP_A/B/C)", 3 * 0.9, "3v3", "SRC SCPS201F ICC standby typ @3.6 V"),
+    Load("EXP_WAKE inverter SN74AUP1G04 ICC", 0.5, "3v3", "SRC SCES571K ICC 0.5 uA max 25 C"),
+    Load("Tamper loop shut (R99 1 MOhm to GND through the switches)", 3.3, "3v3", "design: 3.3 V / 1 MOhm (HD-032)"),
+    Load("Lamps dark on battery; SPI pull-downs idle low; QOD off while AON on", 0.0, "3v3",
+         "design: S0-S3 off by firmware, PWR lamp runs from VBUS only, D1 pulses only when awake"),
     Load("TPS22917 x4 AON enabled (IQ; worst case, firmware powers seated slots only)", 4 * 0.5, "3v3", "SRC SLVSDW8B IQ 0.5 uA typ"),
     Load("TPS2553-1 x4 SW disabled (IIN_off)", 4 * 0.100, "3v3", "SRC SLVS841G IIN_off 0.1 uA typ"),
     # W&S mode, 100 ms SLEEPTIME, one axis (door closed). EST interpolated from SLYS045C ICC_DCM:
@@ -68,6 +72,10 @@ BATTERY_USABLE_WH = 8.4  # EST handoff §22 (3350 mAh 18650, derated)
 SELF_DISCHARGE_PCT_MONTH = 2.0  # EST protected Li-ion pack incl. protection IC
 PANEL_W = 2.0  # EST HD-019
 SUN_HOURS_WINTER = 1.0  # EST pessimistic winter effective full-sun hours
+# Sheltered outdoor nodes (owner, 2026-11-20): the BQ25186 stops charging below ~0 C through the pack NTC
+# (SLUSF69 TS thresholds, cold limit; check against the chosen pack's NTC, HD-006), so a cold spell is
+# battery-only whatever the sun does. Li-ion keeps roughly 70-80 % of its capacity at -10 C (EST).
+COLD_CAPACITY = 0.7  # EST fraction of usable capacity at -10 C
 PV_DERATE = 0.5  # EST angle, dirt, linear-charger loss, temperature
 
 # ---- Charger thermals -----------------------------------------------------------------
@@ -194,7 +202,11 @@ def main() -> int:
                f"({PANEL_W} W panel × {SUN_HOURS_WINTER} h × {PV_DERATE:.0%}, all EST).")
     out.append(
         f"- Dark-day reserve from a full pack ≈ {life_days(deep_total)[0]:.0f} days "
-        "(self-discharge dominates; cold capacity loss not modelled).\n"
+        "(self-discharge dominates).")
+    out.append(
+        f"- Cold spell (below 0 °C: no charging from any source, capacity × {COLD_CAPACITY:.0%} EST): "
+        f"≈ {life_days(deep_total)[0] * COLD_CAPACITY:.0f} days on a full pack before the node goes dark. "
+        "A node that enters the cold half-charged has half that.\n"
     )
     out.append("## 6. Checks\n")
     ok_all = True

@@ -28,6 +28,10 @@ def main(argv: list[str] | None = None) -> int:
     src.add_argument("--exec", nargs=argparse.REMAINDER, help="a virtual node: bench_node ...")
     p.add_argument("--expect", nargs="*", default=[], metavar="SLOT=CARD",
                    help=f"cards seated per slot, from {sorted(CARD_CODES)}")
+    p.add_argument("--flipped", nargs="*", default=[], metavar="SLOT=CARD",
+                   help="C0-01: cards seated upside down on purpose (HD-025)")
+    p.add_argument("--measure", nargs="*", default=[], metavar="TEST=VALUE",
+                   help="operator measurements, e.g. T-11=11.0 (mA)")
     p.add_argument("--out", help="results file (JSON lines)")
     args = p.parse_args(argv)
     expect = {}
@@ -36,6 +40,19 @@ def main(argv: list[str] | None = None) -> int:
         if card not in CARD_CODES or slot not in "0123" or len(slot) != 1:
             p.error(f"bad --expect {item!r}")
         expect[int(slot)] = card
+    flipped = {}
+    for item in args.flipped:
+        slot, _, card = item.partition("=")
+        if card not in CARD_CODES or slot not in "0123" or len(slot) != 1:
+            p.error(f"bad --flipped {item!r}")
+        flipped[int(slot)] = card
+    measure = {}
+    for item in args.measure:
+        test, _, value = item.partition("=")
+        try:
+            measure[test] = float(value)
+        except ValueError:
+            p.error(f"bad --measure {item!r}")
     if args.port:
         transport = SerialTransport(args.port)
     elif args.console:
@@ -52,8 +69,8 @@ def main(argv: list[str] | None = None) -> int:
             mark = {"pass": "PASS", "fail": "FAIL", "blocked": "BLOCKED", "manual": "MANUAL"}[r.verdict]
             print(f"{mark:8} {r.test:24} {r.diagnosis}", flush=True)
 
-        bench = Bench(Console(transport), expect, sink)
-        results = bench.run(plan(expect))
+        bench = Bench(Console(transport), expect, sink, flipped=flipped, measure=measure)
+        results = bench.run(plan(expect, flipped))
         import json
         s = summary(results)
         f.write(json.dumps({"summary": s}) + "\n")

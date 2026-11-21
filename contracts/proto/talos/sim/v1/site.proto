@@ -113,6 +113,16 @@ enum DeviceBinding {
   DEVICE_BINDING_HARDWARE = 3;
 }
 
+// The node's enclosure tamper loop (lid switch; TL-SN-001 J9, HD-032). The device
+// reports capability tamper.enclosure. L2 runs it on the TL-SN-001 board model.
+message EnclosureSpec {
+  // A loop change shorter than this is a bounce and is not reported. 0 = 50 ms
+  // (the firmware's TamperDebouncer::kDebounceMs).
+  uint32 debounce_ms = 1;
+  // The lid is already off when the scenario starts.
+  bool open_at_start = 2;
+}
+
 message SiteDevice {
   string id = 1;
   Point position = 2;
@@ -125,6 +135,7 @@ message SiteDevice {
   uint32 battery_mv = 8;
   optional NotifierSpec notifier = 9;
   DeviceBinding binding = 10;
+  optional EnclosureSpec enclosure = 11;
 }
 
 message Site {

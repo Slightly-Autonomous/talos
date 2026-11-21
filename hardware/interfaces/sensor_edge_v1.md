@@ -6,7 +6,7 @@ Twenty contacts, 0.80 mm pitch, 2 × 10. The card is a 1.60 mm PCB with gold fin
 |---|---|---|---|---|
 | 1 | GND | – | ground | ground |
 | 2 | GND | – | ground | ground |
-| 3 | V3V3_AON_n | main→card | TPS22917, default OFF (1 MΩ pull-down), 1 nF CT for a ~2 ms ramp (inrush ≤ 30 mA into 10 µF); firmware powers seated slots one at a time, ≤ 20 mA *(est)* | ID EEPROM and anything on the I²C branch |
+| 3 | V3V3_AON_n | main→card | TPS22917, default OFF (1 MΩ pull-down), QOD to VOUT (on-chip discharge, HD-028), 1 nF CT for a ~2 ms ramp (inrush ≤ 30 mA into 10 µF); firmware powers seated slots one at a time, ≤ 20 mA *(est)* | ID EEPROM and anything on the I²C branch |
 | 4 | V3V3_SW_n | main→card | TPS2553-1, default OFF, latch-off current limit 155–207 mA, FAULT_N to EXP_B, 100 kΩ bleed | higher-current sensing only, no I²C devices unless buffered |
 | 5 | V5_SW (reserved) | main→card | **not connected** | leave unconnected |
 | 6 | GND | – | ground | ground |
@@ -14,20 +14,22 @@ Twenty contacts, 0.80 mm pitch, 2 × 10. The card is a 1.60 mm PCB with gold fin
 | 8 | SLOTn_SCL | main→card | TCA9546A channel *n*, 4.7 k pull-up to AON_n | open-drain |
 | 9 | SLOT_WAKEn | card→main | GPIO10/11/12/13, 1 MΩ pull-down, TVS | push-pull, idle low preferred |
 | 10 | SLOTn_ALERT_N | card→main | EXP_B input, 100 k pull-up to AON_n | open-drain, active low |
-| 11 | SPI_SCK | main→card | shared GPIO4 | high-Z input |
-| 12 | SPI_MOSI | main→card | shared GPIO5 | high-Z input |
-| 13 | SPI_MISO | card→main | shared GPIO0 | **must tri-state when CS_N high** |
+| 11 | SPI_SCK | main→card | shared GPIO4, 100 kΩ pull-down (HD-027) | high-Z input |
+| 12 | SPI_MOSI | main→card | shared GPIO5, 100 kΩ pull-down (HD-027) | high-Z input |
+| 13 | SPI_MISO | card→main | shared GPIO0, 100 kΩ pull-down (HD-027) | **must tri-state when CS_N high** |
 | 14 | SLOTn_CS_N | main→card | EXP_A output, 100 k pull-up to AON_n | active low |
 | 15 | SLOTn_UART_TX | main→card | TS3A5017 1S*n* (UART1 TX GPIO22) through 330 Ω, 100 kΩ pull-up to AON_n | card RX |
 | 16 | SLOTn_UART_RX | card→main | TS3A5017 2S*n* (UART1 RX GPIO25) through 330 Ω, 100 kΩ pull-up to AON_n | card TX |
 | 17 | SLOTn_RESET_N | main→card | EXP_A output, 100 k pull-up to AON_n | optional |
-| 18 | SLOTn_PRESENT_N | card→main | EXP_B input, 100 k pull-up to PRESENT_PROBE | **tie to GND on every card** |
-| 19 | ANALOG_RSVD | – | **not connected** (HD-003) | leave unconnected |
+| 18 | ANALOG_RSVD | – | **not connected** (HD-003) | leave unconnected |
+| 19 | SLOTn_PRESENT_N | card→main | EXP_B input, 100 k pull-up to PRESENT_PROBE | **tie to GND on every card** |
 | 20 | GND | – | ground | ground |
 
+A card inserted upside down maps its contact *c* onto host contact 21 − *c*. PRESENT_N sits on 19 (it was on 18 until HD-025, 2026-11-20) so that a flipped card's grounded PRESENT_N lands on host GND (contact 2), not on the slot's AON rail (contact 3). Every other mirrored pair was checked harmless. The card face also carries a "<type> UP" label with an arrow toward the fingers.
+
 ## Rules
-- **S-1:** Every card has an ID EEPROM at 0x50 on AON, holding ID block v1 (code, revision, format, variant, CRC-8; `firmware/portable/modules.h`). Card I²C addresses must not use the reserved root addresses 0x20, 0x21, 0x6A or 0x70.
-- **S-2:** Devices on the branch I²C must be powered from AON, because the branch pull-ups go to AON. A device on SW needs an isolating buffer with I_off support.
+- **S-1:** Every card has an ID EEPROM at 0x50 on AON, holding ID block v1 (code, revision, format, variant, CRC-8; `firmware/portable/modules.h`). Card I²C addresses must not use the reserved root addresses 0x20, 0x21, 0x22, 0x6A or 0x70.
+- **S-2:** Devices on the branch I²C must be powered from AON, because the branch pull-ups go to AON. A device on SW needs an isolating buffer with I_off support. SPI devices likewise sit on AON or behind an I_off buffer (HD-027): the bus is shared, so an unpowered SPI card must not clamp it.
 - **S-3:** Firmware holds SPI_SCK/MOSI low and keeps the UART mux disabled (`UART_MUX_EN_N` high) whenever the addressed slot's rails are off.
 - **S-4:** One card UART is active at a time (one UART1, one mux). The board manifest declares `uart_channels: 1`, and the validator rejects two UART cards that need concurrent operation. Bench fixtures (`test_fixture: true`, TL-TEST-001) are exempt: the firmware routes the mux to one at a time.
 - **S-5:** No hot-swap. Cards are inserted with the node off.

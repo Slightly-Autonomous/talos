@@ -43,10 +43,11 @@ flowchart TB
   H2 -->|I2C root| MUX["TCA9546A 0x70"] -->|SLOTn_SDA/SCL| SLOTS["4 × sensor_edge_v1"]
   H2 -->|I2C root| EXPA["TCA9535 0x20<br/>enables, reset, CS"]
   H2 -->|I2C root| EXPB["TCA9535 0x21<br/>presence, alerts, charger, UART sel"]
+  H2 -->|I2C root| EXPC["TCA9535 0x22<br/>slot LEDs S0-S3, tamper loop"]
   H2 -->|UART1| UMUX["TS3A5017 dual 4:1"] --> SLOTS
   H2 -->|SPI bus| SLOTS
   SLOTS -->|SLOT_WAKE0..3 → GPIO10..13| H2
-  EXPA & EXPB -->|EXP_INT_N → GPIO14| H2
+  EXPA & EXPB & EXPC -->|EXP_INT_N → inverter → EXP_WAKE → GPIO14| H2
   AON & SW --> SLOTS
 ```
 
@@ -59,12 +60,12 @@ The KiCad schematic is flat, one sheet per board, in Rev A. Section labels in th
 | Need | Pins | Why |
 |---|---|---|
 | Four slot wake lines | GPIO10, 11, 12, 13 | Only GPIO8–14 are LP pins usable in every chip mode, deep sleep included *(src: ESP32-H2 Series datasheet v1.3 §2.2 "LP pins (GPIO8 ~ GPIO14): are able to work in any chip mode")*. The old placeholders 0/1/4/5 cannot wake from deep sleep. |
-| Aggregated wake (alerts, presence, charger) | GPIO14 ← expander INT | GPIO14 is also LP. The two TCA9535 INT outputs are wired-OR. |
+| Aggregated wake (alerts, presence, charger, tamper) | GPIO14 ← EXP_WAKE | GPIO14 is also LP. The three TCA9535 INT outputs are wired-OR on EXP_INT_N (47 k pull-up); an SN74AUP1G04 inverts it, so GPIO14 is active high like the slot WAKEs and all five share one ext1 ANY_HIGH mask (HD-034). |
 | Boot button / strap | GPIO9 | GPIO9 is a strap, weak pull-up, SPI boot = 1 *(src: Table 4, 6)*. Gets a 10 k pull-up and a BOOT button. |
 | Status LED | GPIO8 | GPIO8 is a strap (floating default). A 10 k pull-up keeps it high so joint download (GPIO8=1, GPIO9=0) stays possible. |
 | No 32 kHz crystal | GPIO13, 14 | Using GPIO13/14 as wake lines gives up the XTAL_32K pins. Thread SED timing then uses the internal RC: **HD-018, bench item.** |
 | USB Serial/JTAG | GPIO26/27 | Factory flash and debug over the same USB-C used for power. |
-| Factory UART | GPIO23/24 (U0RXD/U0TXD) | Test pads only. |
+| Factory UART | GPIO23/24 (U0RXD/U0TXD) | Test pads and the Tag-Connect TC2030-NL pads J10 (1 3V3, 2 EN, 3 GND, 4 U0TXD, 5 BOOT, 6 U0RXD). U0RXD doubles as MUX_RESET_N through R65. |
 | Root I²C | GPIO2 (SDA), GPIO3 (SCL) | Pad JTAG (MTMS/MTDO) is not used. USB-JTAG covers debug. |
 | Shared SPI | GPIO4 SCK, GPIO5 MOSI, GPIO0 MISO | Per-slot CS comes from the expander. Low-rate smart cards only. |
 | Card UART | GPIO22 TX, GPIO25 RX via a 4:1 mux | GPIO25 is the JTAG-source strap. It only matters if EFUSE_JTAG_SEL_ENABLE is burnt, which we never do. |
@@ -78,6 +79,7 @@ The KiCad schematic is flat, one sheet per board, in Rev A. Section labels in th
 |---|---|
 | 0x20 | TCA9535 EXP_A |
 | 0x21 | TCA9535 EXP_B |
+| 0x22 | TCA9535 EXP_C |
 | 0x6A | BQ25186 *(src: SLUSF69 §6.3.16)* |
 | 0x70 | TCA9546A |
 
@@ -91,6 +93,10 @@ A TCA9546A joins an enabled branch to the root bus, so branch devices share the 
 | P04–P07 | SLOT_AON_EN0–3 (1 MΩ pull-down: default off) | SLOT_ALERT_N0–3 (in) |
 | P10–P13 | SLOT_RESET_N0–3 (100 k pull-up) | UART_SEL0, UART_SEL1, UART_MUX_EN_N, PRESENT_PROBE (1 MΩ pull-down) |
 | P14–P17 | SLOT_CS_N0–3 (100 k pull-up) | CHG_INT_N, CHG_PG_N, PMUX_ST, SW_FAULT_N (wired-OR, 100 k pull-up) |
+
+**EXP_C (0x22):** P00–P03 SLOT_LED0_N–3_N (active low: lamp anode to V3V3_CORE through 2.2 k), P04 TAMPER_N (lid and wall switches in series on J9 to GND, 1 MΩ pull-up, 10 nF; high = lid open or wire cut), all other pins unused and driven low by firmware.
+
+**Indicators:** STAT (D1, GPIO8, blink codes), PWR (D8, lit straight from USB_VBUS: free on battery), S0–S3 (D9–D12, firmware, dark on battery). They sit together on the bottom edge for one light pipe.
 
 TCA9535 ports power up as inputs, so every output's safe default comes from a resistor, not from firmware. Presence pull-ups hang off `PRESENT_PROBE`, which firmware drives high only while it reads presence. That keeps four 100 k pull-ups out of the sleep budget.
 

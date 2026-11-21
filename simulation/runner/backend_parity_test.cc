@@ -32,7 +32,8 @@ std::vector<std::string> corpus() {
 // readings follow each backend's own schedule and are covered by the scenarios' expectations.
 bool compared(const std::string& event_type) {
   static const std::set<std::string> kTransitions = {
-      "motion.detected", "motion.cleared", "contact.opened", "contact.closed", "impact.detected"};
+      "motion.detected", "motion.cleared", "contact.opened", "contact.closed",
+      "impact.detected", "tamper.opened",  "tamper.closed"};
   return kTransitions.contains(event_type);
 }
 

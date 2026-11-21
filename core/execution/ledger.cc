@@ -69,6 +69,18 @@ Result<std::vector<CommandTransition>> CommandLedger::dispatch(const CommandId& 
   return std::vector{make(id, CommandStatus::kDispatched, now, "dispatched")};
 }
 
+Result<std::vector<CommandTransition>> CommandLedger::complete_internal(
+    const CommandId& id, Timestamp now, std::string evidence) const {
+  const CommandRecord* rec = find(id);
+  if (!rec) return Error{"unknown_command", id.str()};
+  if (rec->status != CommandStatus::kAccepted) {
+    return Error{"not_dispatchable",
+                 "command " + id.str() + " is " + std::string(to_string(rec->status))};
+  }
+  return std::vector{make(id, CommandStatus::kDispatched, now, "executed by the hub"),
+                     make(id, CommandStatus::kVerified, now, std::move(evidence))};
+}
+
 Result<std::vector<CommandTransition>> CommandLedger::on_ack(const CommandAck& ack,
                                                              Timestamp now) const {
   const CommandRecord* rec = find(ack.command);

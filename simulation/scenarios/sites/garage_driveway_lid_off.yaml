@@ -1,0 +1,37 @@
+# garage_driveway.yaml with node_garage's lid already off at the start (tamper scenarios).
+property_id: garage-01
+timezone: America/Chicago
+utc_offset_minutes: -360
+zones:
+  - {id: driveway, name: Driveway, kind: ZONE_KIND_OUTDOOR, polygon: [{x: 0, y: 0}, {x: 14, y: 0}, {x: 14, y: 8}, {x: 0, y: 8}]}
+  - {id: garage, name: Garage, kind: ZONE_KIND_INDOOR, polygon: [{x: 0, y: 8}, {x: 10, y: 8}, {x: 10, y: 16}, {x: 0, y: 16}]}
+  - {id: side_yard, name: Side yard, kind: ZONE_KIND_OUTDOOR, polygon: [{x: 10, y: 8}, {x: 14, y: 8}, {x: 14, y: 16}, {x: 10, y: 16}]}
+walls:
+  - {a: {x: 0, y: 8}, b: {x: 10, y: 8}}
+  - {a: {x: 0, y: 8}, b: {x: 0, y: 16}}
+  - {a: {x: 0, y: 16}, b: {x: 10, y: 16}}
+  - {a: {x: 10, y: 8}, b: {x: 10, y: 10}}
+  - {a: {x: 10, y: 11.5}, b: {x: 10, y: 16}}
+portals:
+  - {id: side_door, type: portal.door, zone_id: garage, a: {x: 10, y: 10}, b: {x: 10, y: 11.5}}
+devices:
+  - id: node_garage
+    position: {x: 0.3, y: 15.7}
+    board_id: universal_controller_v1
+    heartbeat_interval_ms: 60000
+    battery_mv: 3700
+    enclosure: {open_at_start: true}
+    sensors:
+      - {slot: 0, module_id: pir_ekmb_v1, pir: {heading_deg: -35, half_angle_deg: 45, range_m: 13, hold_ms: 5000}}
+      - {slot: 1, module_id: reed_contact_v1, contact: {portal_id: side_door}}
+  - id: node_driveway
+    position: {x: 7, y: 7.8}
+    board_id: universal_controller_v1
+    heartbeat_interval_ms: 60000
+    battery_mv: 3950
+    sensors:
+      - {slot: 0, module_id: pir_ekmb_v1, pir: {heading_deg: -90, half_angle_deg: 60, range_m: 9, hold_ms: 5000, false_triggers_per_hour: 0}}
+      - {slot: 2, module_id: smart_camera_s3_v1, camera: {heading_deg: -90, half_angle_deg: 50, range_m: 12, min_interval_ms: 3000, confidence_permille: 800}}
+  - id: notifier
+    position: {x: 5, y: 12}
+    notifier: {latency_ms: 200}

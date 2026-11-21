@@ -56,6 +56,9 @@ def adapter(a: DebugAdapter) -> list[dict]:
     out.append(_rec("adapter.v3v3", None, manual="meter TP1: 3.251-3.350 V (AP2112K +/-1.5 %)"))
     out.append(_rec("adapter.baseline_current", None,
                     manual="PPK2 across JP1, AON on, slot empty: < 10 uA; subtract from card readings"))
+    out.append(_rec("adapter.lamps", None,
+                    manual="D-10: PWR lit on USB; AON and SW lamps follow `power aon|sw on|off`; FLT dark, lit on "
+                           "a SW overload (10 R to GND) until `power sw off`; IN lit with USB where fitted"))
     return out
 
 
@@ -117,8 +120,12 @@ def test_card(a: DebugAdapter) -> list[dict]:
     discharge = a.power_cycle_aon()
     out.append(_rec("card.aon_reset", _card_reg(a, 0x06) == 0xFF, discharge_s=round(discharge, 3)))
     _card_set(a, 0x06, 0xFF)
-    out.append(_rec("card.sw_current", None, manual="PPK2 across JP2, `power sw on`: 10.0 mA +/-3 % (330 R)"))
+    out.append(_rec("card.sw_current", None, manual="PPK2 across JP2, `power sw on`: 10.2-11.8 mA (330 R = 10.0 mA "
+                    "+/-3 %, plus the green SW LED ~0.5-1.5 mA; PROVISIONAL until the LED part is fixed)"))
     out.append(_rec("card.aon_current", None, manual="PPK2 across JP1: < adapter baseline + 5 uA"))
+    out.append(_rec("card.sw_lamp", None,
+                    manual="T-11: TL-TEST-001 SW lamp dark with SW off, lit with SW on; judge the PPK2 reading with "
+                           "`python3 -m talos_bench ... --measure T-11=<mA>` (10.2-11.8 mA)"))
     return out
 
 

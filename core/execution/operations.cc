@@ -20,9 +20,15 @@ constexpr OperationSpec kCatalog[] = {
     {"alarm.activate", RiskClass::kDisruptiveOutput, false, kNoArgs, ""},
     {"access.set_locked", RiskClass::kSecurityCritical, true, 2, "access.lock"},
     {"alarm.disarm", RiskClass::kSecurityCritical, false, kNoArgs, ""},
+    // Suppresses one node's tamper alarm for a bounded time: it can silence an
+    // alarm, so humans only (security-critical) and the node must be reporting
+    // (fresh device.health). Ending it raises protection again: benign.
+    {"device.maintenance", RiskClass::kSecurityCritical, true, 4, "device.health", true},
+    {"device.maintenance_end", RiskClass::kBenignOutput, true, kNoArgs, "device.health", true},
 };
 
-static_assert(std::variant_size_v<CommandArgs> == 4, "update the operation catalog");
+static_assert(std::variant_size_v<CommandArgs> == 5, "update the operation catalog");
+static_assert(std::is_same_v<std::variant_alternative_t<4, CommandArgs>, SetMaintenance>);
 static_assert(std::is_same_v<std::variant_alternative_t<1, CommandArgs>, AudioSpeak>);
 static_assert(std::is_same_v<std::variant_alternative_t<2, CommandArgs>, SetLocked>);
 static_assert(std::is_same_v<std::variant_alternative_t<3, CommandArgs>, Notify>);
@@ -77,6 +83,13 @@ Result<Command> normalize_command(const Command& command) {
     return reject("target_does_not_match_operation",
                   command.operation + " must target " + std::string(spec->target_capability));
   }
+  Command out = command;
+  if (auto* m = std::get_if<SetMaintenance>(&out.args)) {
+    if (m->duration_ms == 0) m->duration_ms = static_cast<std::uint32_t>(kDefaultMaintenance.count);
+    if (Millis{m->duration_ms} < kMinMaintenance || Millis{m->duration_ms} > kMaxMaintenance) {
+      return reject("args_out_of_bounds", "maintenance lasts 1 min to 4 h");
+    }
+  }
   const Millis ttl = command.expires_at - command.created_at;
   if (ttl > max_ttl_for(spec->risk)) {
     return reject("ttl_out_of_bounds", "ttl " + std::to_string(ttl.count) + " ms");
@@ -91,7 +104,12 @@ Result<Command> normalize_command(const Command& command) {
     return reject("expectation_does_not_match_operation",
                   "expect must be what " + command.operation + " produces");
   }
-  Command out = command;
+  if (spec->hub_internal) {
+    // The hub's own journaled state change is the evidence (ADR 0007 amendment).
+    out.verification = VerificationMode::kObservedState;
+    out.expect.reset();
+    return out;
+  }
   if (command.verification == VerificationMode::kAckOnly || !derived) {
     out.verification = VerificationMode::kAckOnly;
     out.expect.reset();  // ack-only can never be verified

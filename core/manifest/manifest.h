@@ -46,6 +46,44 @@ struct SlotSpec {
   std::vector<std::string> rails;  // rails routed to this slot
 };
 
+// On-board wiring that firmware drives (documentation, PROVISIONAL).
+struct ExpanderPinSpec {
+  std::string pin;        // "P00".."P17"
+  std::string net;        // empty for an unconnected pin
+  std::string direction;  // "input" | "output" | "unused"
+  bool active_low = false;
+};
+
+struct ExpanderSpec {
+  std::string name;  // e.g. "EXP_C"
+  std::string part;
+  std::uint8_t i2c_address = 0;
+  std::string interrupt_net;
+  std::vector<ExpanderPinSpec> pins;
+};
+
+struct WakeLineSpec {
+  std::string net;
+  std::string mcu_pin;
+  bool active_high = true;
+};
+
+struct IndicatorSpec {
+  std::string name;
+  std::string net;
+  std::string driver;
+  bool active_low = false;
+  std::string color;
+};
+
+// A module only some of the board's slots may host (B-03), e.g. a T/RH card
+// kept away from the charger's heat. PROVISIONAL data from the board manifest.
+struct ModuleSlotLimit {
+  ModuleId module;
+  std::vector<SlotIndex> allowed_slots;
+  std::string reason;
+};
+
 struct BoardManifest {
   BoardId id;
   std::string revision;
@@ -58,6 +96,11 @@ struct BoardManifest {
   std::vector<std::uint8_t> reserved_i2c_addresses;  // root-bus addresses cards must avoid
   std::string board_family;
   std::string transport;
+  std::vector<ExpanderSpec> expanders;
+  std::vector<WakeLineSpec> wake_lines;
+  std::vector<IndicatorSpec> indicators;
+  std::vector<CapabilityId> board_capabilities;  // provided by the board, not a slot
+  std::vector<ModuleSlotLimit> module_slot_limits;
 };
 
 struct RailLoad {
@@ -106,6 +149,7 @@ enum class ManifestIssueCode : std::uint8_t {
   kConnectorMismatch,
   kI2cRootConflict,
   kUartOversubscribed,
+  kSlotNotAllowed,  // the board limits this module to other slots (ModuleSlotLimit)
 };
 
 std::string_view to_string(ManifestIssueCode c);

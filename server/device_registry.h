@@ -34,7 +34,11 @@ struct DeviceTelemetry {
   std::uint32_t ota_received = 0;
   std::uint32_t running_version = 0;
   std::uint32_t applied_config_revision = 0;
-  std::deque<talos::v1::Diagnostic> recent;  // newest last, bounded
+  // Enclosure tamper loop (fw::EventKind::kTamper): true = lid open or loop
+  // cut, nullopt = never reported (nodes without a tamper input).
+  std::optional<bool> tamper_open;
+  std::optional<std::pair<std::uint32_t, std::uint32_t>> tamper_pos;  // (boot_epoch, seq) of it
+  std::deque<talos::v1::Diagnostic> recent;                           // newest last, bounded
   // Recent (boot_epoch, seq) of applied non-journaled events, bounded; the
   // journal's dedup covers the other kinds.
   std::set<std::pair<std::uint32_t, std::uint32_t>> unjournaled_seen;
@@ -84,6 +88,8 @@ class DeviceRegistry {
 talos::v1::Health project_health(const DeviceId& device, const DeviceTelemetry* telemetry,
                                  Freshness health_freshness,
                                  std::optional<Timestamp> health_last_seen, Timestamp now,
-                                 Millis offline_after, const SourceAnomaly* anomaly = nullptr);
+                                 Millis offline_after, const SourceAnomaly* anomaly = nullptr,
+                                 bool tamper_open = false,
+                                 std::optional<Timestamp> maintenance_until = std::nullopt);
 
 }  // namespace talos::server

@@ -20,6 +20,7 @@ devices:
     board_id: universal_controller_v1
     heartbeat_interval_ms: 60000
     battery_mv: 3700
+    enclosure: {}  # lid switch loop (HD-032); L2 runs this node on the TL-SN-001 board model
     sensors:
       - {slot: 0, module_id: pir_ekmb_v1, pir: {heading_deg: -35, half_angle_deg: 45, range_m: 13, hold_ms: 5000}}
       - {slot: 1, module_id: reed_contact_v1, contact: {portal_id: side_door}}
@@ -28,6 +29,7 @@ devices:
     board_id: universal_controller_v1
     heartbeat_interval_ms: 60000
     battery_mv: 3950
+    enclosure: {}  # lid loop (HD-032); camera keeps this node on L1
     sensors:
       - {slot: 0, module_id: pir_ekmb_v1, pir: {heading_deg: -90, half_angle_deg: 60, range_m: 9, hold_ms: 5000, false_triggers_per_hour: 0}}
       - {slot: 2, module_id: smart_camera_s3_v1, camera: {heading_deg: -90, half_angle_deg: 50, range_m: 12, min_interval_ms: 3000, confidence_permille: 800}}
