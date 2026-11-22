@@ -256,3 +256,14 @@ The owner accepted this on 2026-11-21 with the PIR on every board, 2 x AA lithiu
   - scenario `garage_battery_door_tamper` (L1 and L2, with parity);
   - `ExpectObservation.capability_id`.
 - **Website:** shows each cause with the same rule as the lid: unknown, never "closed".
+
+**ESP32-H2 platform (same day):**
+- **Thread:** `thread_link.cc` runs the CoAP link over OpenThread UDP. Child timeout is 4000 s, so a deep-sleep wake is a Child Update.
+- **Sleep:** `main.cc` follows `sleep_plan()`. Deep sleep uses the ext1 mask plus a timer. Light sleep uses esp_pm automatic light sleep, with the armed lines as GPIO wake sources.
+- **Reset causes:** USB and brownout are mapped.
+- **Production profile:** NVS encryption (HMAC key in eFuse KEY4, both partitions) and anti-rollback (secure version 1).
+- **Development signing keys:** generated in `secrets/`. An automated safety check refused to commit them, so they stay local and git-ignored (see `secrets/README.md`).
+
+**Modular boards archived:** `hardware/archive/modular-2026-11`, tag `modular-checkpoint-2026-11`. TL-DBG-001 stays active (owner). `hardware/scripts/boards.py` lists the active boards.
+
+**Housing:** `hardware/mechanical/housing` generates the base, lid, sliding battery door and magnet carrier (CadQuery, STEP/STL) from the routed board's geometry. Bench kit: `docs/hardware/bench-kit.md`.
