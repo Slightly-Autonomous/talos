@@ -31,13 +31,13 @@ stimuli:
   - {at_ms: 30000, enclosure_set: {device_id: node_garage, open: false}}
 expect:
   - name: boot state closed
-    observation: {event_type: tamper.state, device_id: node_garage, to_ms: 1000, min_count: 1, max_count: 1}
+    observation: {event_type: tamper.state, device_id: node_garage, capability_id: tamper.enclosure, to_ms: 1000, min_count: 1, max_count: 1}
   - name: opened while armed
-    observation: {event_type: tamper.opened, device_id: node_garage, from_ms: 5000, to_ms: 6000, min_count: 1, max_count: 1}
+    observation: {event_type: tamper.opened, device_id: node_garage, capability_id: tamper.enclosure, from_ms: 5000, to_ms: 6000, min_count: 1, max_count: 1}
   - name: closed
-    observation: {event_type: tamper.closed, device_id: node_garage, from_ms: 15000, to_ms: 16000, min_count: 1, max_count: 1}
+    observation: {event_type: tamper.closed, device_id: node_garage, capability_id: tamper.enclosure, from_ms: 15000, to_ms: 16000, min_count: 1, max_count: 1}
   - name: opened while disarmed
-    observation: {event_type: tamper.opened, device_id: node_garage, from_ms: 25000, to_ms: 26000, min_count: 1, max_count: 1}
+    observation: {event_type: tamper.opened, device_id: node_garage, capability_id: tamper.enclosure, from_ms: 25000, to_ms: 26000, min_count: 1, max_count: 1}
   - name: alarmed both times, in every mode
     command: {operation: notify, final_status_in: [COMMAND_STATUS_COMPLETED_UNVERIFIED], count: 2}
   - name: one notification per opening

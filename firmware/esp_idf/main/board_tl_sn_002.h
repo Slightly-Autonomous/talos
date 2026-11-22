@@ -37,21 +37,25 @@ inline constexpr std::uint8_t kStatusLed = 8;
 // BOOT button: strap at reset (download mode, ROM), service-mode toggle after boot.
 inline constexpr std::uint8_t kBootButton = 9;
 // Five LP wake lines, all active high (ext1 ANY_HIGH).
-inline constexpr std::uint8_t kMagWake = 10;     // TMAG5273A2 INT_N through SN74AUP1G04
-inline constexpr std::uint8_t kAccInt = 11;      // LIS2DW12 INT1, push-pull active high
-inline constexpr std::uint8_t kPirOut = 12;      // PIR223D-S0 output, 1M pull-down
-inline constexpr std::uint8_t kTamper = 13;      // lid + wall loop to GND, 1M pull-up + 10 nF
+inline constexpr std::uint8_t kMagWake = 10;  // TMAG5273A2 INT_N through SN74AUP1G04
+inline constexpr std::uint8_t kAccInt = 11;   // LIS2DW12 INT1, push-pull active high
+inline constexpr std::uint8_t kPirOut = 12;   // PIR223D-S0 output, 1M pull-down
+inline constexpr std::uint8_t kTamper =
+    13;  // SW4 lid + SW5 battery door to GND, 1M pull-up + 10 nF
 inline constexpr std::uint8_t kUserButton = 14;  // to 3V3, 100k pull-down
 // GPIO0, 5, 22, 25: spare (GPIO0 on a test pad). GPIO23/24: U0RXD/U0TXD on the
 // Tag-Connect recovery pads. GPIO26/27: USB Serial/JTAG (flash, console, debug).
 
-// TCA9535 at 0x20 (A0-A2 GND). INT not connected (nothing on it is an input).
+// TCA9535 at 0x20 (A0-A2 GND). INT not connected: its one input (P11) is read
+// when the tamper line (GPIO13, a wake source) says the loop opened.
 //   P00 LED_LINK_N  P01 LED_MAG_N  P02 LED_VIB_N  P03 LED_PIR_N
 //   P04 LED_ENV_N   P05 LED_TAMP_N P06 LED_BATT_N P07 LED_FLT_N   (active low, 2.2k to 3V3)
 //   P10 PIR_PWR (high = PIR powered through an RC filter; the expander holds it in deep sleep)
-//   P11-P17 unused: outputs driven low.
+//   P11 TAMPER_DOOR in (4.7M pull-up, SW5 to GND: high = battery door open, HD-049)
+//   P12-P17 unused: outputs driven low.
 inline constexpr std::uint8_t kExp = 0x20;
-inline constexpr std::uint8_t kPirPowerPin = 8;  // P10
+inline constexpr std::uint8_t kPirPowerPin = 8;     // P10
+inline constexpr std::uint8_t kBatteryDoorPin = 9;  // P11
 
 inline BoardSupport tl_sn_002() {
   BoardSupport b;
@@ -78,7 +82,8 @@ inline BoardSupport tl_sn_002() {
   b.lamp_n[static_cast<std::size_t>(Lamp::kTamper)] = {kExp, 5};
   b.lamp_n[static_cast<std::size_t>(Lamp::kBattery)] = {kExp, 6};
   b.lamp_n[static_cast<std::size_t>(Lamp::kFault)] = {kExp, 7};
-  b.unused_pins[0] = {kExp, 0xFE00};  // P11-P17
+  b.unused_pins[0] = {kExp, 0xFC00};  // P12-P17
+  b.battery_door = {kExp, kBatteryDoorPin};
   b.status_led_line = kStatusLed;
   b.service_button_line = kBootButton;
   b.tamper_line = kTamper;
@@ -89,7 +94,8 @@ inline BoardSupport tl_sn_002() {
   // LOAD (after a radio burst). PROVISIONAL. Low = 2.2 V (1.10 V/cell) from
   // hardware/results/power-budget-sn2.md: it keeps the TPS63900 input >= 1.8 V
   // during an 18 dBm TX burst at -40 C. Below it the node reports low battery
-  // (BATT lamp, PowerMode::kLowPower); capping TX power waits for the radio driver.
+  // (BATT lamp, PowerMode::kLowPower) and caps TX power at +10 dBm (about half
+  // the burst current of +18 dBm, ~11 dB less link margin). PROVISIONAL (HD-043).
   b.primary_battery = true;
   b.battery_low_mv = 2200;
   b.battery_critical_mv = 2000;  // 1.0 V/cell loaded: the 1.8 V regulator floor is close
@@ -97,6 +103,11 @@ inline BoardSupport tl_sn_002() {
   // The loaded reading is noisy (burst length, temperature): leaving low power or
   // critical needs 100 mV above the threshold, so the mode can't flap per heartbeat.
   b.battery_hysteresis_mv = 100;
+  b.tx_power_dbm = 18;
+  b.tx_power_low_battery_dbm = 10;
+  // Owner 2026-11-22: deep sleep between reports by default (<= 2 s event
+  // latency); the hub can switch a node to kSleepyChild or kAlwaysOn per device.
+  b.power_profile = PowerProfile::kDeepSleep;
   // Module admission budgets (provisional). Battery: card-equivalent draw only,
   // the board baseline is in the power budget. USB: TPS63900 0.4 A x 3.3 V minus
   // the radio TX burst, as TL-SN-001.

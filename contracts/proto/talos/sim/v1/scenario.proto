@@ -113,6 +113,13 @@ message EnclosureSet {
   uint32 bounce_ms = 3;
 }
 
+// TL-SN-002's tool-free battery door (HD-049): its switch is in series with the
+// lid's, and the node reports it as its own capability, tamper.battery_door.
+message BatteryDoorSet {
+  string device_id = 1;
+  bool open = 2;
+}
+
 message ActuatorFaultSet {
   string device_id = 1;
   ActuatorFault fault = 2;
@@ -161,6 +168,7 @@ message Stimulus {
     UserButtonPress user_button = 16;
     BatterySet battery_set = 17;
     UsbConsoleLine usb_console = 18;
+    BatteryDoorSet battery_door_set = 19;
   }
 }
 
@@ -187,6 +195,9 @@ message ExpectObservation {
   // Defaults to 1 when unset; set 0 together with max_count 0 to assert absence.
   optional uint32 min_count = 5;
   optional uint32 max_count = 6;
+  // Only this capability (e.g. "tamper.enclosure" when a node also reports
+  // tamper.battery_door). Empty = any.
+  string capability_id = 7;
 }
 
 message ExpectCommand {

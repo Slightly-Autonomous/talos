@@ -13,6 +13,10 @@ namespace talos::fw {
 // config, OTA, power mode) return nullopt here and belong to the
 // observability plane (Phase 6). They are still ACKed so they never retry
 // forever.
+// Hub capability for each firmware TamperCause (ADR 0019 amendment 2026-11-22):
+// tamper.enclosure, tamper.battery_door, tamper.mount, tamper.magnet.
+const char* tamper_capability(TamperCause c);
+
 std::optional<ObservationEnvelope> to_envelope(const DeviceEvent& e, const DeviceId& device,
                                                const PropertyId& property);
 

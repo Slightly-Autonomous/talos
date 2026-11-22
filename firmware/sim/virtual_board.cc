@@ -208,7 +208,8 @@ void Lis2dw12::load_outputs() {
   const std::int32_t ug_per_lsb = 244 << ((regs[0x25] >> 4) & 0x3);
   for (int axis = 0; axis < 3; ++axis) {
     std::int32_t mg = high_pass ? 0 : static_mg[static_cast<std::size_t>(axis)];
-    if (axis == 0) mg += impact_x_mg_;
+    // A jolt is brief: the post-event sample shows it, later samples do not.
+    if (axis == 0 && clock_.now_ms() < impact_until_) mg += impact_x_mg_;
     mg += st_mg;
     const auto lsb = static_cast<std::int16_t>(std::clamp(mg * 1000 / ug_per_lsb, -8191, 8191) * 4);
     regs[0x28 + 2 * axis] = static_cast<std::uint8_t>(static_cast<std::uint16_t>(lsb) & 0xFF);
@@ -226,7 +227,8 @@ void Lis2dw12::impact(std::int32_t mg) {
   const bool int1_wakeup = (regs[0x23] & 0x20) != 0;
   const bool interrupts_enabled = (regs[0x3F] & 0x20) != 0;
   if ((regs[0x34] & 0x3F) == 0 || std::abs(mg) < threshold_mg) return;
-  impact_x_mg_ = mg;   // the post-event sample the driver reads
+  impact_x_mg_ = mg;  // the post-event sample the driver reads
+  impact_until_ = clock_.now_ms() + kImpactVisibleMs;
   regs[0x38] |= 0x08;  // WU_IA
   regs[0x3B] |= 0x02;  // ALL_INT_SRC WU_IA
   if (!int1_wakeup || !interrupts_enabled) return;
@@ -564,8 +566,9 @@ BoardSupport tl_sn_002_board() { return board::sn002::tl_sn_002(); }
 Sn002Board::Sn002Board(const BoardSupport& board) : board_(board) {
   exp.external = [this](std::uint8_t pin) {
     // Lamp cathodes (P00-P07) are pulled to 3V3 through lamp + 2.2k when undriven;
-    // PIR_PWR has the RC filter's pull-down; P11-P17 are unconnected.
-    (void)this;
+    // PIR_PWR has the RC filter's pull-down; P11 is TAMPER_DOOR (4.7M pull-up,
+    // SW5 to GND while the door is shut); P12-P17 are unconnected.
+    if (board_.battery_door.wired() && pin == board_.battery_door.pin) return battery_door_open;
     return pin < 8;
   };
   exp.on_write = [this] {
@@ -624,7 +627,7 @@ IPower& Node::select_power() {
     sn002_.emplace(board);
     i2c.attach(I2cBus::kRoot, board.lamp_n[0].address, &sn002_->exp);
     gpio.live = [this](std::uint8_t line) -> std::optional<bool> {
-      if (line == board.tamper_line) return sn002_->lid_open;
+      if (line == board.tamper_line) return sn002_->tamper_line();
       if (line == board.user_button_line) return sn002_->user_pressed;
       if (line == board.usb_present_line) return sn002_->usb;
       if (line == board.slots[2].wake_line) {

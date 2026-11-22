@@ -34,7 +34,16 @@ std::uint64_t get_u64(const std::uint8_t*& p) {
   return v;
 }
 
-enum ItemType : std::uint8_t { kAck = 1, kConfig = 2, kOffer = 3, kChunk = 4, kReboot = 5 };
+// kConfig2 (2026-11-22) = kConfig + u8 power_profile. Sent only when the profile
+// changes, so a hub talking to older firmware keeps sending kConfig.
+enum ItemType : std::uint8_t {
+  kAck = 1,
+  kConfig = 2,
+  kOffer = 3,
+  kChunk = 4,
+  kReboot = 5,
+  kConfig2 = 6
+};
 
 }  // namespace
 
@@ -83,8 +92,7 @@ bool decode_event(const std::uint8_t* p, DeviceEvent& e) {
   const std::uint8_t kind = *p++;
   const std::uint8_t prio = *p++;
   const std::uint8_t flags = *p++;
-  if (kind > static_cast<std::uint8_t>(EventKind::kConsoleLocked) || prio > 3 || flags > 1)
-    return false;
+  if (kind > static_cast<std::uint8_t>(EventKind::kReset) || prio > 3 || flags > 1) return false;
   if (e.slot != kNoSlot && e.slot >= kSlots) return false;
   e.kind = static_cast<EventKind>(kind);
   e.priority = static_cast<Priority>(prio);
@@ -103,11 +111,13 @@ bool DownlinkWriter::add(const Downlink& d) {
     put_u32(p, a->boot_epoch);
     put_u32(p, a->seq);
   } else if (const auto* c = std::get_if<ConfigUpdate>(&d)) {
-    *p++ = kConfig;
+    const bool v2 = c->power_profile != ConfigUpdate::kKeepProfile;
+    *p++ = v2 ? kConfig2 : kConfig;
     put_u32(p, c->revision);
     put_u32(p, c->heartbeat_interval_ms);
     put_u32(p, c->environment_interval_ms);
     put_u32(p, c->impact_threshold_mg);
+    if (v2) *p++ = c->power_profile;
   } else if (const auto* o = std::get_if<OtaOffer>(&d)) {
     *p++ = kOffer;
     put_u32(p, o->version);
@@ -151,13 +161,16 @@ std::size_t decode_item(const std::uint8_t* p, const std::uint8_t* end, Downlink
       d = a;
       break;
     }
-    case kConfig: {
-      if (!have(16)) return 0;
+    case kConfig:
+    case kConfig2: {
+      const bool v2 = p[-1] == kConfig2;
+      if (!have(v2 ? 17 : 16)) return 0;
       ConfigUpdate c;
       c.revision = get_u32(p);
       c.heartbeat_interval_ms = get_u32(p);
       c.environment_interval_ms = get_u32(p);
       c.impact_threshold_mg = get_u32(p);
+      if (v2) c.power_profile = *p++;
       d = c;
       break;
     }

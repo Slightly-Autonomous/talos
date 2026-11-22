@@ -699,6 +699,19 @@ Result<api::DeviceConfigResponse> HubService::set_device_config(
   u.heartbeat_interval_ms = req.heartbeat_interval_ms();
   u.environment_interval_ms = req.environment_interval_ms();
   u.impact_threshold_mg = req.impact_threshold_mg();
+  switch (req.power_profile()) {
+    case api::POWER_PROFILE_DEEP_SLEEP:
+      u.power_profile = static_cast<std::uint8_t>(fw::PowerProfile::kDeepSleep);
+      break;
+    case api::POWER_PROFILE_SLEEPY_CHILD:
+      u.power_profile = static_cast<std::uint8_t>(fw::PowerProfile::kSleepyChild);
+      break;
+    case api::POWER_PROFILE_ALWAYS_ON:
+      u.power_profile = static_cast<std::uint8_t>(fw::PowerProfile::kAlwaysOn);
+      break;
+    default:
+      break;  // unchanged (kKeepProfile)
+  }
   desired_config_[device] = u;
   api::DeviceConfigResponse r;
   r.set_device_id(device.str());
@@ -717,21 +730,34 @@ api::HealthListResponse HubService::device_health() const {
     const auto& caps = engine_->state().capabilities;
     std::optional<Timestamp> seen;
     if (auto it = caps.find(health_ref); it != caps.end()) seen = it->second.received_at;
-    // An open enclosure stays a fault until a closed report, however old it is.
+    // An open tamper cause stays a fault until a closed report, however old it is.
+    // The enclosure alone keeps the classic wording; any other cause is named.
     bool tamper_open = false;
-    if (auto it = caps.find({d.id, std::nullopt, CapabilityId("tamper.enclosure")});
-        it != caps.end()) {
+    std::string tamper_detail;
+    bool other_cause = false;
+    for (const auto& [cap, what] :
+         {std::pair<const char*, const char*>{"tamper.enclosure", "enclosure lid open or loop cut"},
+          {"tamper.battery_door", "battery door open"},
+          {"tamper.mount", "moved from its mount"},
+          {"tamper.magnet", "foreign magnet at the door sensor"}}) {
+      auto it = caps.find({d.id, std::nullopt, CapabilityId(cap)});
+      if (it == caps.end()) continue;
       const auto* v = std::get_if<TamperState>(&it->second.value);
-      tamper_open = v && v->open;
+      if (!v || !v->open) continue;
+      tamper_open = true;
+      if (std::string(cap) != "tamper.enclosure") other_cause = true;
+      tamper_detail += (tamper_detail.empty() ? "" : ", ") + std::string(what);
     }
+    if (!other_cause) tamper_detail.clear();
     std::optional<Timestamp> maintenance_until;
     if (auto m = engine_->state().maintenance.find(d.id); m != engine_->state().maintenance.end()) {
       maintenance_until = m->second.until;
     }
-    *out.add_devices() = project_health(
-        d.id, registry_.find(d.id), engine_->freshness_of(health_ref), seen, now,
-        engine_->config().freshness_max_age, registry_.anomaly(d.id), tamper_open,
-        maintenance_until, board_has_primary_cells(d.board), board_has_built_in_sensors(d.board));
+    *out.add_devices() =
+        project_health(d.id, registry_.find(d.id), engine_->freshness_of(health_ref), seen, now,
+                       engine_->config().freshness_max_age, registry_.anomaly(d.id), tamper_open,
+                       maintenance_until, board_has_primary_cells(d.board),
+                       board_has_built_in_sensors(d.board), tamper_detail);
   }
   return out;
 }

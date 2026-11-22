@@ -127,6 +127,7 @@ void FirmwareDevice::apply_inputs(const World& world) {
     c.open = p->open;
   }
   if (enclosure_) set_lid(world.enclosure_open(id_));
+  if (node_->is_sn002()) node_->sn002().battery_door_open = world.battery_door_open(id_);
   if (const auto mv = world.battery_mv(id_)) {
     node_->adc.mv = *mv;
     node_->power.battery_mv_ = *mv;
@@ -155,9 +156,13 @@ void FirmwareDevice::boot(std::int64_t t_ms, Timestamp now, const World& world,
                           std::vector<Uplink>& out) {
   last_t_ms_ = t_ms;
   // Installed earlier: run the firmware through its warm-up before the scenario starts (the
-  // PIR mask needs 30 s of quiet input). What it sent meanwhile is ACKed here, so it is not
-  // retried, and reaches the hub once at t_ms, as a node joining the hub reports its state.
-  constexpr fw::TimeMs kPreRollMs = fw::PirDriver::kWarmMinMs + 1'000;
+  // PIR mask needs its warm-up of quiet input: 30 s on the EKMB, 60 s + 3 s on TL-SN-002's
+  // PIR223D). What it sent meanwhile is ACKed here, so it is not retried, and reaches the hub
+  // once at t_ms, as a node joining the hub reports its state.
+  constexpr fw::TimeMs kPreRollMs =
+      std::max(fw::PirDriver::kEkmb.warm_min_ms + fw::PirDriver::kEkmb.quiet_ms,
+               fw::PirDriver::kPir223d.warm_min_ms + fw::PirDriver::kPir223d.quiet_ms) +
+      1'000;
   power_on(now - Millis{static_cast<std::int64_t>(kPreRollMs)}, world);
   std::vector<fw::DeviceEvent> sent;
   for (fw::TimeMs ms = 0; ms < kPreRollMs; ms += 10) {
@@ -173,12 +178,14 @@ void FirmwareDevice::boot(std::int64_t t_ms, Timestamp now, const World& world,
   }
   start_ = now - Millis{static_cast<std::int64_t>(node_->clock.now_ms())};
   // Only the latest report per (slot, kind) still describes the device; older ones were
-  // superseded during the pre-roll.
+  // superseded during the pre-roll. Tamper reports are per cause (event a): the lid's
+  // state is not superseded by the battery door's.
   for (std::size_t i = 0; i < sent.size(); ++i) {
     const bool superseded =
         std::any_of(sent.begin() + static_cast<std::ptrdiff_t>(i) + 1, sent.end(),
                     [&](const fw::DeviceEvent& later) {
-                      return later.slot == sent[i].slot && later.kind == sent[i].kind;
+                      return later.slot == sent[i].slot && later.kind == sent[i].kind &&
+                             (later.kind != fw::EventKind::kTamper || later.a == sent[i].a);
                     });
     if (!superseded) node_->link.uplink.push_back(sent[i]);
   }

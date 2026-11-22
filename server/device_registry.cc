@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <string>
 
+#include "firmware/portable/hal.h"
+
 namespace talos::server {
 
 namespace {
@@ -35,6 +37,8 @@ std::string kind_name(fw::EventKind k) {
       return "user.button";
     case fw::EventKind::kConsoleLocked:
       return "console.locked";
+    case fw::EventKind::kReset:
+      return "device.reset";
   }
   return "unknown";
 }
@@ -122,6 +126,15 @@ void DeviceRegistry::observe(const DeviceId& device, const fw::DeviceEvent& e, T
     case fw::EventKind::kConsoleLocked:
       t.console_refusals.emplace_back(at, static_cast<std::uint32_t>(e.a > 0 ? e.a : 1));
       while (t.console_refusals.size() > kConsoleReportsPerDevice) t.console_refusals.pop_front();
+      break;
+    case fw::EventKind::kReset:
+      // A reset through the outside USB-C port with the enclosure shut is the
+      // same kind of probing as a refused console command: it counts toward
+      // the DEGRADED rule (owner 2026-11-22, open-decisions "USB-C").
+      if (e.a == static_cast<std::int32_t>(fw::ResetCause::kUsb) && e.b == 1) {
+        t.console_refusals.emplace_back(at, 1u);
+        while (t.console_refusals.size() > kConsoleReportsPerDevice) t.console_refusals.pop_front();
+      }
       break;
     default:
       break;
@@ -307,7 +320,8 @@ talos::v1::Health project_health(const DeviceId& device, const DeviceTelemetry* 
                                  std::optional<Timestamp> health_last_seen, Timestamp now,
                                  Millis offline_after, const SourceAnomaly* anomaly,
                                  bool tamper_open, std::optional<Timestamp> maintenance_until,
-                                 bool primary_cells, bool built_in_sensors) {
+                                 bool primary_cells, bool built_in_sensors,
+                                 const std::string& tamper_detail) {
   talos::v1::Health h;
   h.set_device_id(device.str());
   std::optional<Timestamp> seen = t && t->last_seen ? t->last_seen : health_last_seen;
@@ -364,6 +378,11 @@ talos::v1::Health project_health(const DeviceId& device, const DeviceTelemetry* 
   if (lid_open) {
     if (const std::uint32_t n = recent_console_refusals(t, now))
       h.add_evidence(console_evidence(n));
+    if (!tamper_detail.empty()) {
+      return status(talos::v1::HEALTH_STATUS_FAULTED, "tamper: " + tamper_detail,
+                    "Inspect the node: close the lid and battery door, check its mount and that "
+                    "no foreign magnet is near the door sensor");
+    }
     return status(talos::v1::HEALTH_STATUS_FAULTED, "enclosure tamper: lid open or loop cut",
                   "Check the enclosure lid and its tamper switch wiring (J9)");
   }

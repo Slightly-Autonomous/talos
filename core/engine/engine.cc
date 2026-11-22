@@ -247,7 +247,16 @@ Status HubEngine::execute_internal(const CommandId& id) {
 }
 
 Status HubEngine::alarm_if_tamper_open(const DeviceId& device) {
-  const CapabilityRef ref{device, std::nullopt, CapabilityId("tamper.enclosure")};
+  // Every tamper cause of the node (enclosure, battery door, mount, magnet).
+  for (const char* cap :
+       {"tamper.enclosure", "tamper.battery_door", "tamper.mount", "tamper.magnet"}) {
+    if (Status s = alarm_if_open(CapabilityRef{device, std::nullopt, CapabilityId(cap)}); !s)
+      return s;
+  }
+  return Status::Ok();
+}
+
+Status HubEngine::alarm_if_open(const CapabilityRef& ref) {
   auto it = state_.capabilities.find(ref);
   if (it == state_.capabilities.end()) return Status::Ok();
   const auto* t = std::get_if<TamperState>(&it->second.value);

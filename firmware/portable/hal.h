@@ -72,6 +72,9 @@ class IPower {
   // Enclosure tamper loop (TAMPER_N): true = lid open or loop cut, false =
   // closed, nullopt = the board has no tamper input or it could not be read.
   virtual std::optional<bool> tamper_open() { return std::nullopt; }
+  // Battery-door switch (BoardSupport::battery_door, TL-SN-002 TAMPER_DOOR on
+  // EXP P11): true = door open, nullopt = no such input or the read failed.
+  virtual std::optional<bool> battery_door_open() { return std::nullopt; }
   // Green slot LED S0..S3. False if the board has none or the write failed.
   virtual bool set_slot_led(std::uint8_t /*slot*/, bool /*on*/) { return false; }
   // Board lamp (LINK, TAMP, BATT, FLT). False if the board has none or the write failed.
@@ -110,6 +113,9 @@ enum class StoreKey : std::uint8_t {
   // Board name, revision and serial (BoardInfo, diag `board-id`), written once
   // at program time (D-09) and checked by the bench runner.
   kBoardInfo = 15,
+  // Installed gravity vector (MountPose baseline, 3 x int32 mg), written when
+  // the enclosure closes after installation (TamperCause::kMountMoved).
+  kMountBaseline = 16,
 };
 
 inline constexpr bool is_permanent(StoreKey k) {
@@ -163,6 +169,9 @@ class ILink {
   // True when handed to the radio; delivery is confirmed only by an Ack.
   virtual bool send(const DeviceEvent& event) = 0;
   virtual std::optional<Downlink> receive() = 0;
+  // Radio transmit power cap in dBm (low-battery cap, HD-043). False if the
+  // link has no radio (serial, loopback) or the value was refused.
+  virtual bool set_tx_power_dbm(std::int8_t /*dbm*/) { return false; }
 };
 
 // Application watchdog (the ESP-IDF task watchdog, with a reset): if feed()
@@ -182,6 +191,10 @@ enum class ResetCause : std::uint8_t {
   kDeepSleepGpio = 1,   // deep-sleep wake from a wake line (ext1)
   kDeepSleepTimer = 2,  // deep-sleep wake from the timer
   kSoftware = 3,        // esp_restart(), watchdog, panic: RAM lost, rails may be up
+  // Appended 2026-11-22: a reset requested over USB Serial/JTAG (the outside
+  // USB-C port on TL-SN-002), and a brownout (cells sagging under a TX burst).
+  kUsb = 4,
+  kBrownout = 5,
 };
 
 struct WakeInfo {
@@ -326,6 +339,17 @@ struct BoardSupport {
   std::uint8_t usb_present_line = 0xFF;
   // Board lamps (Lamp), expander pins, active low.
   std::array<ExpanderPin, kLampCount> lamp_n{};
+  // Battery-door sense (TL-SN-002 TAMPER_DOOR), an expander input: high = door
+  // open. Its switch is in series with the tamper loop, so opening it also
+  // raises tamper_line; this pin says which one opened (HD-049).
+  ExpanderPin battery_door;
+  // Default sleep design (owner 2026-11-22); a hub ConfigUpdate may change it.
+  PowerProfile power_profile = PowerProfile::kDeepSleep;
+  // Radio power (dBm): normal, and the cap below battery_low_mv on primary
+  // cells, where an 18 dBm burst could pull the pair under the regulator's
+  // minimum input (power-budget-sn2.md). 0x7F = the platform default, no cap.
+  std::int8_t tx_power_dbm = 0x7F;
+  std::int8_t tx_power_low_battery_dbm = 0x7F;
   // Battery thresholds (mV at the cells). The defaults are TL-SN-001's 1S Li-ion.
   std::uint32_t battery_low_mv = 3550;
   std::uint32_t battery_critical_mv = 3300;

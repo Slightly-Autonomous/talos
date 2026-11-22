@@ -216,12 +216,13 @@ export function tamperStatus(
   property: Property,
   state: StateResponse | undefined,
   deviceId: string,
+  capability: string = TAMPER_CAPABILITY,
 ): TamperStatus | undefined {
   const declared = property.devices
     .find((d) => d.id === deviceId)
-    ?.capabilities.includes(TAMPER_CAPABILITY);
+    ?.capabilities.includes(capability);
   const cap = state?.capabilities.find(
-    (c) => c.ref?.deviceId === deviceId && c.ref.capabilityId === TAMPER_CAPABILITY,
+    (c) => c.ref?.deviceId === deviceId && c.ref.capabilityId === capability,
   );
   if (!declared && !cap) return undefined;
   const last = cap?.value?.kind.case === "tamper" ? cap.value.kind.value.open : undefined;
@@ -313,6 +314,50 @@ export function diagnosticLabel(kind: string, value: bigint | number): string {
     default:
       return `${kind} ${String(value)}`;
   }
+}
+
+// TL-SN-002's other tamper causes (ADR 0019 amendment 2026-11-22), each its own
+// capability with the enclosure's rules: unknown is never "closed".
+export const OTHER_TAMPER_CAUSES: ReadonlyArray<{ capability: string; what: string }> = [
+  { capability: "tamper.battery_door", what: "battery door" },
+  { capability: "tamper.mount", what: "mount" },
+  { capability: "tamper.magnet", what: "door magnet" },
+];
+
+export interface CauseStatus {
+  capability: string;
+  what: string;
+  status: TamperStatus;
+}
+
+// Declared or reported causes of one device, in a fixed order.
+export function otherTampers(
+  property: Property,
+  state: StateResponse | undefined,
+  deviceId: string,
+): CauseStatus[] {
+  const out: CauseStatus[] = [];
+  for (const c of OTHER_TAMPER_CAUSES) {
+    const status = tamperStatus(property, state, deviceId, c.capability);
+    if (status) out.push({ ...c, status });
+  }
+  return out;
+}
+
+export function causeLabel(c: CauseStatus): string {
+  const open =
+    {
+      "tamper.battery_door": "battery door open",
+      "tamper.mount": "moved from its mount",
+      "tamper.magnet": "foreign magnet at the door sensor",
+    }[c.capability] ?? `${c.what} tripped`;
+  const shut =
+    { "tamper.battery_door": "closed", "tamper.mount": "in place", "tamper.magnet": "normal" }[
+      c.capability
+    ] ?? "ok";
+  if (c.status.display === "open") return `TAMPER: ${open}`;
+  if (c.status.display === "closed") return `${c.what} ${shut}`;
+  return c.status.last === undefined ? `${c.what} unknown` : `${c.what} unknown (last: ${shut})`;
 }
 
 export function tamperLabel(t: TamperStatus): string {

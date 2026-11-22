@@ -116,9 +116,10 @@ BoardIo::BoardIo(II2c& i2c, IClock& clock, IBatteryAdc& adc, const BoardSupport&
       add(*p);
     }
   }
-  for (const auto* p : {&board_.present_probe, &board_.uart_sel0, &board_.uart_sel1,
-                        &board_.uart_mux_en_n, &board_.charger_int_n, &board_.charger_pg_n,
-                        &board_.source_st, &board_.sw_fault_n, &board_.tamper_n}) {
+  for (const auto* p :
+       {&board_.present_probe, &board_.uart_sel0, &board_.uart_sel1, &board_.uart_mux_en_n,
+        &board_.charger_int_n, &board_.charger_pg_n, &board_.source_st, &board_.sw_fault_n,
+        &board_.tamper_n, &board_.battery_door}) {
     add(*p);
   }
   for (const auto& p : board_.slot_led_n) add(p);
@@ -382,6 +383,13 @@ std::optional<bool> BoardIo::tamper_open() {
   const auto level = sense(board_.tamper_n);  // also releases EXP_C's INT
   if (!level) return std::nullopt;
   return *level;  // 1 MOhm pull-up: high = lid open or loop cut
+}
+
+std::optional<bool> BoardIo::battery_door_open() {
+  if (!board_.battery_door.wired()) return std::nullopt;
+  const auto level = sense(board_.battery_door);
+  if (!level) return std::nullopt;
+  return *level;  // 4.7 MOhm pull-up, SW5 to GND: high = door open (HD-049)
 }
 
 bool BoardIo::set_slot_led(std::uint8_t slot, bool on) {

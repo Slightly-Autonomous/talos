@@ -283,6 +283,8 @@ class Lis2dw12 final : public RegisterDevice {
   std::uint8_t line_;
   const Clock& clock_;
   void load_outputs();
+  static constexpr TimeMs kImpactVisibleMs = 200;
+  TimeMs impact_until_ = 0;
   TimeMs pulse_until_ = 0;
   bool pulsing_ = false;
   std::int32_t impact_x_mg_ = 0;
@@ -327,7 +329,11 @@ class Sn002Board {
  public:
   explicit Sn002Board(const BoardSupport& board);
   Tca9535Model exp;
-  bool lid_open = false;        // lid or wall switch open, or the loop cut: TAMPER high
+  bool lid_open = false;  // SW4 lid switch open, or the loop cut: TAMPER high
+  // SW5 battery door open (HD-049): TAMPER high too (in series), and
+  // TAMPER_DOOR (EXP P11, 4.7M pull-up) high.
+  bool battery_door_open = false;
+  bool tamper_line() const { return lid_open || battery_door_open; }
   bool usb = true;              // VBUS present: USB_PRESENT high, power mux on USB
   bool user_pressed = false;    // USER button (to 3V3): high while pressed
   bool pir_out = false;         // what the PIR's output would do if powered
@@ -453,6 +459,11 @@ class Link final : public ILink {
  public:
   bool send(const DeviceEvent& e) override;
   std::optional<Downlink> receive() override;
+  bool set_tx_power_dbm(std::int8_t dbm) override {
+    tx_power_dbm = dbm;
+    return true;
+  }
+  std::int8_t tx_power_dbm = 0x7F;  // last cap the runtime set (0x7F = never set)
   bool connected = true;
   int drop_next = 0;               // drop this many uplink sends
   std::deque<DeviceEvent> uplink;  // what reached the hub side

@@ -145,6 +145,7 @@ class VirtualDevice final : public IDeviceBackend {
   // Enclosure tamper loop: last reported state and the debounce.
   std::optional<talos::sim::v1::EnclosureSpec> enclosure_;
   bool enclosure_last_ = false;
+  bool door_last_ = false;  // TL-SN-002 battery door (HD-049)
   talos::sim::v1::ActuatorFault fault_ = talos::sim::v1::ACTUATOR_FAULT_NONE;
   std::vector<PendingAction> pending_;
   std::set<std::string> executed_;  // device-side idempotency by command id

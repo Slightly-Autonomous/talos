@@ -184,7 +184,7 @@ TEST(Binding, FirmwareRunWithNothingFirmwareCanPlayIsSkipped) {
 }
 
 // Scenario start finds devices already warm; a reboot is a real power-on. The firmware masks
-// the PIR for its warm-up (30 s), so motion 6 s after a reboot is not reported on L2.
+// the PIR for its warm-up (60 s on TL-SN-002), so motion 6 s after a reboot is not reported on L2.
 TEST(Binding, RebootedFirmwareNodeIsBlindDuringPirWarmup) {
   v1::Scenario sc;
   ASSERT_TRUE(codec::load_yaml_file(kRoot + "/scenarios/garage_side_door_intrusion.yaml", sc));

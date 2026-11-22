@@ -98,7 +98,13 @@ Property build_property(const v1::Site& site, const World& world) {
     if (d.has_lock()) declare("access.lock");
     if (d.has_speaker()) declare("audio.speak");
     if (d.has_notifier()) declare("notify");
-    if (d.has_enclosure()) declare("tamper.enclosure");
+    if (d.has_enclosure()) {
+      declare("tamper.enclosure");
+      // TL-SN-002 also reports its battery door, mount pose and magnet defeat (HD-049).
+      if (d.board_id() == "sensor_node_v2") {
+        for (const char* c : {"tamper.battery_door", "tamper.mount", "tamper.magnet"}) declare(c);
+      }
+    }
     for (const auto& s : d.sensors()) {
       declare(capability_for(s));
       if (s.slot() < kMaxSlots) dev.slots[s.slot()] = ModuleId(s.module_id());
@@ -393,6 +399,9 @@ class Run {
       case v1::Stimulus::kUserButton:
         world_.press_user_button(t, s.user_button().device_id(), s.user_button().hold_ms());
         break;
+      case v1::Stimulus::kBatteryDoorSet:
+        world_.set_battery_door(t, s.battery_door_set().device_id(), s.battery_door_set().open());
+        break;
       case v1::Stimulus::kBatterySet:
         world_.set_battery(t, s.battery_set().device_id(), s.battery_set().mv());
         break;
@@ -477,6 +486,8 @@ class Run {
             const auto* obs = std::get_if<ObservationRecorded>(&entry.event);
             if (obs && obs->envelope.event_type == x.event_type() &&
                 (x.device_id().empty() || obs->envelope.source.device.str() == x.device_id()) &&
+                (x.capability_id().empty() ||
+                 obs->envelope.source.capability.str() == x.capability_id()) &&
                 entry.received_at >= from && entry.received_at <= to) {
               ++n;
             }

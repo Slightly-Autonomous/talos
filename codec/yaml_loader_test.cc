@@ -70,9 +70,8 @@ TEST(YamlLoader, SampleDevicesDeclareOnlyWhatTheirModulesProvide) {
       const std::string board_file = d->board == BoardId("sensor_node_v2")
                                          ? "boards/sensor_node_v2.yaml"
                                          : "boards/universal_controller_proto_a.yaml";
-      bool provided = cap == CapabilityId("tamper.enclosure") &&
-                      load_board_manifest(kDir + board_file).value().board_capabilities ==
-                          std::vector<CapabilityId>{CapabilityId("tamper.enclosure")};
+      const auto board_caps = load_board_manifest(kDir + board_file).value().board_capabilities;
+      bool provided = std::find(board_caps.begin(), board_caps.end(), cap) != board_caps.end();
       for (const auto& slot : d->slots) {
         if (!slot || !catalog.contains(*slot)) continue;
         for (const auto& c : catalog.at(*slot).capabilities) provided |= c == cap;
@@ -379,7 +378,10 @@ TEST(SensorNodeV2, LoadsProvisionalWithBuiltInsBatteryAndNoSlotHardware) {
   EXPECT_EQ(b.wake_lines.size(), 5u);
   for (const auto& w : b.wake_lines) EXPECT_TRUE(w.active_high) << w.net;
   EXPECT_EQ(b.indicators.size(), 10u);
-  EXPECT_EQ(b.board_capabilities, std::vector<CapabilityId>{CapabilityId("tamper.enclosure")});
+  EXPECT_EQ(b.board_capabilities,
+            (std::vector<CapabilityId>{
+                CapabilityId("tamper.enclosure"), CapabilityId("tamper.battery_door"),
+                CapabilityId("tamper.mount"), CapabilityId("tamper.magnet")}));
   bool has_solar = false;
   for (const auto& p : b.power_sources) has_solar |= p.source == PowerSource::kSolarBattery;
   EXPECT_FALSE(has_solar) << "no PV input on TL-SN-002";

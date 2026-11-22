@@ -26,6 +26,8 @@ import {
   maintenanceFor,
   tamperLabel,
   tamperStatus,
+  otherTampers,
+  causeLabel,
   zoneActivity,
   zoneOf,
 } from "./view";
@@ -438,5 +440,55 @@ describe("USB console lock", () => {
     expect(label).toBe("degraded");
     expect(tone).not.toBe("fresh");
     expect(tone).not.toBe("fault");
+  });
+});
+
+// TL-SN-002's other tamper causes (ADR 0019 amendment 2026-11-22): battery door,
+// mount, door magnet. Same rules as the enclosure: unknown is never closed.
+describe("other tamper causes", () => {
+  const node = create(PropertySchema, {
+    id: "house-01",
+    devices: [
+      {
+        id: "node-12",
+        zoneId: "hallway",
+        capabilities: ["tamper.enclosure", "tamper.battery_door", "tamper.mount", "tamper.magnet"],
+      },
+      { id: "node-07", zoneId: "backyard", capabilities: ["tamper.enclosure"] },
+    ],
+  });
+  const cap = (capabilityId: string, open: boolean, freshness = Freshness.FRESH) => ({
+    ref: { deviceId: "node-12", capabilityId },
+    freshness,
+    value: { kind: { case: "tamper" as const, value: { open } } },
+  });
+
+  test("declared causes are listed in order and start unknown", () => {
+    const c = otherTampers(node, state({ capabilities: [] }), "node-12");
+    expect(c.map((x) => x.capability)).toEqual([
+      "tamper.battery_door",
+      "tamper.mount",
+      "tamper.magnet",
+    ]);
+    expect(c.every((x) => x.status.display === "unknown")).toBe(true);
+    expect(causeLabel(c[0]!)).toBe("battery door unknown");
+    expect(otherTampers(node, undefined, "node-07")).toEqual([]);
+  });
+
+  test("an open battery door is a named alarm and a device fault", () => {
+    const st = state({ capabilities: [cap("tamper.battery_door", true, Freshness.STALE)] });
+    const c = otherTampers(node, st, "node-12");
+    expect(c[0]!.status.display).toBe("open");
+    expect(causeLabel(c[0]!)).toBe("TAMPER: battery door open");
+    expect(deviceHealth(st, "node-12")).toBe("fault");
+  });
+
+  test("a stale normal report is unknown, never normal", () => {
+    const st = state({
+      capabilities: [cap("tamper.magnet", false, Freshness.STALE), cap("tamper.mount", false)],
+    });
+    const c = otherTampers(node, st, "node-12");
+    expect(causeLabel(c[1]!)).toBe("mount in place");
+    expect(causeLabel(c[2]!)).toBe("door magnet unknown (last: normal)");
   });
 });

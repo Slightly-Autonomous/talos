@@ -266,6 +266,8 @@ bool Tmag5273ContactDriver::read_field(SlotIo& io, std::int32_t (&ut)[3]) {
         static_cast<std::uint16_t>((raw[2 * axis] << 8) | raw[2 * axis + 1]));
     ut[axis] = static_cast<std::int32_t>(v) * 1000 / lsb_per_mt_;
   }
+  field_ = {ut[0], ut[1], ut[2]};
+  ++field_seq_;
   return true;
 }
 
@@ -387,6 +389,11 @@ void Tmag5273ContactDriver::supervise(SlotIo& io, IEventSink& sink, TimeMs now) 
   if (!io.reg_read(kAddr, kDeviceConfig2, &cfg, 1)) return failed(io, sink, now);
   if ((cfg & 0x03) == kModeWakeSleep) {
     wake_fault_reported_ = false;
+    // Armed and quiet. While the door reads closed only its dominant axis is
+    // watched (a falling field), so a foreign magnet that holds the field up is
+    // invisible to the interrupt: take a fresh 3-axis reading at every heartbeat
+    // for the runtime's magnet-defeat check (TamperCause::kMagnetDefeat).
+    if (!open_) service(io, sink, now);
     return;
   }
   // It fired (W&S drops to standby on a threshold) or lost its config.
@@ -464,6 +471,23 @@ bool Lis2dw12Driver::resume(SlotIo& io, IEventSink& sink, TimeMs now, std::uint3
   if (io.reg_read(kAddr, kWakeUpSrc, &src, 1) && (src & kWuIa)) report_impact(io, sink);
   if (configured(io, threshold_mg)) return true;
   return init(io, sink, now, threshold_mg);  // config lost: the part was power-cycled after all
+}
+
+bool Lis2dw12Driver::read_gravity(SlotIo& io, Vec3& mg) {
+  if (!io.reg_write(kAddr, kCtrl6, 0x00)) return false;  // low-pass path, +/-2 g
+  io.delay_ms(kGravitySettleMs);
+  std::uint8_t raw[6] = {};
+  const bool ok = io.reg_read(kAddr, kOutXL, raw, 6);
+  const bool back = io.reg_write(kAddr, kCtrl6, kCtrl6HpFds);  // always restore the impact path
+  if (!ok || !back) return false;
+  std::int32_t v[3];
+  for (int axis = 0; axis < 3; ++axis) {
+    const auto r = static_cast<std::int16_t>(
+        static_cast<std::uint16_t>(raw[2 * axis] | (raw[2 * axis + 1] << 8)));
+    v[axis] = (static_cast<std::int32_t>(r) / 4) * 244 / 1000;  // 0.244 mg/LSB, 14-bit
+  }
+  mg = {v[0], v[1], v[2]};
+  return true;
 }
 
 bool Lis2dw12Driver::report_impact(SlotIo& io, IEventSink& sink) {

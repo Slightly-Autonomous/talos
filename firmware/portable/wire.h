@@ -6,7 +6,7 @@
 //
 //   uplink:   u8 version=1 | u8 count | count x Event(28 B) | tag(8)
 //   downlink: u8 version=1 | u8 count | items...            | tag(8)
-//     item:   u8 type | body (Ack 8 B, Config 16 B, OtaOffer 40 B,
+//     item:   u8 type | body (Ack 8 B, Config 16 B, Config2 17 B, OtaOffer 40 B,
 //                             OtaChunk 6 B + data, Reboot 0 B)
 #pragma once
 

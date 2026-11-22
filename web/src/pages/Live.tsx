@@ -15,6 +15,8 @@ import {
   sensorsLabel,
   tamperLabel,
   tamperStatus,
+  otherTampers,
+  causeLabel,
 } from "../model/view";
 import { endMaintenanceCommandRequest, maintenanceCommandRequest } from "../model/commands";
 import type { Health } from "@talos/contracts/talos/v1/health_pb";
@@ -125,12 +127,15 @@ export function Live() {
               const projected = health.get(d.id);
               const fallback = deviceHealth(state, d.id);
               const tamper = tamperStatus(property, state, d.id);
+              const causes = otherTampers(property, state, d.id);
+              const anyOpen =
+                tamper?.display === "open" || causes.some((c) => c.status.display === "open");
               const maint = maintenanceFor(state, d.id, now);
               const sensors = deviceSensors(d);
               const [label, tone] = deviceTone(
                 projected?.status,
                 fallback,
-                tamper?.display === "open",
+                anyOpen,
                 maint !== undefined || projected?.status === HealthStatus.MAINTENANCE,
               );
               return (
@@ -156,6 +161,17 @@ export function Live() {
                       {tamperLabel(tamper)}
                     </div>
                   )}
+                  {causes.map((c) => (
+                    <div
+                      key={c.capability}
+                      className={c.status.display === "open" ? "error small" : "muted small"}
+                      data-testid={`${c.capability}-${d.id}`}
+                      data-tamper={c.status.display}
+                      role={c.status.display === "open" ? "alert" : undefined}
+                    >
+                      {causeLabel(c)}
+                    </div>
+                  ))}
                   {tamper && (
                     <div className="small">
                       {maint ? (

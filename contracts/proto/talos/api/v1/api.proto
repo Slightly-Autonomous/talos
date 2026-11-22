@@ -173,6 +173,19 @@ message DeviceConfigRequest {
   uint32 heartbeat_interval_ms = 1;
   uint32 environment_interval_ms = 2;
   uint32 impact_threshold_mg = 3;
+  // How the node sleeps (owner 2026-11-22). Unset keeps the node's current
+  // profile; the board default is deep sleep (<= 2 s event latency).
+  PowerProfile power_profile = 4;
+}
+
+enum PowerProfile {
+  POWER_PROFILE_UNSPECIFIED = 0;
+  // Deep sleep between reports, re-attach on wake: lowest current, <= ~2 s.
+  POWER_PROFILE_DEEP_SLEEP = 1;
+  // Light sleep, stays attached (Thread SED): ~100 ms, a few times the current.
+  POWER_PROFILE_SLEEPY_CHILD = 2;
+  // Radio always on: instant. For USB- or mains-powered installs.
+  POWER_PROFILE_ALWAYS_ON = 3;
 }
 
 message DeviceConfigResponse {

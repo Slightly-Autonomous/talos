@@ -208,3 +208,51 @@ The owner accepted this on 2026-11-21 with the PIR on every board, 2 x AA lithiu
   - *Production profile:* `firmware/esp_idf/sdkconfig.production` (Secure Boot v2 RSA-3072, flash encryption release mode, JTAG off, secure download mode, console kept), external signing, compile-checked in CI. Owner provisioning steps (offline key, `espsecure.py` signing, irreversible first-boot eFuses): `docs/hardware/provisioning.md`, the HD-016 resolution path.
   - *Hub, twin, web:* refusals are diagnostics (`console.locked`), never alarms; three or more in 24 h make the device DEGRADED with "USB console access attempts while closed", named under any other status too. Twin scenario `garage_usb_console_attack` (L1 and L2, parity on the diagnostic count): mutating commands with the lid closed are refused and reported, then opening the lid alarms. The website labels the diagnostic and shows DEGRADED as not healthy.
   - *Tools:* the TL-SN-002 bench plan checks the lock with the lid closed (S-M20) and opens the lid (S-M21) before self-tests, the PIR rail, lamps and buttons; `talos_bench.flash` opens the lid before the identity write; `talos_dbg program-id --node` says "open the lid" on a locked node.
+
+## Amendment 2026-11-22 (b): owner answers, tamper causes, sleep profiles, datasheet checks
+
+**Owner answers (2026-11-22):**
+- Door-frame mount is fine and the housing may be chunky.
+- Tool-free battery door, which alarms when opened.
+- Deep sleep with ≤ 2 s event latency by default, configurable per node because some installs need instant reporting.
+- Anti-rollback and NVS encryption on.
+- The signing key is kept in the private repo for now. Rotate and remove it before shipping (open-decisions P1).
+- Modular boards archived; TL-DBG-001 stays active.
+- First build: 3 boards for bench work on the development computer.
+
+**Hardware (TL-SN-002):**
+- **Tamper switches:** SW4 (lid) and SW5 (battery door) are on-board TS-1187A tactile switches in series on the TAMPER wake line. Housing spring fingers keep them pressed. No wiring to fit, so the board stays zero-touch.
+- **Telling door from lid:** TAMPER_DOOR (the node between JP3 and SW5, 4.7 MΩ pull-up) goes to EXP P11. It is high only with the door open.
+- **External loop:** J9 is now an unfitted option behind the bridged solder jumper JP3, for adding external switches in series.
+- **Datasheet checks:**
+  - PIR223D footprint corrected (90° lead pattern, HD-044).
+  - TMAG5273A2 confirmed at 0x35, 250 LSB/mT (HD-045).
+  - Keystone 2462 is polypropylene with no published temperature rating (HD-046).
+  - L91 internal resistance confirms the 25 °C pair model (HD-043).
+
+**Firmware:**
+- **`EventKind::kTamper` carries a `TamperCause` in `a`:**
+  - enclosure, as before;
+  - battery door;
+  - mount moved: the gravity vector from the LIS2DW12 moves more than ~20° from the pose captured 10 s after the enclosure closes, checked at heartbeats and 2 s after impacts;
+  - magnet defeat: while the door reads closed, the 3-axis field goes above 100 mT, to 3× the closed baseline, or more than ~35° off it. Checked at heartbeats (the interrupt only watches a falling field) and at every conversion.
+- **Pure logic and tests:** `tamper_detect.h`, `sleep_policy.h`.
+- **`PowerProfile`:**
+  - deep sleep (default);
+  - sleepy child (light sleep, stays attached);
+  - always on (instant; also forced on USB).
+  - Set by `BoardSupport::power_profile`, or by the hub with the new wire item `kConfig2`. Old hubs send `kConfig` unchanged.
+  - `NodeRuntime::sleep_plan()` tells the platform what to do between steps.
+- **TX power:** capped at +10 dBm on primary cells below `battery_low_mv`, otherwise +18 dBm. Uses `ILink::set_tx_power_dbm`.
+- **`EventKind::kReset`:** a P1 diagnostic at every cold boot, carrying the cause (`ResetCause::kUsb` / `kBrownout` appended) and whether the enclosure was shut.
+
+**Hub, twin, web:**
+- **Capabilities:** each cause is its own capability: `tamper.battery_door`, `tamper.mount`, `tamper.magnet`. The existing rules (`trigger_event_type: tamper.opened`), the maintenance suppression and the re-alarm at the end of maintenance cover all of them.
+- **Health:** names the cause.
+- **USB resets:** a USB reset with the enclosure shut counts toward the console-probing DEGRADED rule.
+- **Config:** `POST /v1/devices/{id}/config` takes `power_profile`.
+- **Twin:**
+  - stimulus `battery_door_set`;
+  - scenario `garage_battery_door_tamper` (L1 and L2, with parity);
+  - `ExpectObservation.capability_id`.
+- **Website:** shows each cause with the same rule as the lid: unknown, never "closed".

@@ -27,10 +27,10 @@ stimuli:
   - {at_ms: 10000, enclosure_set: {device_id: node_garage, open: false}}
 expect:
   - name: state reported at boot
-    observation: {event_type: tamper.state, device_id: node_garage, to_ms: 1000, min_count: 1, max_count: 1}
+    observation: {event_type: tamper.state, device_id: node_garage, capability_id: tamper.enclosure, to_ms: 1000, min_count: 1, max_count: 1}
   - name: no opening transition
-    observation: {event_type: tamper.opened, device_id: node_garage, min_count: 0, max_count: 0}
+    observation: {event_type: tamper.opened, device_id: node_garage, capability_id: tamper.enclosure, min_count: 0, max_count: 0}
   - name: lid put back
-    observation: {event_type: tamper.closed, device_id: node_garage, from_ms: 10000, to_ms: 11000, min_count: 1, max_count: 1}
+    observation: {event_type: tamper.closed, device_id: node_garage, capability_id: tamper.enclosure, from_ms: 10000, to_ms: 11000, min_count: 1, max_count: 1}
   - name: no alarm for a state report
     command: {operation: notify, count: 0}

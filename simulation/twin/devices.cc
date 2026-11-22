@@ -117,6 +117,11 @@ void VirtualDevice::report_initial_state(Timestamp now, const World& world,
     enclosure_last_ = world.enclosure_open(id_);
     emit(out, envelope(now, std::nullopt, "tamper.enclosure", "tamper.state",
                        TamperState{enclosure_last_}));
+    if (console_lock_) {  // TL-SN-002: the battery door reports its own state (HD-049)
+      door_last_ = world.battery_door_open(id_);
+      emit(out, envelope(now, std::nullopt, "tamper.battery_door", "tamper.state",
+                         TamperState{door_last_}));
+    }
   }
   if (lock_) {
     if (const Portal* p = world.portal(lock_->portal_id())) {
@@ -192,6 +197,11 @@ void VirtualDevice::sample(std::int64_t t_ms, Timestamp now, World& world,
       enclosure_last_ = open;
       emit(out, envelope(now, std::nullopt, "tamper.enclosure",
                          open ? "tamper.opened" : "tamper.closed", TamperState{open}));
+    }
+    if (const bool door = world.battery_door_open(id_); console_lock_ && door != door_last_) {
+      door_last_ = door;
+      emit(out, envelope(now, std::nullopt, "tamper.battery_door",
+                         door ? "tamper.opened" : "tamper.closed", TamperState{door}));
     }
   }
 

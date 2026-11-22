@@ -73,7 +73,7 @@ StoreKey ring_key(std::size_t i) {
 
 // Runtime state kept in LP RAM across an ESP32-H2 deep sleep (which is a reset).
 // Only trusted on a deep-sleep wake, and only with the magic and CRC intact.
-constexpr std::uint32_t kRetainedMagic = 0x544C5332u;  // "TLS2" (TLS1 had no fixed_quarantined)
+constexpr std::uint32_t kRetainedMagic = 0x544C5333u;  // "TLS3" (TLS2 had no tamper causes)
 struct RetainedState {
   std::uint32_t magic;
   std::uint32_t boot_epoch;  // already persisted: a wake never writes NVS for it
@@ -101,6 +101,12 @@ struct RetainedState {
   std::uint16_t battery_mv;
   std::uint16_t loaded_mv;
   std::array<std::uint32_t, kSlots> fixed_retry_in_ms;
+  // Tamper causes (HD-049): bit 0 lid reported open, bit 1 battery door reported
+  // open, bit 2 magnet baseline valid, bit 3 magnet defeated, bit 4 mount moved,
+  // bit 5 door last read open (magnet), bit 6 mount re-baseline pending.
+  std::uint8_t flags2;
+  std::uint8_t reserved2;
+  std::array<std::int16_t, 3> magnet_base;  // closed-door field, units of 100 uT
   std::uint32_t crc;
 };
 static_assert(std::is_trivially_copyable_v<RetainedState>);
@@ -181,6 +187,11 @@ void NodeRuntime::emit(std::uint8_t slot, EventKind kind, Priority priority, boo
   if (priority == Priority::kP0Critical) {
     persist_critical(e);
     p0_waiting_ = true;
+  }
+  // An impact may be someone prying the node off its mount: check the pose once
+  // the jolt has passed (a reading during it is not gravity).
+  if (kind == EventKind::kImpact && slot < kSlots && mount_check_at_ == kNever) {
+    mount_check_at_ = p_.clock.now_ms() + kMountAfterImpactMs;
   }
   // L-03: a wake event from a slot is a short flash of its LED (when lit at all).
   if (slot < kSlots &&
@@ -330,6 +341,17 @@ void NodeRuntime::save_retained() {
     }
     rs.battery_mv = static_cast<std::uint16_t>(std::min<std::uint32_t>(battery_mv_, 0xFFFE));
     rs.loaded_mv = static_cast<std::uint16_t>(std::min<std::uint32_t>(loaded_mv_, 0xFFFF));
+    const auto& mb = magnet_.baseline();
+    rs.flags2 = static_cast<std::uint8_t>(
+        (lid_reported_ ? 1u : 0u) | (door_reported_ ? 2u : 0u) | (mb ? 4u : 0u) |
+        (magnet_.defeated() ? 8u : 0u) | (mount_.moved() ? 16u : 0u) |
+        (magnet_was_open_ ? 32u : 0u) | (mount_rebaseline_at_ != kNever ? 64u : 0u));
+    if (mb) {
+      auto q = [](std::int32_t ut) {
+        return static_cast<std::int16_t>(std::clamp<std::int32_t>(ut / 100, -32767, 32767));
+      };
+      rs.magnet_base = {q(mb->x), q(mb->y), q(mb->z)};
+    }
     rs.crc = retained_crc(rs);
   }
   std::memcpy(sleep_->retained(), &rs, sizeof rs);
@@ -441,6 +463,27 @@ void NodeRuntime::boot() {
                                     : TimeMs{kFixedRetryMs});
   }
   if (warm && (rs.flags & 4u)) tamper_.restore((rs.flags & 8u) != 0);
+  lid_reported_ = warm && (rs.flags2 & 1u);
+  door_reported_ = warm && (rs.flags2 & 2u);
+  magnet_was_open_ = !warm || (rs.flags2 & 32u);
+  magnet_seq_seen_ = 0;
+  if (warm && (rs.flags2 & 4u)) {
+    magnet_.restore(Vec3{rs.magnet_base[0] * 100, rs.magnet_base[1] * 100, rs.magnet_base[2] * 100},
+                    (rs.flags2 & 8u) != 0);
+  } else {
+    magnet_.restore(std::nullopt, false);
+  }
+  {
+    std::array<std::int32_t, 3> g{};
+    const bool have = load(p_.store, StoreKey::kMountBaseline, g);
+    mount_.restore(have ? std::optional<Vec3>(Vec3{g[0], g[1], g[2]}) : std::nullopt,
+                   warm && (rs.flags2 & 16u));
+  }
+  // A pending re-baseline survives the wake (it is due a few seconds after a close).
+  mount_rebaseline_at_ = warm && (rs.flags2 & 64u) ? t0 : kNever;
+  mount_check_at_ = kNever;
+  tx_capped_ = false;
+  tx_applied_ = 0x7F;
   exp_wake_masked_ = warm && (rs.flags & 16u);
   exp_wake_high_ = false;
   next_exp_poll_ = t0;
@@ -468,6 +511,8 @@ void NodeRuntime::boot() {
   discover(r);
   admit_power();
   refresh_external_power();
+  apply_tx_power();
+  for (std::uint8_t i = 0; i < kSlots; ++i) check_magnet(i);  // baseline a door found closed
   // EXP_WAKE first: on a wake from it this reads TAMPER_N and releases INT.
   service_expanders(p_.clock.now_ms());
   sample_tamper(p_.clock.now_ms());
@@ -489,6 +534,11 @@ void NodeRuntime::boot() {
     // Boot status tells the hub the running version (and any rollback).
     (void)d;
     emit_ota_status(Priority::kP1State);
+    // Why the chip started: a reset through the outside USB-C port with the
+    // enclosure shut is worth seeing on the hub (owner 2026-11-22).
+    emit(kNoSlot, EventKind::kReset, Priority::kP1State, false,
+         static_cast<std::int32_t>(wake_.cause),
+         tamper_raw() == std::optional<bool>{false} ? 1u : 0u);
     emit(kNoSlot, EventKind::kHeartbeat, Priority::kP2Health, false,
          static_cast<std::int32_t>(battery_mv_), static_cast<std::uint32_t>(mode_));
     next_heartbeat_ = now + config_.heartbeat_interval_ms;
@@ -872,12 +922,141 @@ std::optional<bool> NodeRuntime::tamper_raw() {
 
 void NodeRuntime::sample_tamper(TimeMs now) {
   const bool known = tamper_.state().has_value();
-  if (!tamper_.sample(tamper_raw(), now)) return;
-  const bool open = *tamper_.state();
-  // Cold boot: a state report (b = 1), so the hub also learns that a lid it saw
+  const bool changed = tamper_.sample(tamper_raw(), now);
+  // While the loop is open the door input is re-read at every sample: a door
+  // closed while the lid stays open (or the reverse) is a change of cause.
+  if (changed || tamper_.state() == std::optional<bool>{true}) update_tamper_causes(now, !known);
+}
+
+// The loop is SW4 (lid) in series with SW5 (battery door); TAMPER_DOOR (EXP P11)
+// is high only when the door is open, and while it is, the lid can't be seen.
+// Boards without the door input report every opening as the enclosure, as before.
+void NodeRuntime::update_tamper_causes(TimeMs now, bool first) {
+  const auto loop = tamper_.state();
+  // A loop change still debouncing: the door input may already show the new
+  // state (the door shut a few ms before the loop settles) and would read as
+  // the lid opening. Decide once the loop has settled.
+  if (!loop || tamper_.pending()) return;
+  bool lid = lid_reported_;
+  bool door = door_reported_;
+  const bool door_wired = p_.board.battery_door.wired();
+  if (!*loop) {
+    lid = false;
+    door = false;
+  } else {
+    const std::optional<bool> d =
+        door_wired ? p_.power.battery_door_open() : std::optional<bool>{false};
+    if (d == std::optional<bool>{true}) {
+      door = true;  // the lid keeps its last known state
+    } else if (d == std::optional<bool>{false}) {
+      door = false;
+      lid = true;
+    } else {
+      lid = true;  // can't tell which: the enclosure (fails toward the alarm)
+    }
+  }
+  // Cold boot: state reports (b = 1), so the hub also learns that a lid it saw
   // open was closed while the node was off. Afterwards, transitions (b = 0).
-  emit(kNoSlot, EventKind::kTamper, open ? Priority::kP0Critical : Priority::kP1State, open, 0,
-       known ? 0 : 1);
+  const std::uint32_t b = first ? 1u : 0u;
+  if (first || lid != lid_reported_) {
+    if (lid_reported_ && !lid) mount_rebaseline_at_ = now + kMountSettleMs;  // closed after service
+    lid_reported_ = lid;
+    emit(kNoSlot, EventKind::kTamper, lid ? Priority::kP0Critical : Priority::kP1State, lid,
+         static_cast<std::int32_t>(TamperCause::kEnclosure), b);
+  }
+  if (door_wired && (first || door != door_reported_)) {
+    door_reported_ = door;
+    emit(kNoSlot, EventKind::kTamper, door ? Priority::kP0Critical : Priority::kP1State, door,
+         static_cast<std::int32_t>(TamperCause::kBatteryDoor), b);
+  }
+}
+
+void NodeRuntime::check_magnet(std::uint8_t i) {
+  if (i >= kSlots || !slots_[i].enabled) return;
+  const auto* tmag = std::get_if<Tmag5273ContactDriver>(&slots_[i].driver);
+  if (!tmag || tmag->field_seq() == magnet_seq_seen_) return;
+  magnet_seq_seen_ = tmag->field_seq();
+  if (tmag->open()) {
+    // An open door can't be faked closed: the baseline goes, and a defeat ends.
+    if (magnet_.defeated()) {
+      emit(i, EventKind::kTamper, Priority::kP1State, false,
+           static_cast<std::int32_t>(TamperCause::kMagnetDefeat), 0);
+    }
+    magnet_.clear_baseline();
+    magnet_.restore(std::nullopt, false);
+    magnet_was_open_ = true;
+    return;
+  }
+  if (magnet_was_open_ || !magnet_.baseline()) {
+    magnet_.set_baseline(tmag->field());  // the door just closed: its own magnet
+    magnet_was_open_ = false;
+    return;
+  }
+  if (const auto change = magnet_.check(tmag->field())) {
+    emit(i, EventKind::kTamper, *change ? Priority::kP0Critical : Priority::kP1State, *change,
+         static_cast<std::int32_t>(TamperCause::kMagnetDefeat), 0);
+  }
+}
+
+void NodeRuntime::check_mount(std::uint8_t i, TimeMs now) {
+  if (i >= kSlots || !slots_[i].enabled) return;
+  auto* imu = std::get_if<Lis2dw12Driver>(&slots_[i].driver);
+  if (!imu) return;
+  // Re-baseline only with the enclosure shut: someone working on it moves it.
+  const bool rebaseline =
+      now >= mount_rebaseline_at_ && tamper_.state() == std::optional<bool>{false};
+  if (!rebaseline && !mount_.baseline()) return;
+  SlotIo io(p_, i);
+  Vec3 g;
+  const bool ok = imu->read_gravity(io, g);
+  io.deselect();
+  if (!ok) return;
+  if (rebaseline) {
+    if (!MountPose::plausible(g)) return;  // try again at the next heartbeat
+    const bool was_moved = mount_.moved();
+    mount_.set_baseline(g);
+    mount_rebaseline_at_ = kNever;
+    const std::array<std::int32_t, 3> raw{g.x, g.y, g.z};
+    save(p_.store, StoreKey::kMountBaseline, raw);
+    if (was_moved) {
+      emit(i, EventKind::kTamper, Priority::kP1State, false,
+           static_cast<std::int32_t>(TamperCause::kMountMoved), 0);
+    }
+    return;
+  }
+  if (const auto change = mount_.check(g)) {
+    emit(i, EventKind::kTamper, *change ? Priority::kP0Critical : Priority::kP1State, *change,
+         static_cast<std::int32_t>(TamperCause::kMountMoved), 0);
+  }
+}
+
+void NodeRuntime::apply_tx_power() {
+  const bool cap = p_.board.primary_battery && !external_power_ && battery_mv_ != 0 &&
+                   battery_mv_ < p_.board.battery_low_mv;
+  tx_capped_ = cap && p_.board.tx_power_low_battery_dbm != 0x7F;
+  const std::int8_t want = tx_capped_ ? p_.board.tx_power_low_battery_dbm : p_.board.tx_power_dbm;
+  if (want == 0x7F || want == tx_applied_) return;
+  if (p_.link.set_tx_power_dbm(want)) tx_applied_ = want;
+}
+
+PowerProfile NodeRuntime::power_profile() const {
+  const std::uint8_t v = config_.power_profile;
+  if (v <= static_cast<std::uint8_t>(PowerProfile::kAlwaysOn)) return static_cast<PowerProfile>(v);
+  return p_.board.power_profile;
+}
+
+SleepPlan NodeRuntime::sleep_plan(bool console_active) const {
+  SleepInputs in;
+  in.profile = power_profile();
+  in.external_power = external_power_;
+  in.sends_pending = queue_.size() > 0;
+  in.console_active = console_active;
+  in.busy = downlink_more_ || ota_.record().state == OtaState::kDownloading || tamper_.pending() ||
+            button_.pending() || user_.pending() || lamp_test_active() ||
+            mount_rebaseline_at_ != kNever || mount_check_at_ != kNever || service_mode();
+  in.now_ms = p_.clock.now_ms();
+  in.next_wake_ms = next_wake_ms();
+  return SleepPolicy::plan(in);
 }
 
 // EXP_WAKE high means some expander saw an input change (TAMPER_N, CHG_PG_N,
@@ -1225,6 +1404,9 @@ void NodeRuntime::handle(const Downlink& d) {
     if (cfg->impact_threshold_mg >= 32 && cfg->impact_threshold_mg <= 1968) {
       next.impact_threshold_mg = cfg->impact_threshold_mg;
     }
+    if (cfg->power_profile <= static_cast<std::uint8_t>(PowerProfile::kAlwaysOn)) {
+      next.power_profile = cfg->power_profile;
+    }
     config_ = next;
     save(p_.store, StoreKey::kConfig, config_);
     for (std::uint8_t i = 0; i < kSlots; ++i) {
@@ -1474,7 +1656,10 @@ void NodeRuntime::step() {
     // USB_PRESENT is a plain GPIO (no expander INT): read it every step.
     const bool before = external_power_;
     refresh_external_power();
-    if (external_power_ != before) update_power_mode(battery_mv_);
+    if (external_power_ != before) {
+      update_power_mode(battery_mv_);
+      apply_tx_power();
+    }
   }
   poll_service_button(now);
   poll_user_button(now);
@@ -1501,6 +1686,14 @@ void NodeRuntime::step() {
         },
         st.driver);
     io.deselect();
+    check_magnet(i);
+  }
+  if (now >= mount_check_at_) {
+    mount_check_at_ = kNever;
+    for (std::uint8_t i = 0; i < kSlots; ++i) check_mount(i, now);
+  }
+  if (mount_rebaseline_at_ != kNever && now >= mount_rebaseline_at_) {
+    for (std::uint8_t i = 0; i < kSlots; ++i) check_mount(i, now);
   }
   if (quarantine_pending_) {
     for (std::uint8_t i = 0; i < kSlots; ++i) {
@@ -1530,7 +1723,12 @@ void NodeRuntime::step() {
     sample_tamper(now);  // belt and braces: a missed INT can't hide an open lid past one heartbeat
     const std::uint32_t mv = take_battery_mv();
     update_power_mode(mv);
+    apply_tx_power();
     supervise_slots(now);
+    for (std::uint8_t i = 0; i < kSlots; ++i) {
+      check_magnet(i);  // supervise() took a fresh field while the door is closed
+      check_mount(i, now);
+    }
     emit(kNoSlot, EventKind::kHeartbeat, Priority::kP2Health, false, static_cast<std::int32_t>(mv),
          static_cast<std::uint32_t>(mode_));
     const std::uint32_t factor = mode_ == PowerMode::kNormal ? 1u : 4u;
@@ -1579,6 +1777,8 @@ TimeMs NodeRuntime::next_wake_ms() const {
   if (button_.pending() && button_.due_ms() < next) next = button_.due_ms();
   if (user_.pending() && user_.due_ms() < next) next = user_.due_ms();
   if (tamper_poll_at_ < next) next = tamper_poll_at_;
+  if (mount_rebaseline_at_ < next) next = mount_rebaseline_at_;
+  if (mount_check_at_ < next) next = mount_check_at_;
   if (p_.board.expander_wake_line != 0xFF && exp_wake_high_) {
     const TimeMs t = exp_wake_masked_ ? next_exp_poll_ : exp_wake_high_since_ + kWakeMaskMs;
     if (t < next) next = t;

@@ -39,6 +39,16 @@ void World::enclosure_bounce(std::int64_t t_ms, const std::string& device, std::
   record(t_ms, "enclosure.bounce", device, std::to_string(ms) + " ms");
 }
 
+void World::set_battery_door(std::int64_t t_ms, const std::string& device, bool open) {
+  battery_doors_[device] = open;
+  record(t_ms, open ? "battery_door.opened" : "battery_door.closed", device);
+}
+
+bool World::battery_door_open(const std::string& device) const {
+  auto it = battery_doors_.find(device);
+  return it != battery_doors_.end() && it->second;
+}
+
 void World::press_user_button(std::int64_t t_ms, const std::string& device, std::uint32_t hold_ms) {
   user_presses_[device].push_back(hold_ms);
   record(t_ms, "user_button.pressed", device, std::to_string(hold_ms) + " ms");

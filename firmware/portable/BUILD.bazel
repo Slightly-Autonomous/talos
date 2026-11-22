@@ -37,6 +37,8 @@ cc_library(
         "ota.h",
         "runtime.h",
         "serial_link.h",
+        "sleep_policy.h",
+        "tamper_detect.h",
         "types.h",
         "wire.h",
     ],
@@ -75,6 +77,17 @@ cc_test(
     name = "console_policy_test",
     size = "small",
     srcs = ["console_policy_test.cc"],
+    copts = TALOS_COPTS,
+    deps = [
+        ":portable",
+        "@googletest//:gtest_main",
+    ],
+)
+
+cc_test(
+    name = "tamper_sleep_test",
+    size = "small",
+    srcs = ["tamper_sleep_test.cc"],
     copts = TALOS_COPTS,
     deps = [
         ":portable",

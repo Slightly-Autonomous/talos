@@ -29,9 +29,10 @@ enum class EventKind : std::uint8_t {
   kConfigApplied,  // a = applied config revision
   kOtaStatus,      // a = OtaState, b = next byte wanted (downloading), else running version
   kPowerMode,      // a = PowerMode
-  // Enclosure tamper loop (HD-032), slot = kNoSlot. flag = open (lid open or
-  // loop cut); b = 1 for a state report (cold boot), 0 for a transition.
-  // Opening is P0, a restore P1. Appended: never renumber the kinds above.
+  // Tamper (HD-032, HD-049), slot = kNoSlot. flag = open / active; a =
+  // TamperCause (0 = the enclosure loop, as before 2026-11-22); b = 1 for a
+  // state report (cold boot), 0 for a transition. Opening is P0, a restore P1.
+  // Appended: never renumber the kinds above.
   kTamper,
   // USER button (TL-SN-002, ADR 0019), slot = kNoSlot, P1. a = UserButtonAction.
   // A short press also sends a heartbeat (the test report) and runs the lamp
@@ -42,6 +43,29 @@ enum class EventKind : std::uint8_t {
   // report (>= 1), b = refused since boot. At most one per kConsoleReportMs; the
   // first refusal is reported at once. Appended.
   kConsoleLocked,
+  // Why this boot happened (TL-SN-002, owner 2026-11-22: a reset through the
+  // outside USB-C port must be visible). slot = kNoSlot, P1 diagnostic, sent
+  // once per boot that is not a deep-sleep wake. a = ResetCause, b = 1 if the
+  // enclosure was closed at boot. Appended.
+  kReset,
+};
+
+// EventKind::kTamper `a`: which tamper sensor. Each maps to its own hub
+// capability (firmware/bridge/hub_bridge.cc).
+enum class TamperCause : std::int32_t {
+  kEnclosure = 0,     // lid switch or the loop (cut, or J9's external switches)
+  kBatteryDoor = 1,   // the tool-free battery door (SW5, TAMPER_DOOR)
+  kMountMoved = 2,    // the accelerometer's gravity vector left the installed pose
+  kMagnetDefeat = 3,  // a foreign magnet: field far above or away from the closed baseline
+};
+
+// How the node sleeps between reports (owner 2026-11-22: default deep sleep
+// with <= 2 s event latency; some installs need instant). ConfigUpdate and
+// BoardSupport::power_profile. USB power always runs kAlwaysOn.
+enum class PowerProfile : std::uint8_t {
+  kDeepSleep = 0,    // deep sleep, rejoin on wake: lowest current, event-to-hub <= ~2 s
+  kSleepyChild = 1,  // light sleep, stays attached (Thread SED): ~100 ms, ~3-4x the current
+  kAlwaysOn = 2,     // radio always on (MED/FTD): instant, USB or mains only
 };
 
 // EventKind::kUserButton `a`.
@@ -122,6 +146,9 @@ struct ConfigUpdate {
   std::uint32_t heartbeat_interval_ms = 0;
   std::uint32_t environment_interval_ms = 0;
   std::uint32_t impact_threshold_mg = 0;
+  // Appended 2026-11-22 (wire: optional trailing byte). kKeepProfile = unchanged.
+  static constexpr std::uint8_t kKeepProfile = 0xFF;
+  std::uint8_t power_profile = kKeepProfile;
 };
 struct OtaOffer {
   std::uint32_t version = 0;

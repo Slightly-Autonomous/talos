@@ -131,6 +131,7 @@ class BoardIo final : public IPower {
   void service() override;
   std::uint8_t take_sw_faults() override;
   std::optional<bool> tamper_open() override;
+  std::optional<bool> battery_door_open() override;
   bool set_slot_led(std::uint8_t slot, bool on) override;
   bool set_lamp(Lamp lamp, bool on) override;
   void service_interrupt() override;

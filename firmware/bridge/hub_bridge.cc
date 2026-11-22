@@ -4,6 +4,20 @@
 
 namespace talos::fw {
 
+const char* tamper_capability(TamperCause c) {
+  switch (c) {
+    case TamperCause::kBatteryDoor:
+      return "tamper.battery_door";
+    case TamperCause::kMountMoved:
+      return "tamper.mount";
+    case TamperCause::kMagnetDefeat:
+      return "tamper.magnet";
+    case TamperCause::kEnclosure:
+      break;
+  }
+  return "tamper.enclosure";  // the loop, and any cause this hub does not know yet
+}
+
 std::optional<ObservationEnvelope> to_envelope(const DeviceEvent& e, const DeviceId& device,
                                                const PropertyId& property) {
   ObservationEnvelope env;
@@ -43,7 +57,7 @@ std::optional<ObservationEnvelope> to_envelope(const DeviceEvent& e, const Devic
     case EventKind::kTamper:
       // Device-level, no slot: zones come from the device's placement (ADR 0011).
       env.source.slot.reset();
-      env.source.capability = CapabilityId("tamper.enclosure");
+      env.source.capability = CapabilityId(tamper_capability(static_cast<TamperCause>(e.a)));
       env.event_type = e.b == 1 ? "tamper.state" : (e.flag ? "tamper.opened" : "tamper.closed");
       env.payload = TamperState{e.flag};
       break;

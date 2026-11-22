@@ -107,6 +107,7 @@ class HubEngine {
   Status execute_internal(const CommandId& id);
   // Maintenance ended: if the node's lid is still open, the tamper alarm fires now.
   Status alarm_if_tamper_open(const DeviceId& device);
+  Status alarm_if_open(const CapabilityRef& ref);
   Authorization authorize(const Command& command, Origin origin, Command& normalized) const;
   std::vector<Command> hand_off(const DeviceId* device);
   const Principal* find_principal(const PrincipalId& id) const;

@@ -37,12 +37,14 @@ battery:
   fresh_mv: 3600
   low_mv: 2200        # firmware battery_low_mv (under load)
   critical_mv: 2000   # firmware battery_critical_mv (under load)
-board_capabilities: [tamper.enclosure]
+# Tamper causes, each its own capability (ADR 0019 amendment 2026-11-22, HD-049): the lid loop,
+# the tool-free battery door, the mount pose (accelerometer) and magnet defeat (Hall sensor).
+board_capabilities: [tamper.enclosure, tamper.battery_door, tamper.mount, tamper.magnet]
 expanders:
   - name: EXP
     part: TCA9535
     i2c_address: 32   # A0-A2 = GND
-    interrupt_net: ""  # INT not connected: every pin is an output
+    interrupt_net: ""  # INT not connected: P11 TAMPER_DOOR is read when the tamper line rises
     pins:
       - {pin: P00, net: LED_LINK_N, direction: output, active_low: true}
       - {pin: P01, net: LED_MAG_N, direction: output, active_low: true}

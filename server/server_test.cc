@@ -16,6 +16,8 @@
 
 #include "codec/yaml_loader.h"
 #include "common/sha256/sha256.h"
+#include "firmware/bridge/hub_bridge.h"
+#include "firmware/portable/hal.h"
 #include "server/auth.h"
 #include "server/config.h"
 #include "server/http_server.h"
@@ -1531,6 +1533,99 @@ TEST(DeviceRegistry, Sn002UserButtonAaLowBatteryAndBuiltInFaults) {
   EXPECT_TRUE(board_has_primary_cells(BoardId("sensor_node_v2")));
   EXPECT_FALSE(board_has_primary_cells(BoardId("sensor_node_proto_a")));
   EXPECT_FALSE(board_has_built_in_sensors(std::nullopt));
+}
+
+// TL-SN-002 (ADR 0019 amendment 2026-11-22): a reset through the outside USB-C port
+// with the enclosure shut counts like a refused console command; other resets don't.
+TEST(DeviceRegistry, Sn002UsbResetWhileClosedIsProbingEvidence) {
+  DeviceRegistry reg;
+  const DeviceId dev("node-sn2");
+  const Timestamp t0{20'000'000};
+  fw::DeviceEvent e;
+  e.boot_epoch = 1;
+  e.seq = 1;
+  e.kind = fw::EventKind::kHeartbeat;
+  e.a = 3'000;
+  ASSERT_TRUE(reg.observe_unjournaled(dev, e, t0));
+  auto health = [&](Timestamp now) {
+    return project_health(dev, reg.find(dev), Freshness::kFresh, now, now, Millis{60'000}, nullptr,
+                          false, std::nullopt, true, true);
+  };
+  for (std::uint32_t epoch = 2; epoch <= 4; ++epoch) {
+    fw::DeviceEvent r;
+    r.boot_epoch = epoch;
+    r.seq = 1;
+    r.kind = fw::EventKind::kReset;
+    r.priority = fw::Priority::kP1State;
+    r.a = static_cast<std::int32_t>(fw::ResetCause::kUsb);
+    r.b = 1;  // enclosure shut
+    ASSERT_TRUE(reg.observe_unjournaled(dev, r, t0));
+    EXPECT_EQ(reg.diagnostics(dev).back().kind(), "device.reset");
+  }
+  EXPECT_EQ(health(t0).status(), talos::v1::HEALTH_STATUS_DEGRADED);
+  // A power-on reset, or a USB reset with the lid open (someone servicing it), is not probing.
+  DeviceRegistry quiet;
+  ASSERT_TRUE(quiet.observe_unjournaled(dev, e, t0));
+  for (std::uint32_t epoch = 2; epoch <= 5; ++epoch) {
+    fw::DeviceEvent r;
+    r.boot_epoch = epoch;
+    r.seq = 1;
+    r.kind = fw::EventKind::kReset;
+    r.a = static_cast<std::int32_t>(epoch % 2 ? fw::ResetCause::kPowerOn : fw::ResetCause::kUsb);
+    r.b = epoch % 2 ? 1 : 0;
+    ASSERT_TRUE(quiet.observe_unjournaled(dev, r, t0));
+  }
+  EXPECT_EQ(project_health(dev, quiet.find(dev), Freshness::kFresh, t0, t0, Millis{60'000}, nullptr,
+                           false, std::nullopt, true, true)
+                .status(),
+            talos::v1::HEALTH_STATUS_HEALTHY);
+}
+
+// Tamper causes other than the lid are named in health (HD-049).
+TEST(DeviceRegistry, Sn002TamperCausesAreNamed) {
+  DeviceRegistry reg;
+  const DeviceId dev("node-sn2");
+  const Timestamp t0{30'000'000};
+  fw::DeviceEvent e;
+  e.boot_epoch = 1;
+  e.seq = 1;
+  e.kind = fw::EventKind::kHeartbeat;
+  e.a = 3'000;
+  ASSERT_TRUE(reg.observe_unjournaled(dev, e, t0));
+  const auto h = project_health(dev, reg.find(dev), Freshness::kFresh, t0, t0, Millis{60'000},
+                                nullptr, true, std::nullopt, true, true, "battery door open");
+  EXPECT_EQ(h.status(), talos::v1::HEALTH_STATUS_FAULTED);
+  EXPECT_EQ(h.evidence(0), "tamper: battery door open");
+  // The lid alone keeps the classic wording.
+  const auto lid = project_health(dev, reg.find(dev), Freshness::kFresh, t0, t0, Millis{60'000},
+                                  nullptr, true, std::nullopt, true, true);
+  EXPECT_EQ(lid.evidence(0), "enclosure tamper: lid open or loop cut");
+}
+
+TEST(HubBridge, EachTamperCauseHasItsOwnCapability) {
+  fw::DeviceEvent e;
+  e.boot_epoch = 3;
+  e.seq = 9;
+  e.kind = fw::EventKind::kTamper;
+  e.flag = true;
+  const std::pair<fw::TamperCause, const char*> cases[] = {
+      {fw::TamperCause::kEnclosure, "tamper.enclosure"},
+      {fw::TamperCause::kBatteryDoor, "tamper.battery_door"},
+      {fw::TamperCause::kMountMoved, "tamper.mount"},
+      {fw::TamperCause::kMagnetDefeat, "tamper.magnet"},
+      {static_cast<fw::TamperCause>(42), "tamper.enclosure"},  // unknown: fails toward the lid
+  };
+  for (const auto& [cause, cap] : cases) {
+    e.a = static_cast<std::int32_t>(cause);
+    e.slot = cause == fw::TamperCause::kMagnetDefeat ? 0 : fw::kNoSlot;
+    const auto env = fw::to_envelope(e, DeviceId("node-12"), PropertyId("house-01"));
+    ASSERT_TRUE(env.has_value());
+    EXPECT_EQ(env->source.capability.str(), cap);
+    EXPECT_FALSE(env->source.slot.has_value());  // device-level, whichever sensor saw it
+    EXPECT_EQ(env->event_type, "tamper.opened");
+  }
+  e.kind = fw::EventKind::kReset;
+  EXPECT_FALSE(fw::to_envelope(e, DeviceId("node-12"), PropertyId("house-01")).has_value());
 }
 
 }  // namespace talos::server

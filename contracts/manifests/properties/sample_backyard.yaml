@@ -52,8 +52,9 @@ devices:
     board_id: sensor_node_v2
     board_revision: rev-a
     slot_modules: [tmag5273a2_magnetic, vibration_lis2dw12_v1, pir223d_motion, environment_sht40_v1]
-    # tamper.enclosure: the node's lid loop (HD-032), device-level (no slot).
-    capabilities: [contact.open_state, tamper.enclosure]
+    # tamper.*: the lid loop (HD-032), the battery door, the mount pose and magnet defeat
+    # (HD-049), all device-level (no slot).
+    capabilities: [contact.open_state, tamper.enclosure, tamper.battery_door, tamper.mount, tamper.magnet]
     zone_id: hallway
     position: {x: 2.2, y: 0.4}
   - {id: patio_speaker, property_id: house-01, zone_id: patio, position: {x: 6, y: 10.6}, capabilities: [audio.speak]}

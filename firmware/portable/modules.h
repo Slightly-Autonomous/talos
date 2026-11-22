@@ -12,6 +12,7 @@
 #include <variant>
 
 #include "firmware/portable/hal.h"
+#include "firmware/portable/tamper_detect.h"
 #include "firmware/portable/types.h"
 
 namespace talos::fw {
@@ -66,6 +67,10 @@ struct RuntimeConfig {
   std::uint32_t heartbeat_interval_ms = 60'000;
   std::uint32_t environment_interval_ms = 300'000;
   std::uint32_t impact_threshold_mg = 600;
+  // PowerProfile, or kBoardDefault = BoardSupport::power_profile (ConfigUpdate).
+  static constexpr std::uint8_t kBoardDefault = 0xFF;
+  std::uint8_t power_profile = kBoardDefault;
+  std::uint8_t reserved[3] = {};
 };
 
 class IEventSink {
@@ -136,11 +141,13 @@ class PirDriver {
   // motion is reported. An output that never goes low stays a fault.
   static constexpr TimeMs kToggleWindowMs = 10'000;
   static constexpr PirTiming kEkmb{kWarmMinMs, kQuietMs, kWarmMaxMs, kGlitchMs, kToggleWindowMs};
-  // PIR223D-S0 (TL-SN-002). PROVISIONAL: no datasheet timing in hand yet. Digital
-  // PIRs of this class settle in ~10-30 s and block ~2 s after each detection, so
-  // the EKMB minimum (30 s) and glitch filter are kept, quiet 2 s, and a fault is
-  // called at 60 s instead of 210 s. Verify against the datasheet and on the bench.
-  static constexpr PirTiming kPir223d{30'000, 2'000, 60'000, 30, 10'000};
+  // PIR223D-S0 (TL-SN-002). NEWOPTO XYC-PIR223D-S0 spec (2020-06-01): output
+  // held 1 s after the last valid pulse ("delay time"), then locked 2.3 s;
+  // REL needs two threshold crossings within 4 s (or one at 5x threshold).
+  // No warm-up time is given; factory figures are taken "after one minute
+  // stabilization", so nothing is valid before 60 s, the output must rest low
+  // 3 s (hold + lock), and a still-busy output is a fault at 120 s. Bench (HD-044).
+  static constexpr PirTiming kPir223d{60'000, 3'000, 120'000, 30, 10'000};
   // Selects the part's timing; call before init()/resume().
   void set_timing(const PirTiming& t) { timing_ = t; }
   const PirTiming& timing() const { return timing_; }
@@ -211,11 +218,11 @@ class Tmag5273ContactDriver {
   static constexpr std::int32_t kCloseUt = 20'000;
   static constexpr std::int32_t kLsbPerMt = 820;  // +/-40 mT range (A1)
   // TMAG5273A2 (TL-SN-002): the x2 range variant, +/-133 mT (or +/-266 mT with
-  // X_Y_RANGE/Z_RANGE set); the A in the name is the factory address (0x35, as
-  // A1). 32768 / 133 = 246 LSB/mT; a threshold code is 133 mT / 128. PROVISIONAL:
-  // check both against the TMAG5273 datasheet (SLYS045) device-comparison table.
+  // X_Y_RANGE/Z_RANGE set); the A in the name is the factory address 0x35
+  // (SLYS045C Table 6-2). A threshold code is 133 mT / 128 (Table 8-x). Checked
+  // against the datasheet 2026-11-22 (HD-045 closed).
   static constexpr std::int32_t kA2RangeMt = 133;
-  static constexpr std::int32_t kA2LsbPerMt = 246;
+  static constexpr std::int32_t kA2LsbPerMt = 250;  // SLYS045C 5.8: 250 LSB/mT at +/-133 mT
   // Range variant; call before init()/resume(). Defaults to the A1 (+/-40 mT).
   void set_range(std::int32_t range_mt, std::int32_t lsb_per_mt) {
     range_mt_ = range_mt;
@@ -240,6 +247,10 @@ class Tmag5273ContactDriver {
   // 8-bit threshold code: range / 128 per code (40 mT for the A1), rounded up.
   static std::uint8_t threshold_code(std::int32_t ut, std::int32_t range_mt = 40);
   bool open() const { return open_; }
+  // The last fresh 3-axis conversion (uT) and a counter that moves with each one,
+  // for the runtime's magnet-defeat check (tamper_detect.h).
+  const Vec3& field() const { return field_; }
+  std::uint32_t field_seq() const { return field_seq_; }
 
  private:
   bool convert_all(SlotIo& io, std::int32_t (&ut)[3]);
@@ -249,6 +260,8 @@ class Tmag5273ContactDriver {
   void service(SlotIo& io, IEventSink& sink, TimeMs now);
   void failed(SlotIo& io, IEventSink& sink, TimeMs now);
   bool open_ = true;
+  Vec3 field_{};
+  std::uint32_t field_seq_ = 0;
   std::int32_t range_mt_ = 40;
   std::int32_t lsb_per_mt_ = kLsbPerMt;
   TimeMs retry_at_ = kNever;
@@ -283,6 +296,12 @@ class Lis2dw12Driver {
   // low or open; report the fault and the impact.
   void supervise(SlotIo& io, IEventSink& sink, TimeMs now);
   bool set_threshold(SlotIo& io, std::uint32_t threshold_mg);
+  // Gravity in mg (TamperCause::kMountMoved): the outputs normally carry the
+  // high-pass path (FDS), so this switches them to the low-pass path for
+  // kGravitySettleMs, reads one sample and switches back. The wake-up function
+  // keeps running on its own filter meanwhile. PROVISIONAL (bench HD-049).
+  static constexpr std::uint32_t kGravitySettleMs = 25;  // > 2 ODR periods at 100 Hz
+  bool read_gravity(SlotIo& io, Vec3& mg);
   // A wake line held high produces no new edge, so re-check it until it is
   // either explained by an event or reported as stuck.
   TimeMs due_ms(TimeMs) const {

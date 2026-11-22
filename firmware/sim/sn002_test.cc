@@ -53,7 +53,9 @@ void set_lid(Node& n, bool open) {
 // Booted and settled past the PIR warm-up, everything ACKed.
 void settle(Node& n) {
   n.boot();
-  n.run_for(PirDriver::kPir223d.warm_min_ms + PirDriver::kPir223d.quiet_ms + 100);
+  // The PIR223D warm-up (60 s) outlasts the first heartbeat: the hub ACKs as it
+  // would, so the link never counts as failing and nothing is left queued.
+  run_acked(n, PirDriver::kPir223d.warm_min_ms + PirDriver::kPir223d.quiet_ms + 100);
   n.drain_and_ack();
   n.run_for(10);
 }
@@ -93,12 +95,13 @@ TEST(Sn002, ExpanderSafeStateLampsDarkUnusedLowPirRailOnlyAfterDiscovery) {
   for (std::uint8_t pin = 0; pin < 8; ++pin) {
     EXPECT_TRUE(e.is_output(pin)) << int(pin);
   }
-  for (std::uint8_t pin = 9; pin < 16; ++pin) {
+  EXPECT_FALSE(e.is_output(9));  // P11 TAMPER_DOOR is an input (HD-049)
+  for (std::uint8_t pin = 10; pin < 16; ++pin) {
     EXPECT_TRUE(e.is_output(pin)) << int(pin);
     EXPECT_FALSE(e.level(pin)) << int(pin);
   }
   // Unused pins never drove high: output latch written before direction.
-  EXPECT_EQ(e.ever_driven_high & 0xFE00, 0);
+  EXPECT_EQ(e.ever_driven_high & 0xFE00, 0);  // P11 is never driven at all
 }
 
 TEST(Sn002, TmagA2RangeThresholdsAndReadings) {
@@ -245,9 +248,14 @@ TEST(Sn002Tamper, ColdBootWithTheLidOpenSendsAStateReport) {
   n.boot();
   n.run_for(TamperDebouncer::kDebounceMs + 20);
   const auto t = of(n.drain_and_ack(), EventKind::kTamper);
-  ASSERT_EQ(t.size(), 1u);
+  // One state report per cause: the lid open, the battery door shut (HD-049).
+  ASSERT_EQ(t.size(), 2u);
+  EXPECT_EQ(t[0].a, static_cast<std::int32_t>(TamperCause::kEnclosure));
   EXPECT_TRUE(t[0].flag);
   EXPECT_EQ(t[0].b, 1u);
+  EXPECT_EQ(t[1].a, static_cast<std::int32_t>(TamperCause::kBatteryDoor));
+  EXPECT_FALSE(t[1].flag);
+  EXPECT_EQ(t[1].b, 1u);
 }
 
 // --- lamps ---------------------------------------------------------------------------------
@@ -492,8 +500,7 @@ TEST(Sn002Power, LoadedReadingIsTheLowestSinceTheLastHeartbeat) {
   n.imu(kVib).impact(1'500);
   n.run_for(30);
   n.adc.mv = 3'000;  // the cells recover at rest
-  n.run_for(60'000);
-  const auto hb = of(n.drain_and_ack(), EventKind::kHeartbeat);
+  const auto hb = of(run_acked(n, 60'000), EventKind::kHeartbeat);
   ASSERT_FALSE(hb.empty());
   EXPECT_EQ(hb.back().a, 2'100) << "the resting voltage hides an empty lithium cell";
 }

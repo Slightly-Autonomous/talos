@@ -105,7 +105,8 @@ talos::v1::Health project_health(const DeviceId& device, const DeviceTelemetry* 
                                  Millis offline_after, const SourceAnomaly* anomaly = nullptr,
                                  bool tamper_open = false,
                                  std::optional<Timestamp> maintenance_until = std::nullopt,
-                                 bool primary_cells = false, bool built_in_sensors = false);
+                                 bool primary_cells = false, bool built_in_sensors = false,
+                                 const std::string& tamper_detail = {});
 
 // Boards whose battery is primary cells (never charged): low battery means
 // "replace the cells", not "charge". TL-SN-002 (ADR 0019): 2 x AA Li-FeS2.

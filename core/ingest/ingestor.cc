@@ -20,7 +20,8 @@ bool payload_fits(const CapabilityId& capability, const ObservationPayload& p) {
   if (c == "audio.speak") return std::holds_alternative<AudioPlayback>(p);
   if (c == "camera.detection") return std::holds_alternative<ObjectDetected>(p);
   if (c == "device.health") return std::holds_alternative<Heartbeat>(p);
-  if (c == "tamper.enclosure") return std::holds_alternative<TamperState>(p);
+  // tamper.enclosure, tamper.battery_door, tamper.mount, tamper.magnet (and later causes).
+  if (c.rfind("tamper.", 0) == 0) return std::holds_alternative<TamperState>(p);
   return true;
 }
 

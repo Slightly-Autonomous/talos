@@ -18,6 +18,8 @@
 #include "firmware/portable/indicators.h"
 #include "firmware/portable/modules.h"
 #include "firmware/portable/ota.h"
+#include "firmware/portable/sleep_policy.h"
+#include "firmware/portable/tamper_detect.h"
 
 namespace talos::fw {
 
@@ -87,6 +89,11 @@ class NodeRuntime final : public IEventSink {
   // nothing, so a jammed, bouncing or abused button can't flood the radio, drain
   // the cells or push older P1 state out of the queue (red team).
   static constexpr std::uint32_t kUserCooldownMs = 10'000;
+  // After the enclosure closes (installation or service), the installed pose is
+  // captured this long later, once hands are off the node (MountPose baseline).
+  static constexpr std::uint32_t kMountSettleMs = 10'000;
+  // A pose check runs this long after an impact, once the jolt has died down.
+  static constexpr std::uint32_t kMountAfterImpactMs = 2'000;
 
   explicit NodeRuntime(Platform& p, IWatchdog* watchdog = nullptr, ISleep* sleep = nullptr)
       : p_(p), ota_(p, watchdog), watchdog_(watchdog), sleep_(sleep) {}
@@ -171,6 +178,20 @@ class NodeRuntime final : public IEventSink {
   std::optional<bool> tamper_open() const { return tamper_.state(); }
   // EXP_WAKE held high after servicing every expander: masked as a wake source.
   bool expander_wake_masked() const { return exp_wake_masked_; }
+  // Tamper causes as reported to the hub (HD-049): the lid (enclosure loop) and
+  // the battery door; the magnet-defeat and mount-pose detectors.
+  bool lid_open_reported() const { return lid_reported_; }
+  bool battery_door_open_reported() const { return door_reported_; }
+  bool magnet_defeated() const { return magnet_.defeated(); }
+  bool mount_moved() const { return mount_.moved(); }
+  const std::optional<Vec3>& mount_baseline() const { return mount_.baseline(); }
+  // Radio power cap active (primary cells below battery_low_mv, HD-043).
+  bool tx_capped() const { return tx_capped_; }
+  // Sleep design in force: the hub's ConfigUpdate, else the board default.
+  PowerProfile power_profile() const;
+  // What the platform should do until next_wake_ms() (sleep_policy.h).
+  // console_active: a USB host used the console recently (the platform knows).
+  SleepPlan sleep_plan(bool console_active = false) const;
 
  private:
   struct Resume {
@@ -215,6 +236,13 @@ class NodeRuntime final : public IEventSink {
   void start_lamp_test(TimeMs now);
   void report_console_refusals(TimeMs now);
   std::optional<bool> tamper_raw();
+  // Splits the debounced loop into lid and battery door and reports each change.
+  void update_tamper_causes(TimeMs now, bool first);
+  // Runs MagnetDefeat on slot i's newest field reading (door closed only).
+  void check_magnet(std::uint8_t i);
+  // Reads gravity from slot i's LIS2DW12: re-baselines when due, else checks the pose.
+  void check_mount(std::uint8_t i, TimeMs now);
+  void apply_tx_power();
   // Direct deep-sleep wake lines (TL-SN-002 tamper and USER): armed only while
   // they read idle, so a held button or an open lid can't re-wake the node forever.
   void arm_direct_wake_lines();
@@ -321,6 +349,16 @@ class NodeRuntime final : public IEventSink {
   // closed and, above all, opened again (red team: a close and a re-open inside
   // one sleep were invisible until the next heartbeat).
   TimeMs tamper_poll_at_ = kNever;
+  bool lid_reported_ = false;
+  bool door_reported_ = false;
+  MagnetDefeat magnet_;
+  std::uint32_t magnet_seq_seen_ = 0;
+  bool magnet_was_open_ = true;
+  MountPose mount_;
+  TimeMs mount_rebaseline_at_ = kNever;
+  TimeMs mount_check_at_ = kNever;  // pose check due (kMountAfterImpactMs after an impact)
+  bool tx_capped_ = false;
+  std::int8_t tx_applied_ = 0x7F;
 
   // USB console lock: refusals since boot, not yet reported, and the last report.
   std::uint32_t console_refused_total_ = 0;

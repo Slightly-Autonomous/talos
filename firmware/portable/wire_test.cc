@@ -96,7 +96,12 @@ TEST(Wire, TamperKindRoundTripsAndUnknownKindsAreRefused) {
             DecodeError::kNone);
   ASSERT_EQ(got.size(), 1u);
   EXPECT_EQ(got[0], e);
-  e.kind = static_cast<EventKind>(13);
+  // The reset report (2026-11-22): appended as 13.
+  e.kind = EventKind::kReset;
+  EXPECT_EQ(static_cast<int>(EventKind::kReset), 13);
+  n = encode_uplink(&e, 1, kKey, buf, sizeof buf);
+  EXPECT_EQ(decode_uplink(buf, n, kKey, nullptr, [](const DeviceEvent&) {}), DecodeError::kNone);
+  e.kind = static_cast<EventKind>(14);
   n = encode_uplink(&e, 1, kKey, buf, sizeof buf);
   EXPECT_NE(decode_uplink(buf, n, kKey, nullptr, [](const DeviceEvent&) {}), DecodeError::kNone);
 }
@@ -124,6 +129,29 @@ TEST(Wire, DownlinkIsBoundToItsRequest) {
   EXPECT_EQ(std::get<OtaChunk>(items[2]).data[3], 4);
   // Replaying this reply against another request fails authentication.
   EXPECT_EQ(decode_downlink(buf, n, kKey, req2, [](const Downlink&) {}), DecodeError::kBadTag);
+}
+
+TEST(Wire, ConfigWithAPowerProfileUsesTheConfig2Item) {
+  const Tag req{};
+  std::uint8_t buf[kMaxFrame];
+  DownlinkWriter w(buf, sizeof buf);
+  ConfigUpdate keep{3, 30'000, 60'000, 400};
+  ConfigUpdate prof = keep;
+  prof.revision = 4;
+  prof.power_profile = static_cast<std::uint8_t>(PowerProfile::kSleepyChild);
+  ASSERT_TRUE(w.add(keep));
+  ASSERT_TRUE(w.add(prof));
+  const auto n = w.finish(kKey, req);
+  EXPECT_EQ(buf[2], 2);       // first item: plain kConfig (older firmware decodes it)
+  EXPECT_EQ(buf[2 + 17], 6);  // second: kConfig2
+  std::vector<Downlink> items;
+  ASSERT_EQ(decode_downlink(buf, n, kKey, req, [&](const Downlink& d) { items.push_back(d); }),
+            DecodeError::kNone);
+  ASSERT_EQ(items.size(), 2u);
+  EXPECT_EQ(std::get<ConfigUpdate>(items[0]).power_profile, ConfigUpdate::kKeepProfile);
+  EXPECT_EQ(std::get<ConfigUpdate>(items[1]).power_profile,
+            static_cast<std::uint8_t>(PowerProfile::kSleepyChild));
+  EXPECT_EQ(std::get<ConfigUpdate>(items[1]).impact_threshold_mg, 400u);
 }
 
 TEST(Wire, RandomFramesNeverDecodeOrCrash) {
