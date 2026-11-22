@@ -37,6 +37,11 @@ enum class EventKind : std::uint8_t {
   // A short press also sends a heartbeat (the test report) and runs the lamp
   // test; a long press asks the hub to commission or pair the node. Appended.
   kUserButton,
+  // USB console refusals (TL-SN-002, BoardSupport::console_lock), slot = kNoSlot,
+  // P1, a diagnostic and never an alarm. a = commands refused since the last
+  // report (>= 1), b = refused since boot. At most one per kConsoleReportMs; the
+  // first refusal is reported at once. Appended.
+  kConsoleLocked,
 };
 
 // EventKind::kUserButton `a`.

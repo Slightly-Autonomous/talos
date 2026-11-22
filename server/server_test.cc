@@ -1384,6 +1384,84 @@ TEST(SupabaseAuth, OutOfRangeTimeClaimsIssuerAndDottedLocalTokens) {
 }
 
 }  // namespace
+// TL-SN-002 console lock (ADR 0019 amendment 2026-11-22): a refusal is a
+// diagnostic, never an alarm; repeated refusals with the lid closed make the node
+// DEGRADED ("USB console access attempts while closed"), never hidden by HEALTHY or
+// by a worse status, and they age out after 24 h.
+TEST(DeviceRegistry, Sn002ConsoleRefusalsAreEvidenceNotAlarms) {
+  DeviceRegistry reg;
+  const DeviceId dev("node-sn2");
+  const Timestamp t0{10'000'000};
+  fw::DeviceEvent beat;
+  beat.boot_epoch = 1;
+  beat.seq = 1;
+  beat.kind = fw::EventKind::kHeartbeat;
+  beat.a = 3'000;
+  ASSERT_TRUE(reg.observe_unjournaled(dev, beat, t0));
+  auto health = [&](Timestamp now) {
+    return project_health(dev, reg.find(dev), Freshness::kFresh, now, now, Millis{60'000}, nullptr,
+                          false, std::nullopt, true, true);
+  };
+  auto has = [](const talos::v1::Health& h, const std::string& text) {
+    for (const auto& e : h.evidence()) {
+      if (e.find(text) != std::string::npos) return true;
+    }
+    return false;
+  };
+  EXPECT_EQ(health(t0).status(), talos::v1::HEALTH_STATUS_HEALTHY);
+
+  fw::DeviceEvent refused;
+  refused.boot_epoch = 1;
+  refused.seq = 2;
+  refused.kind = fw::EventKind::kConsoleLocked;
+  refused.priority = fw::Priority::kP1State;
+  refused.a = 1;
+  refused.b = 1;
+  ASSERT_TRUE(reg.observe_unjournaled(dev, refused, t0));
+  EXPECT_FALSE(reg.observe_unjournaled(dev, refused, t0));  // a replay adds nothing
+  EXPECT_EQ(reg.diagnostics(dev).back().kind(), "console.locked");
+  EXPECT_EQ(reg.diagnostics(dev).back().value(), 1);
+  auto h = health(t0);
+  EXPECT_EQ(h.status(), talos::v1::HEALTH_STATUS_HEALTHY);  // one is a diagnostic only
+  EXPECT_TRUE(has(h, "refused while closed"));
+
+  refused.seq = 3;
+  refused.a = 4;  // four more, in the node's next rate-limited report
+  refused.b = 5;
+  ASSERT_TRUE(reg.observe_unjournaled(dev, refused, t0 + Millis{60'000}));
+  h = health(t0 + Millis{60'000});
+  EXPECT_EQ(h.status(), talos::v1::HEALTH_STATUS_DEGRADED);
+  EXPECT_TRUE(has(h, "USB console access attempts while closed: 5"));
+  EXPECT_NE(h.recommended_action().find("USB-C"), std::string::npos);
+
+  // A worse finding keeps the evidence.
+  beat.seq = 4;
+  beat.a = 2'100;
+  beat.b = static_cast<std::uint32_t>(fw::PowerMode::kLowPower);
+  ASSERT_TRUE(reg.observe_unjournaled(dev, beat, t0 + Millis{61'000}));
+  h = health(t0 + Millis{61'000});
+  EXPECT_EQ(h.status(), talos::v1::HEALTH_STATUS_LOW_POWER);
+  EXPECT_TRUE(has(h, "USB console access attempts while closed"));
+  beat.seq = 5;
+  beat.a = 3'000;
+  beat.b = static_cast<std::uint32_t>(fw::PowerMode::kNormal);
+  ASSERT_TRUE(reg.observe_unjournaled(dev, beat, t0 + Millis{62'000}));
+
+  // Later the lid is opened: FAULTED (tamper) and the attempts are still named.
+  h = project_health(dev, reg.find(dev), Freshness::kFresh, t0, t0 + Millis{62'000}, Millis{60'000},
+                     nullptr, true, std::nullopt, true, true);
+  EXPECT_EQ(h.status(), talos::v1::HEALTH_STATUS_FAULTED);
+  EXPECT_TRUE(has(h, "USB console access attempts while closed"));
+
+  // A day later, with the node still reporting, they have aged out.
+  const Timestamp later = t0 + kConsoleRefusalWindow + Millis{120'000};
+  beat.seq = 6;
+  ASSERT_TRUE(reg.observe_unjournaled(dev, beat, later));
+  h = health(later);
+  EXPECT_EQ(h.status(), talos::v1::HEALTH_STATUS_HEALTHY);
+  EXPECT_FALSE(has(h, "USB console"));
+}
+
 // TL-SN-002 (ADR 0019): USER-button events are diagnostics (never journaled,
 // never acted on); AA low battery asks for new cells; a built-in sensor fault
 // does not say "reseat".

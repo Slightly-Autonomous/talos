@@ -7,6 +7,9 @@ The firmware refuses to change a programmed identity; this tool then reads it ba
 and checks every field. tools/bench (S-M16) checks the same fields on every bench run.
 
     python3 -m talos_dbg program-id --node /dev/cu.usbmodem1101 --unit-serial SN-A-0007
+
+TL-SN-002 locks its console while the enclosure lid is closed (its USB-C port is reachable from
+outside): open the lid first, or the write is refused with "locked: open the enclosure".
 """
 
 from __future__ import annotations
@@ -42,6 +45,10 @@ def program(console, board: str, revision: str, serial: str) -> dict:
     """Writes the identity (or confirms it is already exactly this one) and verifies it."""
     validate(board, revision, serial)
     reply = console.command(f"board-id {board} {revision} {serial}")
+    if not reply.ok and str(reply.done.get("err", "")).startswith("locked"):
+        # TL-SN-002 (ADR 0019 amendment 2026-11-22): read-only console while the lid is closed.
+        raise NodeIdError("the node's console is read-only while its enclosure is closed: open the lid "
+                          "(it raises the tamper alarm; start maintenance on the hub first) and retry")
     if not reply.ok:
         have = reply.record("board_id") or {}
         detail = (f" (node has {have.get('board')} rev {have.get('rev')} serial {have.get('serial')})"

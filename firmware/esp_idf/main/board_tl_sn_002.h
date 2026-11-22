@@ -102,6 +102,13 @@ inline BoardSupport tl_sn_002() {
   // the radio TX burst, as TL-SN-001.
   b.battery_sustained_mw = 15;
   b.usb_sustained_mw = 800;
+  // The USB-C port stays reachable from outside the closed enclosure (owner,
+  // 2026-11-22): the console is read-only while the lid is closed, and the
+  // firmware lamps (STAT included) light only with the lid open or in service
+  // mode, so a cable or power bank on the outside port changes and reveals nothing.
+  // The hardware PWR lamp on VBUS stays: it only says USB power is present.
+  b.console_lock = ConsoleLock::kLidClosed;
+  b.lamp_gate = LampGate::kLidOpen;
   return b;
 }
 

@@ -4,10 +4,13 @@
 #include <gtest/gtest.h>
 
 #include <algorithm>
+#include <string>
 #include <vector>
 
 #include "firmware/esp_idf/main/board_tl_sn_002.h"
 #include "firmware/portable/battery.h"
+#include "firmware/portable/diag.h"
+#include "firmware/portable/serial_link.h"
 #include "firmware/sim/sim_faults.h"
 #include "firmware/sim/virtual_board.h"
 
@@ -39,6 +42,12 @@ std::vector<DeviceEvent> run_acked(Node& n, TimeMs ms) {
     for (const auto& e : n.drain_and_ack()) out.push_back(e);
   }
   return out;
+}
+
+// The enclosure lid opens (or closes) and the tamper debounce has passed.
+void set_lid(Node& n, bool open) {
+  n.sn002().lid_open = open;
+  n.run_for(TamperDebouncer::kDebounceMs + 20);
 }
 
 // Booted and settled past the PIR warm-up, everything ACKed.
@@ -243,31 +252,49 @@ TEST(Sn002Tamper, ColdBootWithTheLidOpenSendsAStateReport) {
 
 // --- lamps ---------------------------------------------------------------------------------
 
-TEST(Sn002Lamps, DarkOnBatteryEvenWithEventsAndFaults) {
+// LampGate::kLidOpen (owner, 2026-11-22): the USB-C port is reachable from outside
+// the closed enclosure, so USB power alone must light nothing, STAT included: a power
+// bank on that port reveals neither the link (feedback for a jammer) nor activity.
+TEST(Sn002Lamps, DarkWithTheLidClosedEvenOnUsbWithEventsAndFaults) {
+  Node n = sn002();
+  ASSERT_TRUE(apply_fault(n, "sht_missing"));  // a fault (FLT, ENV slow blink) on top
+  n.adc.mv = 3'300;
+  settle(n);
+  ASSERT_TRUE(n.runtime().external_power());
+  n.imu(kVib).impact(1'500);
+  for (int i = 0; i < 120; ++i) {  // 12 s: past every STAT blink-code period but kJoined's
+    n.run_for(100);
+    n.drain_and_ack();
+    for (std::size_t l = 0; l < kLampCount; ++l) {
+      ASSERT_FALSE(n.sn002().lamp(static_cast<Lamp>(l))) << l;
+    }
+    for (std::uint8_t s = 0; s < kSlots; ++s) ASSERT_FALSE(n.sn002().sensor_led(s)) << int(s);
+    ASSERT_FALSE(n.runtime().status_led_lit());
+  }
+  EXPECT_FALSE(n.runtime().lamps_unattended_ok());
+}
+
+TEST(Sn002Lamps, LidOpenEachRoleShowsItsStateEvenOnBattery) {
   Node n = sn002();
   on_battery(n);
   settle(n);
-  n.sn002().lid_open = true;
-  n.imu(kVib).impact(1'500);
-  n.run_for(200);
   for (std::size_t l = 0; l < kLampCount; ++l) EXPECT_FALSE(n.sn002().lamp(static_cast<Lamp>(l)));
-  for (std::uint8_t s = 0; s < kSlots; ++s) EXPECT_FALSE(n.sn002().sensor_led(s));
-}
-
-TEST(Sn002Lamps, OnUsbEachRoleShowsItsState) {
-  Node n = sn002();
-  n.adc.mv = 3'300;
-  settle(n);
-  // Hub answered (drain_and_ack): LINK solid. Sensors running: their lamps solid.
+  set_lid(n, true);
+  n.drain_and_ack();
   n.run_for(10);
+  // Hub answered: LINK solid. Sensors running: their lamps solid. The open lid: TAMP.
   EXPECT_TRUE(n.sn002().lamp(Lamp::kLink));
   for (std::uint8_t s = 0; s < kSlots; ++s) EXPECT_TRUE(n.sn002().sensor_led(s)) << int(s);
-  EXPECT_FALSE(n.sn002().lamp(Lamp::kTamper));
+  EXPECT_TRUE(n.sn002().lamp(Lamp::kTamper));
   EXPECT_FALSE(n.sn002().lamp(Lamp::kBattery));
   EXPECT_FALSE(n.sn002().lamp(Lamp::kFault));
-  n.sn002().lid_open = true;
-  n.run_for(TamperDebouncer::kDebounceMs + 20);
-  EXPECT_TRUE(n.sn002().lamp(Lamp::kTamper));
+  // STAT shows its blink code again (joined: one 20 ms pulse every 10 s).
+  bool stat = false;
+  for (int i = 0; i < 1'100 && !stat; ++i) {
+    n.run_for(10);
+    stat = n.runtime().status_led_lit();
+  }
+  EXPECT_TRUE(stat);
   // An impact flashes VIB (inverted for SlotLedPolicy::kFlashMs).
   n.imu(kVib).impact(1'500);
   n.run_for(20);
@@ -278,7 +305,8 @@ TEST(Sn002Lamps, OnUsbEachRoleShowsItsState) {
 
 TEST(Sn002Lamps, LinkBlinksWhileJoining) {
   Node n = sn002();
-  n.boot();  // nothing ACKed: the hub has not answered
+  n.sn002().lid_open = true;  // lamps visible
+  n.boot();                   // nothing ACKed: the hub has not answered
   std::vector<bool> seen;
   for (int i = 0; i < 6; ++i) {
     n.run_for(500);
@@ -288,28 +316,64 @@ TEST(Sn002Lamps, LinkBlinksWhileJoining) {
   EXPECT_NE(std::count(seen.begin(), seen.end(), false), 0);
 }
 
-TEST(Sn002Lamps, ServiceModeFromBootLightsThemOnBattery) {
+// Service mode starts only with the lid open (BOOT is inside), then keeps the lamps
+// lit for its 10 minutes after the lid closes (the installer's walk test).
+TEST(Sn002Lamps, ServiceModeNeedsTheLidOpenThenOutlastsItsClosing) {
   Node n = sn002();
   on_battery(n);
   settle(n);
-  n.gpio.set(b2::kBootButton, false);  // BOOT pressed (active low)
-  n.run_for(100);
-  n.gpio.set(b2::kBootButton, true);
-  n.run_for(100);
+  auto press_boot = [&] {
+    n.gpio.set(b2::kBootButton, false);  // BOOT pressed (active low)
+    n.run_for(100);
+    n.gpio.set(b2::kBootButton, true);
+    n.run_for(100);
+  };
+  press_boot();  // lid closed: refused
+  EXPECT_FALSE(n.runtime().service_mode());
+  EXPECT_FALSE(n.runtime().start_service_mode());
+  EXPECT_FALSE(n.sn002().lamp(Lamp::kLink));
+  set_lid(n, true);
+  press_boot();
   EXPECT_TRUE(n.runtime().service_mode());
+  set_lid(n, false);
+  n.drain_and_ack();
+  n.run_for(10);
   EXPECT_TRUE(n.sn002().lamp(Lamp::kLink));
   EXPECT_TRUE(n.sn002().sensor_led(kMag));
   n.run_for(SlotLedPolicy::kServiceMs);
+  EXPECT_FALSE(n.runtime().service_mode());
   EXPECT_FALSE(n.sn002().lamp(Lamp::kLink));
   EXPECT_FALSE(n.sn002().sensor_led(kMag));
+  EXPECT_FALSE(n.runtime().status_led_lit());
 }
 
 // --- USER button ---------------------------------------------------------------------------
+
+// With the lid closed the press still sends its test report, but no lamp test.
+TEST(Sn002User, ShortPressWithTheLidClosedReportsButLightsNothing) {
+  Node n = sn002();
+  settle(n);  // on USB: still dark
+  n.sn002().user_pressed = true;
+  n.run_for(200);
+  n.sn002().user_pressed = false;
+  n.run_for(50);
+  const auto ev = n.drain_and_ack();
+  EXPECT_EQ(of(ev, EventKind::kUserButton).size(), 1u);
+  EXPECT_EQ(of(ev, EventKind::kHeartbeat).size(), 1u);
+  EXPECT_FALSE(n.runtime().lamp_test_active());
+  for (int i = 0; i < 8; ++i) {
+    n.run_for(125);
+    EXPECT_FALSE(n.sn002().lamp(Lamp::kLink));
+    EXPECT_FALSE(n.sn002().sensor_led(kEnv));
+  }
+}
 
 TEST(Sn002User, ShortPressSendsATestReportAndBlinksEveryLampForTenSeconds) {
   Node n = sn002();
   on_battery(n, 3'000);
   settle(n);
+  set_lid(n, true);  // the lamp test runs only with the lid open
+  n.drain_and_ack();
   n.sn002().user_pressed = true;
   n.run_for(200);
   n.sn002().user_pressed = false;
@@ -334,9 +398,11 @@ TEST(Sn002User, ShortPressSendsATestReportAndBlinksEveryLampForTenSeconds) {
   }
   EXPECT_GT(lit, 0);
   EXPECT_GT(dark, 0);
-  n.run_for(kLampTestMs);
+  // Closing the lid ends it at once; the lamps go dark (lid closed, no service).
+  set_lid(n, false);
   EXPECT_FALSE(n.runtime().lamp_test_active());
-  EXPECT_FALSE(n.sn002().lamp(Lamp::kLink));  // back to dark on battery
+  EXPECT_FALSE(n.sn002().lamp(Lamp::kLink));
+  EXPECT_FALSE(n.sn002().sensor_led(kEnv));
 }
 
 TEST(Sn002User, LongPressIsOneCommissionRequestWhileHeld) {
@@ -382,13 +448,13 @@ TEST(Sn002Power, UsbBatterySwitchoverFollowsUsbPresent) {
   n.run_for(20);
   EXPECT_EQ(n.platform().power.source(), PowerSource::kBatteryOnly);
   EXPECT_FALSE(n.runtime().external_power());
-  EXPECT_FALSE(n.sn002().lamp(Lamp::kLink));  // dark on battery
+  EXPECT_FALSE(n.sn002().lamp(Lamp::kLink));  // dark (lid closed)
   // The cells' last loaded reading (2.3 V) is above 2.2 V: still normal.
   EXPECT_EQ(n.runtime().power_mode(), PowerMode::kNormal);
   n.sn002().usb = true;
   n.run_for(20);
   EXPECT_TRUE(n.runtime().external_power());
-  EXPECT_TRUE(n.sn002().lamp(Lamp::kLink));
+  EXPECT_FALSE(n.sn002().lamp(Lamp::kLink));  // USB power alone lights nothing (lid closed)
 }
 
 TEST(Sn002Power, AaLowBatteryUnderLoadEntersLowPowerAndLightsBatt) {
@@ -408,7 +474,8 @@ TEST(Sn002Power, AaLowBatteryUnderLoadEntersLowPowerAndLightsBatt) {
   ASSERT_FALSE(hb.empty());
   EXPECT_EQ(hb.back().a, 2'150);
   EXPECT_TRUE(n.runtime().battery_low());
-  n.runtime().start_service_mode();
+  EXPECT_FALSE(n.sn002().lamp(Lamp::kBattery));  // lid closed: dark
+  set_lid(n, true);
   EXPECT_TRUE(n.sn002().lamp(Lamp::kBattery));
   // Below 2.0 V loaded: critical.
   n.adc.mv = 1'950;
@@ -498,9 +565,10 @@ TEST(Sn002Quarantine, AStuckPirIsDisabledItsRailCutAndRetriedByAPowerCycle) {
   EXPECT_EQ(n.runtime().fixed_quarantined(), 0u);
 }
 
-TEST(Sn002Quarantine, FaultLampLightsOnUsb) {
+TEST(Sn002Quarantine, FaultLampLightsWithTheLidOpen) {
   Node n = sn002();
   ASSERT_TRUE(apply_fault(n, "sht_missing"));
+  n.sn002().lid_open = true;
   n.boot();
   n.run_for(100);
   n.drain_and_ack();
@@ -674,6 +742,136 @@ TEST(Sn002RedTeam, PowerModeHasHysteresis) {
   n.adc.mv = 2'350;
   n.run_for(8 * 60'000);
   EXPECT_EQ(n.runtime().power_mode(), PowerMode::kNormal);
+}
+
+// --- USB console lock (owner 2026-11-22: the USB-C port stays reachable) ------------------
+
+class Text final : public IDiagOut {
+ public:
+  void write(const char* s, std::size_t n) override { text.append(s, n); }
+  bool ok() const { return text.find("\"done\":true,\"ok\":true") != std::string::npos; }
+  bool locked() const {
+    return text.find("\"err\":\"locked: open the enclosure\"") != std::string::npos;
+  }
+  std::string text;
+};
+
+struct Console {
+  explicit Console(Node& node) : n(node) {}
+  Text run(const std::string& line) {
+    Text t;
+    Diag d(n.platform(), n.runtime(), &n.board_io());
+    d.handle_line(line.c_str(), t);
+    rebooted |= d.reboot_requested();
+    return t;
+  }
+  Node& n;
+  bool rebooted = false;
+};
+
+constexpr const char* kKeyHex = "00112233445566778899aabbccddeeff";
+
+TEST(Sn002Console, ReadOnlyWhileTheLidIsClosed) {
+  Node n = sn002();
+  settle(n);
+  Console c(n);
+  ASSERT_TRUE(n.runtime().console_locked());
+  // Status, identity and readouts still answer.
+  for (const char* ro : {"help", "id", "slots", "power", "identity", "led", "board-id", "i2c scan",
+                         "selftest i2c", "exp 0x20"}) {
+    const Text t = c.run(ro);
+    EXPECT_FALSE(t.locked()) << ro << ": " << t.text;
+  }
+  EXPECT_NE(c.run("id").text.find("\"console_locked\":true"), std::string::npos);
+  const auto identity_before = load_identity(n.store);
+  // Everything that changes state or could blind the node is refused, and changes nothing.
+  for (const char* rw : {"provision intruder 00112233445566778899aabbccddeeff",
+                         "i2c wr 0x35 0x02 0x00", "i2c rd 0x19 0x27 1", "rail 2 aon off", "reboot",
+                         "board-id TL-SN-002 A EVIL-0001", "led service on", "rescan",
+                         "selftest imu 1", "selftest sht 3", "uart 0", "mux 1", "frobnicate"}) {
+    const Text t = c.run(rw);
+    EXPECT_TRUE(t.locked()) << rw << ": " << t.text;
+    EXPECT_FALSE(t.ok()) << rw;
+  }
+  n.run_for(20);
+  EXPECT_FALSE(c.rebooted);
+  EXPECT_TRUE(n.sn002().pir_powered());
+  EXPECT_TRUE(n.runtime().slot(kPir).enabled);
+  EXPECT_FALSE(n.runtime().service_mode());
+  EXPECT_EQ(load_identity(n.store).has_value(), identity_before.has_value());
+  EXPECT_EQ(n.runtime().console_refusals(), 13u);
+  EXPECT_NE(c.run("id").text.find("\"console_refusals\":13"), std::string::npos);
+}
+
+TEST(Sn002Console, OpeningTheLidUnlocksItAndRaisesTheTamperAlarm) {
+  Node n = sn002();
+  settle(n);
+  Console c(n);
+  EXPECT_TRUE(c.run("rail 2 aon off").locked());
+  set_lid(n, true);
+  const auto ev = n.drain_and_ack();
+  const auto tamper = of(ev, EventKind::kTamper);
+  ASSERT_EQ(tamper.size(), 1u);
+  EXPECT_TRUE(tamper[0].flag);
+  EXPECT_EQ(tamper[0].priority, Priority::kP0Critical);
+  EXPECT_FALSE(n.runtime().console_locked());
+  EXPECT_TRUE(c.run("led service on").ok());
+  EXPECT_TRUE(c.run("rail 2 aon off").ok());
+  EXPECT_FALSE(n.sn002().pir_powered());
+  EXPECT_TRUE(c.run("rail 2 aon on").ok());
+  EXPECT_TRUE(c.run(std::string("provision node-77 ") + kKeyHex).ok());
+  EXPECT_TRUE(c.rebooted);
+  // Closed again: locked again (after the debounce; the open lid is polled every second).
+  n.sn002().lid_open = false;
+  n.run_for(NodeRuntime::kMaskedPollMs + TamperDebouncer::kDebounceMs + 50);
+  EXPECT_TRUE(n.runtime().console_locked());
+  EXPECT_TRUE(c.run("reboot").locked());
+}
+
+// Unknown at boot (before the debounce settles) counts as closed: fail locked.
+TEST(Sn002Console, LockedUntilTheLidIsKnownOpen) {
+  Node n = sn002();
+  n.sn002().lid_open = true;
+  n.boot();
+  EXPECT_FALSE(n.runtime().tamper_open().has_value());
+  EXPECT_TRUE(n.runtime().console_locked());
+  n.run_for(TamperDebouncer::kDebounceMs + 20);
+  EXPECT_FALSE(n.runtime().console_locked());
+}
+
+// Refusals reach the hub as a P1 kConsoleLocked diagnostic: the first at once, later
+// ones counted into one report per kConsoleReportMs (never a flood, never P0).
+TEST(Sn002Console, RefusalsAreReportedRateLimited) {
+  Node n = sn002();
+  settle(n);
+  Console c(n);
+  c.run("reboot");
+  n.run_for(20);
+  auto ev = of(n.drain_and_ack(), EventKind::kConsoleLocked);
+  ASSERT_EQ(ev.size(), 1u);
+  EXPECT_EQ(ev[0].priority, Priority::kP1State);
+  EXPECT_EQ(ev[0].slot, kNoSlot);
+  EXPECT_EQ(ev[0].a, 1);
+  EXPECT_EQ(ev[0].b, 1u);
+  for (int i = 0; i < 5; ++i) {
+    n.run_for(5'000);
+    c.run("rail 2 aon off");
+  }
+  n.run_for(20);
+  EXPECT_TRUE(of(n.drain_and_ack(), EventKind::kConsoleLocked).empty());
+  ev = of(run_acked(n, kConsoleReportMs), EventKind::kConsoleLocked);  // one for the five
+  ASSERT_EQ(ev.size(), 1u);
+  EXPECT_EQ(ev[0].a, 5);
+  EXPECT_EQ(ev[0].b, 6u);
+  // Nothing new: nothing more.
+  EXPECT_TRUE(of(run_acked(n, 3 * kConsoleReportMs), EventKind::kConsoleLocked).empty());
+  // A flood of 1000 refusals: the first is reported at once, the rest in one report.
+  for (int i = 0; i < 1'000; ++i) c.run("i2c wr 0x35 0x02 0x00");
+  ev = of(run_acked(n, kConsoleReportMs + 100), EventKind::kConsoleLocked);
+  ASSERT_EQ(ev.size(), 2u);
+  EXPECT_EQ(ev[0].a, 1);
+  EXPECT_EQ(ev[1].a, 999);
+  EXPECT_EQ(ev[1].b, 1'006u);
 }
 
 }  // namespace

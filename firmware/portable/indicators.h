@@ -107,6 +107,9 @@ class SlotLedPolicy {
   static constexpr std::uint32_t kSlowBlinkPeriodMs = 2'000;
   static constexpr std::uint32_t kSlowBlinkOnMs = 1'000;
 
+  // `unattended` below: the LEDs may light without service mode. That is external
+  // power on TL-SN-001 (LampGate::kExternalPower) and the lid open on TL-SN-002
+  // (LampGate::kLidOpen); the runtime decides, this policy only applies it.
   void start_service(TimeMs now) { service_until_ = now + kServiceMs; }
   void stop_service() { service_until_ = 0; }
   bool service_active(TimeMs now) const { return now < service_until_; }
@@ -114,13 +117,11 @@ class SlotLedPolicy {
   // A wake event from this slot (motion, contact, impact): a short flash.
   void note_wake(std::uint8_t slot, TimeMs now);
 
-  bool lit_allowed(TimeMs now, bool external_power) const {
-    return external_power || service_active(now);
-  }
-  bool led_on(std::uint8_t slot, SlotLedMode mode, TimeMs now, bool external_power) const;
+  bool lit_allowed(TimeMs now, bool unattended) const { return unattended || service_active(now); }
+  bool led_on(std::uint8_t slot, SlotLedMode mode, TimeMs now, bool unattended) const;
   // Earliest time after `now` at which any LED can change (~0, i.e. kNever, if none).
   TimeMs next_change(const std::array<SlotLedMode, kSlots>& modes, TimeMs now,
-                     bool external_power) const;
+                     bool unattended) const;
 
  private:
   TimeMs service_until_ = 0;
@@ -253,7 +254,7 @@ inline constexpr std::uint32_t kLampTestHalfMs = 250;
 inline constexpr std::uint32_t kFaultLampMs = 10u * 60u * 1000u;
 
 struct LampInputs {
-  bool lit_allowed = false;  // external power or service mode
+  bool lit_allowed = false;  // unattended (external power / lid open, per LampGate) or service mode
   bool joined = false;       // hub answering, link not failing
   std::optional<bool> tamper_open;
   bool battery_low = false;

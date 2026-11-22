@@ -923,7 +923,7 @@ void NodeRuntime::poll_service_button(TimeMs now) {
   if (service_mode()) {
     stop_service_mode();
   } else {
-    start_service_mode();
+    start_service_mode();  // refused with the lid closed on LampGate::kLidOpen boards
   }
 }
 
@@ -944,7 +944,7 @@ void NodeRuntime::poll_user_button(TimeMs now) {
       const std::uint32_t mv = take_battery_mv();
       emit(kNoSlot, EventKind::kHeartbeat, Priority::kP2Health, false,
            static_cast<std::int32_t>(mv), static_cast<std::uint32_t>(mode_));
-      start_lamp_test(now);
+      start_lamp_test(now);  // the event and heartbeat always; the lamps only if allowed
       return;
     }
     case UserButton::Press::kLong:
@@ -959,16 +959,53 @@ void NodeRuntime::poll_user_button(TimeMs now) {
   }
 }
 
+// TL-SN-002 (LampGate::kLidOpen): the USER lamp test runs only with the lid open,
+// so a press on a closed node (or a stuck button) never makes it visible from outside.
 void NodeRuntime::start_lamp_test(TimeMs now) {
+  if (p_.board.lamp_gate == LampGate::kLidOpen && tamper_.state() != std::optional<bool>{true}) {
+    return;
+  }
   lamp_test_started_ = now;
   lamp_test_until_ = now + kLampTestMs;
   update_indicators(now);
 }
 
-void NodeRuntime::start_service_mode() {
+bool NodeRuntime::start_service_mode() {
   const TimeMs now = p_.clock.now_ms();
+  if (p_.board.lamp_gate == LampGate::kLidOpen && tamper_.state() != std::optional<bool>{true}) {
+    return service_mode();  // the BOOT button is inside: service mode needs the lid open
+  }
   slot_leds_.start_service(now);
   update_indicators(now);  // at once, not at the next step
+  return true;
+}
+
+bool NodeRuntime::lamps_unattended_ok() const {
+  if (p_.board.lamp_gate == LampGate::kLidOpen) return tamper_.state() == std::optional<bool>{true};
+  return external_power_;
+}
+
+bool NodeRuntime::console_locked() const {
+  return p_.board.console_lock == ConsoleLock::kLidClosed &&
+         tamper_.state() != std::optional<bool>{true};
+}
+
+void NodeRuntime::note_console_refusal() {
+  ++console_refused_total_;
+  ++console_unreported_;
+  report_console_refusals(p_.clock.now_ms());
+}
+
+// One kConsoleLocked diagnostic per kConsoleReportMs at most: the first refusal at
+// once, later ones counted and sent when the window ends (step()). P1, never P0:
+// it is evidence for the hub's health view, not an alarm (the alarm is the lid).
+void NodeRuntime::report_console_refusals(TimeMs now) {
+  if (console_unreported_ == 0) return;
+  if (console_reported_at_ != kNever && now - console_reported_at_ < kConsoleReportMs) return;
+  emit(kNoSlot, EventKind::kConsoleLocked, Priority::kP1State, false,
+       static_cast<std::int32_t>(console_unreported_), console_refused_total_);
+  console_unreported_ = 0;
+  console_reported_at_ = now;
 }
 
 void NodeRuntime::stop_service_mode() {
@@ -1012,31 +1049,47 @@ std::array<SlotLedMode, kSlots> NodeRuntime::slot_led_modes() const {
 
 void NodeRuntime::update_indicators(TimeMs now) {
   led_due_ms_ = kNever;
+  // LampGate::kLidOpen: closing the lid ends a running USER lamp test at once.
+  if (p_.board.lamp_gate == LampGate::kLidOpen && now < lamp_test_until_ &&
+      tamper_.state() != std::optional<bool>{true}) {
+    lamp_test_until_ = now;
+  }
   if (const std::uint8_t line = p_.board.status_led_line; line != 0xFF) {
     const StatusCode c = select_status(status_inputs(now));
     if (c != status_) {
       status_ = c;
       status_since_ = now;
     }
-    const bool on = status_led_on(status_, now - status_since_);
+    // LampGate::kLidOpen (TL-SN-002): STAT too stays dark with the lid closed
+    // unless service mode, so nothing on the board is visible from outside.
+    const bool stat_allowed = p_.board.lamp_gate != LampGate::kLidOpen || lamps_unattended_ok() ||
+                              slot_leds_.service_active(now);
+    const bool on = stat_allowed && status_led_on(status_, now - status_since_);
     if (!status_led_known_ || on != status_led_level_) {
       status_led_known_ = p_.gpio.write(line, !on);  // active low
       status_led_level_ = on;
     }
-    const TimeMs edge = status_next_edge(status_, now - status_since_);
-    if (edge != kNever) led_due_ms_ = status_since_ + edge;
+    if (stat_allowed) {
+      const TimeMs edge = status_next_edge(status_, now - status_since_);
+      if (edge != kNever) led_due_ms_ = status_since_ + edge;
+      if (!lamps_unattended_ok() && slot_leds_.service_active(now) &&
+          slot_leds_.service_until() < led_due_ms_) {
+        led_due_ms_ = slot_leds_.service_until();
+      }
+    }
   }
   update_lamps(now);
   bool wired = false;
   for (const auto& led : p_.board.slot_led_n) wired |= led.wired();
   if (!wired) return;
   const auto modes = slot_led_modes();
-  if (const TimeMs t = slot_leds_.next_change(modes, now, external_power_); t < led_due_ms_) {
+  const bool unattended = lamps_unattended_ok();
+  if (const TimeMs t = slot_leds_.next_change(modes, now, unattended); t < led_due_ms_) {
     led_due_ms_ = t;
   }
   std::uint8_t want = 0;
   for (std::uint8_t i = 0; i < kSlots; ++i) {
-    if (slot_leds_.led_on(i, modes[i], now, external_power_)) {
+    if (slot_leds_.led_on(i, modes[i], now, unattended)) {
       want = static_cast<std::uint8_t>(want | (1u << i));
     }
   }
@@ -1054,8 +1107,9 @@ void NodeRuntime::update_indicators(TimeMs now) {
   slot_leds_known_ = ok;
 }
 
-// TL-SN-002 board lamps (Lamp): same rule as the slot LEDs (dark on battery
-// unless service mode), except the USER lamp test, which blinks them all.
+// TL-SN-002 board lamps (Lamp): same rule as the slot LEDs (BoardSupport::lamp_gate:
+// on TL-SN-002 dark unless the lid is open or service mode), except the USER lamp
+// test, which blinks them all (and itself only starts with the lid open there).
 void NodeRuntime::update_lamps(TimeMs now) {
   bool wired = false;
   for (const auto& l : p_.board.lamp_n) wired |= l.wired();
@@ -1071,13 +1125,14 @@ void NodeRuntime::update_lamps(TimeMs now) {
   } else {
     const StatusInputs st = status_inputs(now);
     LampInputs in;
-    in.lit_allowed = slot_leds_.lit_allowed(now, external_power_);
+    const bool unattended = lamps_unattended_ok();
+    in.lit_allowed = slot_leds_.lit_allowed(now, unattended);
     in.joined = hub_heard_ && !outage_;
     in.tamper_open = tamper_.state();
     in.battery_low = battery_low();
     in.fault = st.fault || st.card_error || now < fault_lamp_until_;
     want = lamp_levels(in, now);
-    if (!external_power_ && slot_leds_.service_active(now)) consider(slot_leds_.service_until());
+    if (!unattended && slot_leds_.service_active(now)) consider(slot_leds_.service_until());
     if (in.lit_allowed) {
       if (!in.joined) {
         const TimeMs t = now % SlotLedPolicy::kSlowBlinkPeriodMs;
@@ -1483,6 +1538,7 @@ void NodeRuntime::step() {
   }
 
   if (quarantined_) retry_quarantined(now);
+  report_console_refusals(now);
 
   // Non-critical telemetry has a shelf life: after an outage only fresh data goes out.
   queue_.remove_if([now](const DeviceEvent& e) {
@@ -1517,6 +1573,9 @@ TimeMs NodeRuntime::next_wake_ms() const {
     }
   }
   if (tamper_.pending() && tamper_.due_ms() < next) next = tamper_.due_ms();
+  if (console_unreported_ && console_reported_at_ + kConsoleReportMs < next) {
+    next = console_reported_at_ + kConsoleReportMs;
+  }
   if (button_.pending() && button_.due_ms() < next) next = button_.due_ms();
   if (user_.pending() && user_.due_ms() < next) next = user_.due_ms();
   if (tamper_poll_at_ < next) next = tamper_poll_at_;

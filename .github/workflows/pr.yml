@@ -190,6 +190,28 @@ jobs:
           idf.py -B build_tl_sn_001 -D SDKCONFIG=build_tl_sn_001/sdkconfig \
             -D SDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.tl_sn_001" set-target esp32h2 build
           ls -l build_tl_sn_001/*.bin
+      - name: Build the production security profile (compile only; unsigned, no key, burns nothing)
+        shell: bash
+        run: |
+          . "$IDF_PATH/export.sh"
+          cd firmware/esp_idf
+          idf.py -B build_production -D SDKCONFIG=build_production/sdkconfig \
+            -D SDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.production" set-target esp32h2 build
+          ls -l build_production/*.bin build_production/bootloader/bootloader.bin
+          # Kconfig drops unknown or unmet options with a warning only: check each one took.
+          cfg=build_production/sdkconfig
+          for opt in CONFIG_SECURE_BOOT=y CONFIG_SECURE_BOOT_V2_ENABLED=y \
+                     CONFIG_SECURE_SIGNED_APPS_RSA_SCHEME=y CONFIG_SECURE_FLASH_ENC_ENABLED=y \
+                     CONFIG_SECURE_FLASH_ENCRYPTION_MODE_RELEASE=y \
+                     CONFIG_SECURE_ENABLE_SECURE_ROM_DL_MODE=y CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y \
+                     CONFIG_PARTITION_TABLE_OFFSET=0xF000 CONFIG_TALOS_BOARD_TL_SN_002=y; do
+            grep -qix "$opt" "$cfg" || { echo "production profile lost $opt"; exit 1; }
+          done
+          for opt in CONFIG_SECURE_BOOT_BUILD_SIGNED_BINARIES CONFIG_SECURE_BOOT_ALLOW_JTAG \
+                     CONFIG_SECURE_BOOT_INSECURE CONFIG_SECURE_FLASH_ENCRYPTION_MODE_DEVELOPMENT \
+                     CONFIG_SECURE_INSECURE_ALLOW_DL_MODE CONFIG_NVS_ENCRYPTION; do
+            if grep -q "^$opt=y" "$cfg"; then echo "production profile must not set $opt"; exit 1; fi
+          done
 
   deploy:
     name: Deploy artifacts

@@ -50,9 +50,8 @@ void SlotLedPolicy::note_wake(std::uint8_t slot, TimeMs now) {
   if (slot < kSlots) flash_until_[slot] = now + kFlashMs;
 }
 
-bool SlotLedPolicy::led_on(std::uint8_t slot, SlotLedMode mode, TimeMs now,
-                           bool external_power) const {
-  if (slot >= kSlots || !lit_allowed(now, external_power)) return false;
+bool SlotLedPolicy::led_on(std::uint8_t slot, SlotLedMode mode, TimeMs now, bool unattended) const {
+  if (slot >= kSlots || !lit_allowed(now, unattended)) return false;
   bool on = false;
   switch (mode) {
     case SlotLedMode::kOff:
@@ -71,14 +70,14 @@ bool SlotLedPolicy::led_on(std::uint8_t slot, SlotLedMode mode, TimeMs now,
 }
 
 TimeMs SlotLedPolicy::next_change(const std::array<SlotLedMode, kSlots>& modes, TimeMs now,
-                                  bool external_power) const {
+                                  bool unattended) const {
   TimeMs next = kNone;
   auto consider = [&](TimeMs t) {
     if (t > now && t < next) next = t;
   };
   // Service mode ending turns everything dark (unless on external power).
-  if (!external_power && service_active(now)) consider(service_until_);
-  if (!lit_allowed(now, external_power)) return next;
+  if (!unattended && service_active(now)) consider(service_until_);
+  if (!lit_allowed(now, unattended)) return next;
   for (std::uint8_t i = 0; i < kSlots; ++i) {
     consider(flash_until_[i]);
     if (modes[i] == SlotLedMode::kSlowBlink) {

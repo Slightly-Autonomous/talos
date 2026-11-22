@@ -300,6 +300,21 @@ export function deviceTone(
   return [label, tone];
 }
 
+// Device diagnostics (observability plane, ADR 0014) in words. "console.locked":
+// a TL-SN-002 refused USB console commands because its lid was closed (ADR 0019
+// amendment 2026-11-22). A diagnostic, never an alarm; the hub's health turns
+// repeated refusals into DEGRADED evidence, which the device row shows.
+export function diagnosticLabel(kind: string, value: bigint | number): string {
+  switch (kind) {
+    case "console.locked":
+      return `USB console: ${String(value)} command(s) refused, lid closed`;
+    case "user.button":
+      return Number(value) === 2 ? "USER: commissioning requested" : "USER: test report";
+    default:
+      return `${kind} ${String(value)}`;
+  }
+}
+
 export function tamperLabel(t: TamperStatus): string {
   if (t.display === "open") return "TAMPER: enclosure open";
   if (t.display === "closed") return "enclosure closed";

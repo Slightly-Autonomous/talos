@@ -75,6 +75,20 @@ TEST_P(Parity, FirmwareMatchesBehaviouralModel) {
     };
     EXPECT_EQ(count(l2.value()), count(l1.value())) << key << " (L2 firmware vs L1 model)";
   }
+  // Diagnostics both backends model (the USB console lock's rate-limited reports).
+  std::set<std::string> diag_keys;
+  for (const auto* r : {&l1.value(), &l2.value()}) {
+    for (const auto& [key, n] : r->diagnostics) diag_keys.insert(key);
+  }
+  for (const auto& key : diag_keys) {
+    const auto space = key.find(' ');
+    if (!firmware_devices.contains(key.substr(0, space))) continue;
+    auto count = [&](const ScenarioReport& r) {
+      auto it = r.diagnostics.find(key);
+      return it == r.diagnostics.end() ? 0u : it->second;
+    };
+    EXPECT_EQ(count(l2.value()), count(l1.value())) << key << " (L2 firmware vs L1 model)";
+  }
 }
 
 INSTANTIATE_TEST_SUITE_P(Corpus, Parity, ::testing::ValuesIn(corpus()),

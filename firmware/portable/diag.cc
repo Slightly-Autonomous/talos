@@ -179,12 +179,18 @@ void Diag::handle_line(const char* line, IDiagOut& out) {
   const char* err = nullptr;
   bool ok = false;
   auto is = [&](const char* name) { return std::strcmp(cmd, name) == 0; };
-  if (is("help")) {
+  if (rt_.console_locked() && console_access(a.v, a.n) == ConsoleAccess::kMutating) {
+    // TL-SN-002 with the lid closed (BoardSupport::console_lock): read-only console.
+    // Counted and reported to the hub (rate-limited); nothing else happens.
+    rt_.note_console_refusal();
+    err = kConsoleLockedError;
+  } else if (is("help")) {
     JsonLine()
         .str("t", "help")
         .str("cmds",
              "id slots power i2c mux exp rail uart rescan selftest provision identity board-id led "
              "reboot")
+        .boolean("locked", rt_.console_locked())
         .emit(out);
     ok = true;
   } else if (is("id")) {
@@ -264,6 +270,8 @@ bool Diag::cmd_id(IDiagOut& out) {
       .hex("wake_lines", rt_.wake_info().lines)
       .boolean("resumed", rt_.resumed_from_sleep())
       .boolean("exp_wake_masked", rt_.expander_wake_masked())
+      .boolean("console_locked", rt_.console_locked())
+      .num("console_refusals", rt_.console_refusals())
       .emit(out);
   return true;
 }
@@ -466,7 +474,7 @@ bool Diag::cmd_board_id(const Args& a, IDiagOut& out, const char*& err) {
 bool Diag::cmd_led(const Args& a, IDiagOut& out, const char*& err) {
   if (a.n == 3 && std::strcmp(a.v[1], "service") == 0) {
     if (std::strcmp(a.v[2], "on") == 0) {
-      rt_.start_service_mode();
+      if (!rt_.start_service_mode()) err = "service mode needs the lid open";
     } else if (std::strcmp(a.v[2], "off") == 0) {
       rt_.stop_service_mode();
     } else {
@@ -480,7 +488,8 @@ bool Diag::cmd_led(const Args& a, IDiagOut& out, const char*& err) {
       .num("status_code", static_cast<std::int64_t>(rt_.status_code()))
       .boolean("status_lit", rt_.status_led_lit())
       .boolean("service", rt_.service_mode())
-      .boolean("external_power", rt_.external_power());
+      .boolean("external_power", rt_.external_power())
+      .boolean("unattended", rt_.lamps_unattended_ok());
   std::int32_t lit[kSlots];
   for (std::uint8_t i = 0; i < kSlots; ++i) lit[i] = rt_.slot_led_lit(i) ? 1 : 0;
   line.nums("slot_lit", lit, kSlots);

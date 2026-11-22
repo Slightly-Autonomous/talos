@@ -1,0 +1,57 @@
+# Production security profile for TL-SN-002 (ADR 0019 amendment 2026-11-22, HD-016).
+# Layered on the defaults, built in CI as a compile check only:
+#   idf.py -B build_production -D SDKCONFIG=build_production/sdkconfig \
+#          -D SDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.production" set-target esp32h2 build
+#
+# The USB-C port stays reachable from outside the closed enclosure, so a production
+# node must not let that port load code, read the flash or halt the CPU. This profile
+# turns on, AT THE FIRST BOOT OF A FLASHED NODE, IRREVERSIBLY (eFuses):
+#   - Secure Boot v2, RSA-3072 (ESP-IDF v5.5 offers ECDSA SBv2 on the ESP32-H2 only
+#     behind SECURE_BOOT_INSECURE: errata, SECURE_BOOT_V2_ECDSA_INSECURE);
+#   - flash encryption, RELEASE mode (XTS-AES-128, the only H2 option);
+#   - JTAG off: without SECURE_BOOT_ALLOW_JTAG (only settable under the insecure
+#     menu, which stays off) the bootloader burns DIS_PAD_JTAG, DIS_USB_JTAG and
+#     SOFT_DIS_JTAG (bootloader_support/src/esp32h2/*_secure_features.c);
+#   - secure ROM download mode (ENABLE_SECURITY_DOWNLOAD): no flash/RAM reads, no
+#     stub, no manual encryption, only basic writes, which Secure Boot won't boot.
+# It keeps the USB Serial/JTAG peripheral (DIS_USB_SERIAL_JTAG is never burned and is
+# write-protected by the release-mode WR_DIS of DIS_ICACHE) for the console, which
+# the firmware makes READ-ONLY while the lid is closed (console_policy.h).
+#
+# NOTHING HERE NEEDS OR HOLDS A KEY. Signing is EXTERNAL (the owner signs offline with
+# espsecure.py), so CI builds unsigned images that no node will boot. Building this
+# profile burns nothing; flashing and booting a signed build does. Provisioning steps:
+# docs/hardware/provisioning.md. Never add anything that burns eFuses automatically
+# from the host side (CI, tools): provisioning is an explicit owner step.
+#
+# Option names checked against the ESP-IDF v5.5.6 Kconfig (components/bootloader/
+# Kconfig.projbuild); the CI job also greps the resulting sdkconfig for each of them,
+# so a renamed option fails the build instead of being dropped silently.
+
+CONFIG_SECURE_BOOT=y
+CONFIG_SECURE_BOOT_V2_ENABLED=y
+CONFIG_SECURE_SIGNED_APPS_RSA_SCHEME=y
+# External signing: no signing key in the build, ever.
+# CONFIG_SECURE_BOOT_BUILD_SIGNED_BINARIES is not set
+# No "potentially insecure" options (JTAG, ECDSA-SBv2 force, read-disable of eFuses).
+# CONFIG_SECURE_BOOT_INSECURE is not set
+
+CONFIG_SECURE_FLASH_ENC_ENABLED=y
+CONFIG_SECURE_FLASH_ENCRYPTION_MODE_RELEASE=y
+# NVS encryption would need an nvs_keys partition (or an HMAC eFuse key) and a
+# secure init of both NVS partitions (nvs, talos_id): not wired or tested yet, and
+# turned on by default with flash encryption it would make nvs_flash_init() fail at
+# run time. Off until done (docs/hardware/provisioning.md "Open").
+# CONFIG_NVS_ENCRYPTION is not set
+
+CONFIG_SECURE_ENABLE_SECURE_ROM_DL_MODE=y
+
+# The console stays on the USB Serial/JTAG (as sdkconfig.defaults; restated so the
+# production build can't lose it).
+CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
+
+# The Secure Boot v2 + flash encryption bootloader (plus its 4 KiB signature sector)
+# outgrows the 28 KiB below the default 0x8000 table offset: move the table to
+# 0xF000 (56 KiB for the bootloader) with its own partition layout.
+CONFIG_PARTITION_TABLE_OFFSET=0xF000
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions_production.csv"

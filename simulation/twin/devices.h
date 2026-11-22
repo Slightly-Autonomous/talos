@@ -129,6 +129,10 @@ class VirtualDevice final : public IDeviceBackend {
   // fw::NodeRuntime::kUserCooldownMs: one test report per this long at most.
   static constexpr std::int64_t kUserCooldownMs = 10'000;
   std::optional<std::int64_t> last_user_report_ms_;
+  // USB console lock (TL-SN-002): refusals not yet reported, and the last report.
+  bool console_lock_ = false;
+  std::int64_t console_unreported_ = 0;
+  std::optional<std::int64_t> console_reported_ms_;
   std::int64_t next_heartbeat_ = 0;
   std::vector<Pir> pirs_;
   std::vector<Contact> contacts_;

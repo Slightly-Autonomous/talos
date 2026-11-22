@@ -46,7 +46,11 @@ class FlashOnTheVirtualBoard(unittest.TestCase):
         code, lines = self.run_flash()
         steps = {line["step"]: line for line in lines if "step" in line}
         self.assertEqual(steps["flash"]["verdict"], "skipped")  # no port: nothing to flash, said so
+        # The console is read-only with the lid closed: the tool opened it before the identity.
+        self.assertEqual(steps["lid.open"]["verdict"], "pass")
         self.assertEqual(steps["identity"]["verdict"], "pass")
+        self.assertEqual(steps["selftest.S-M20"]["verdict"], "pass")  # closed again: locked
+        self.assertEqual(steps["selftest.S-M21"]["verdict"], "pass")
         self.assertEqual(steps["identity"]["detail"],
                          {"board": "TL-SN-002", "rev": "A", "serial": "SN2-A-0007"})
         self.assertEqual(steps["selftest.N-01.mag"]["verdict"], "pass")

@@ -35,8 +35,16 @@ class Sn002Bench(unittest.TestCase):
                          [(r.test, r.verdict, r.diagnosis) for r in results])
         self.assertEqual(by_id["S-M16"].detail["board"], "TL-SN-002")
         self.assertEqual(by_id["S-M16"].detail["rev"], "A")
-        for t in ("N-01.mag", "N-02.vib", "N-03.pir", "N-04.env", "N-07", "N-08", "N-09", "N-10"):
+        for t in ("N-01.mag", "N-02.vib", "N-03.pir", "N-04.env", "N-07", "N-08", "N-09", "N-10",
+                  "S-M20", "S-M21"):
             self.assertIn(t, by_id)
+        # Lid closed: read-only console, refusal counted, every lamp dark even on USB.
+        self.assertTrue(by_id["S-M20"].detail["console_locked"])
+        self.assertEqual(by_id["S-M20"].detail["refusal"], "locked: open the enclosure")
+        self.assertTrue(by_id["S-M20"].detail["external_power"])
+        self.assertEqual(by_id["S-M20"].detail["lamps"], [0, 0, 0, 0])
+        # Then the plan opened it for the rest.
+        self.assertEqual(by_id["S-M21"].detail, {"tamper": 1, "console_locked": False})
         self.assertEqual(summary(results)["failed"], [])
 
     def test_missing_tmag(self):
@@ -57,7 +65,8 @@ class Sn002Bench(unittest.TestCase):
     def test_lid_open(self):
         by_id, _ = run(["lid_open"])
         self.assertDiagnosis(by_id, "S-M17", "tamper loop open")
-        self.assertEqual(by_id["S-M19"].verdict, "blocked")
+        for t in ("S-M19", "S-M20", "S-M21", "N-06.imu", "N-07", "N-08"):
+            self.assertEqual(by_id[t].verdict, "blocked", t)
 
     def test_low_cells(self):
         by_id, _ = run(["battery_mv=2100"])

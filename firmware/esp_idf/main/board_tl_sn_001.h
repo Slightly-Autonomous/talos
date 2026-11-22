@@ -102,6 +102,11 @@ inline BoardSupport tl_sn_001() {
   // guarantees 0.4 A x 3.3 V = 1.32 W; the MCU's 802.15.4 TX burst takes ~0.5 W of it. The generic
   // 2500 mW default would admit loads the regulator cannot supply (hardware/results/pi.md, S-2).
   b.usb_sustained_mw = 800;
+  // Archived modular prototype (ADR 0019): its USB-C sits inside the enclosure, so
+  // the console stays fully open and the lamps keep the owner's "lit on USB" rule.
+  // TL-SN-002 locks both (board_tl_sn_002.h).
+  b.console_lock = ConsoleLock::kNever;
+  b.lamp_gate = LampGate::kExternalPower;
   return b;
 }
 

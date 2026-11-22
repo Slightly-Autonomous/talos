@@ -44,6 +44,9 @@ struct ScenarioReport {
   std::uint64_t journal_digest = 0;  // FNV-1a over serialized journal entries
   // "device event_type" -> journaled observations (the parity test compares these).
   std::map<std::string, std::uint32_t> observations;
+  // "device kind" -> diagnostics the devices sent (observability plane, e.g.
+  // "console.locked"); the parity test compares these too.
+  std::map<std::string, std::uint32_t> diagnostics;
   std::string trace_json;  // ground truth + journal, for replay/debugging
 };
 

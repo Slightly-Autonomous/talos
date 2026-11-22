@@ -20,7 +20,14 @@
 
 namespace talos::sim {
 
-using UplinkBody = std::variant<ObservationEnvelope, CommandAck>;
+// A device diagnostic for the observability plane (never journaled): what the hub's
+// device registry would record, e.g. "console.locked" with the refusals it carries.
+struct DeviceDiagnostic {
+  std::string kind;
+  std::int64_t value = 0;
+};
+
+using UplinkBody = std::variant<ObservationEnvelope, CommandAck, DeviceDiagnostic>;
 
 // Device-to-hub messages produced during one tick.
 struct Uplink {

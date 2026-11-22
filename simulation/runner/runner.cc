@@ -311,6 +311,11 @@ class Run {
     for (auto& u : up) {
       if (auto* env = std::get_if<ObservationEnvelope>(&u.body)) {
         transport_.send(t, u.device, true, *env);
+      } else if (auto* d = std::get_if<DeviceDiagnostic>(&u.body)) {
+        // Observability plane: recorded when the device sends it, never journaled.
+        diagnostics_.push_back({t, u.device, d->kind, d->value});
+        ++report_.diagnostics[u.device + " " + d->kind];
+        world_.record(t, "diagnostic." + d->kind, u.device, std::to_string(d->value));
       } else {
         transport_.send(t, u.device, true, std::get<CommandAck>(u.body));
       }
@@ -390,6 +395,9 @@ class Run {
         break;
       case v1::Stimulus::kBatterySet:
         world_.set_battery(t, s.battery_set().device_id(), s.battery_set().mv());
+        break;
+      case v1::Stimulus::kUsbConsole:
+        world_.usb_console(t, s.usb_console().device_id(), s.usb_console().line());
         break;
       case v1::Stimulus::kTemperatureSet:
         world_.set_temperature(t, s.temperature_set().zone_id(), s.temperature_set().milli_c());
@@ -504,6 +512,23 @@ class Run {
           if (!count_ok) {
             fail(e.name(), x.operation() + " matching commands: " + std::to_string(n) +
                                " (statuses: " + (statuses.empty() ? "none" : statuses) + ")");
+          }
+          break;
+        }
+        case v1::Expectation::kDiagnostic: {
+          const auto& x = e.diagnostic();
+          const std::int64_t to = x.to_ms() > 0 ? x.to_ms() : sc_.duration_ms();
+          std::uint32_t n = 0;
+          for (const auto& d : diagnostics_) {
+            if (d.kind == x.kind() && (x.device_id().empty() || d.device == x.device_id()) &&
+                d.t_ms >= x.from_ms() && d.t_ms <= to) {
+              ++n;
+            }
+          }
+          const std::uint32_t min = x.has_min_count() ? x.min_count() : 1;
+          if (n < min || (x.has_max_count() && n > x.max_count())) {
+            fail(e.name(), "diagnostic " + x.kind() + " from " + x.device_id() + " seen " +
+                               std::to_string(n) + " times in window");
           }
           break;
         }
@@ -658,6 +683,13 @@ class Run {
   InMemoryJournal journal_;
   std::unique_ptr<HubEngine> engine_;
   std::map<std::string, std::unique_ptr<IDeviceBackend>> devices_;
+  struct SentDiagnostic {
+    std::int64_t t_ms;
+    std::string device;
+    std::string kind;
+    std::int64_t value;
+  };
+  std::vector<SentDiagnostic> diagnostics_;
   ScenarioReport report_;
 };
 

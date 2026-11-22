@@ -85,7 +85,18 @@ TEST(Wire, TamperKindRoundTripsAndUnknownKindsAreRefused) {
             DecodeError::kNone);
   ASSERT_EQ(got.size(), 1u);
   EXPECT_EQ(got[0], e);
-  e.kind = static_cast<EventKind>(12);
+  // TL-SN-002's console-lock refusals (ADR 0019 amendment 2026-11-22): appended.
+  e.kind = EventKind::kConsoleLocked;
+  e.a = 3;
+  e.b = 7;
+  EXPECT_EQ(static_cast<int>(EventKind::kConsoleLocked), 12);
+  n = encode_uplink(&e, 1, kKey, buf, sizeof buf);
+  got.clear();
+  ASSERT_EQ(decode_uplink(buf, n, kKey, nullptr, [&](const DeviceEvent& d) { got.push_back(d); }),
+            DecodeError::kNone);
+  ASSERT_EQ(got.size(), 1u);
+  EXPECT_EQ(got[0], e);
+  e.kind = static_cast<EventKind>(13);
   n = encode_uplink(&e, 1, kKey, buf, sizeof buf);
   EXPECT_NE(decode_uplink(buf, n, kKey, nullptr, [](const DeviceEvent&) {}), DecodeError::kNone);
 }

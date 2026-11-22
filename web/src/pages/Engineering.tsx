@@ -6,7 +6,7 @@ import { toJson } from "@bufbuild/protobuf";
 import { Freshness } from "@talos/contracts/talos/api/v1/api_pb";
 import { JournalEntrySchema } from "@talos/contracts/talos/v1/journal_pb";
 import { useHub } from "../hub/HubProvider";
-import { capabilityLabel, describeEntry } from "../model/view";
+import { capabilityLabel, describeEntry, diagnosticLabel } from "../model/view";
 
 const FRESH = {
   [Freshness.FRESH]: "fresh",
@@ -96,7 +96,7 @@ export function Engineering() {
                   <td>{new Date(Number(d.atUnixMs)).toLocaleTimeString()}</td>
                   <td>{d.kind}</td>
                   <td>
-                    {String(d.value)} {d.unit}
+                    {d.unit ? `${String(d.value)} ${d.unit}` : diagnosticLabel(d.kind, d.value)}
                   </td>
                   <td className="small">{d.correlationId}</td>
                 </tr>

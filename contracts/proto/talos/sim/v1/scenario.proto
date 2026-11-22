@@ -132,6 +132,15 @@ message BatterySet {
   uint32 mv = 2;
 }
 
+// A line typed into the node's USB diag console (TL-SN-002: the USB-C port is
+// reachable from outside the closed enclosure). With the lid closed the console is
+// read-only: a mutating line is refused, counted and reported to the hub as a
+// "console.locked" diagnostic (rate-limited, firmware/portable/console_policy.h).
+message UsbConsoleLine {
+  string device_id = 1;
+  string line = 2;
+}
+
 message Stimulus {
   uint32 at_ms = 1;
   oneof kind {
@@ -151,6 +160,7 @@ message Stimulus {
     EnclosureSet enclosure_set = 15;
     UserButtonPress user_button = 16;
     BatterySet battery_set = 17;
+    UsbConsoleLine usb_console = 18;
   }
 }
 
@@ -185,6 +195,18 @@ message ExpectCommand {
   repeated talos.v1.CommandStatus final_status_in = 3;
   // Exact number of matching commands; unset means at least one.
   optional uint32 count = 4;
+}
+
+// Device diagnostics (observability plane, never the journal), e.g. "console.locked",
+// counted when the device sends them, within [from_ms, to_ms].
+message ExpectDiagnostic {
+  string device_id = 1;
+  string kind = 2;
+  uint32 from_ms = 3;
+  uint32 to_ms = 4;
+  // Defaults to 1 when unset; set 0 together with max_count 0 to assert absence.
+  optional uint32 min_count = 5;
+  optional uint32 max_count = 6;
 }
 
 message ExpectNoCommand {
@@ -230,6 +252,7 @@ message Expectation {
     ExpectCapabilityState capability_state = 7;
     ExpectPortal portal = 8;
     ExpectArmMode arm_mode = 9;
+    ExpectDiagnostic diagnostic = 10;
   }
 }
 

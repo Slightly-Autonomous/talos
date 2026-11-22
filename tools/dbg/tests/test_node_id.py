@@ -29,15 +29,19 @@ class Reply:
 class FakeNode:
     """The firmware's board-id/id commands (firmware/portable/diag.cc): write-once."""
 
-    def __init__(self, info=None, corrupt_readback=False):
+    def __init__(self, info=None, corrupt_readback=False, locked=False):
         self.info = info
         self.corrupt_readback = corrupt_readback
+        self.locked = locked  # TL-SN-002 with the lid closed: read-only console
         self.sent = []
         self.closed = False
 
     def command(self, cmd, timeout=10.0):
         self.sent.append(cmd)
         words = cmd.split()
+        if self.locked and words[0] == "board-id" and len(words) > 1:
+            return Reply([], {"cmd": "board-id", "done": True, "ok": False,
+                              "err": "locked: open the enclosure"})
         if words[0] == "board-id":
             err = None
             want = tuple(words[1:4])
@@ -79,6 +83,12 @@ class Program(unittest.TestCase):
         node = FakeNode(("TL-SN-001", "A", "SN-A-0001"))
         with self.assertRaisesRegex(node_id.NodeIdError, "write-once.*SN-A-0001"):
             node_id.program(node, "TL-SN-001", "A", "SN-A-0007")
+
+    def test_locked_console_says_open_the_lid(self):
+        node = FakeNode(locked=True)
+        with self.assertRaisesRegex(node_id.NodeIdError, "read-only while its enclosure is closed.*open the lid"):
+            node_id.program(node, "TL-SN-002", "A", "SN2-A-0007")
+        self.assertIsNone(node.info)
 
     def test_readback_mismatch_fails(self):
         with self.assertRaisesRegex(node_id.NodeIdError, "read-back mismatch"):
@@ -141,6 +151,22 @@ class AgainstTheVirtualNode(unittest.TestCase):
             self.assertEqual(rec["serial"], "SN-A-0042")
             with self.assertRaisesRegex(node_id.NodeIdError, "write-once"):
                 node_id.program(console, "TL-SN-001", "A", "SN-A-0043")
+        finally:
+            console.close()
+
+    def test_tl_sn_002_needs_the_lid_open(self):
+        sys.path.insert(0, str(ROOT / "tools/hil"))
+        from talos_hil.console import Console, ProcessTransport  # noqa: PLC0415
+
+        console = Console(ProcessTransport([BENCH_NODE, "--board=TL-SN-002", "--no-board-id"]))
+        try:
+            console.command("sim run 300")  # past the tamper debounce: the lid reads closed
+            with self.assertRaisesRegex(node_id.NodeIdError, "open the lid"):
+                node_id.program(console, "TL-SN-002", "A", "SN2-A-0042")
+            console.command("sim fault lid_open")
+            console.command("sim run 300")
+            rec = node_id.program(console, "TL-SN-002", "A", "SN2-A-0042")
+            self.assertEqual(rec["serial"], "SN2-A-0042")
         finally:
             console.close()
 

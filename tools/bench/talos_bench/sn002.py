@@ -9,10 +9,20 @@ PIR rail and the AA reading.
 Same result model as runner.py: pass / fail (with a diagnosis) / blocked / manual. No part
 reference designators yet: the TL-SN-002 schematic is still being generated, so diagnoses name
 parts and nets. PROVISIONAL like the board.
+
+Console lock (ADR 0019 amendment 2026-11-22): TL-SN-002's USB-C port is reachable from outside
+the closed enclosure, so its console is READ-ONLY while the lid is closed and every firmware lamp
+(STAT included) stays dark. The plan checks that (S-M20) with the lid closed, then OPENS THE LID
+(S-M21) before anything that changes state: self-tests, the PIR rail, lamps, buttons. On a real
+board S-M21 asks the operator to open the lid (which raises the tamper alarm: put the node in
+maintenance on the hub first) and waits for the loop to read open; on the virtual board it opens
+it with `sim fault lid_open`.
 """
 
 from __future__ import annotations
 
+import os
+import sys
 import time
 
 from .runner import Bench, Result, Test
@@ -30,6 +40,34 @@ ROOT_PARTS = {0x19: "LIS2DW12 (0x19)", 0x20: "TCA9535 lamp expander (0x20, A0-A2
 LAMPS = ["LINK", "TAMP", "BATT", "FLT"]  # `led` lamp_lit order (firmware Lamp enum)
 TAMPER_GPIO = 13
 USER_GPIO = 14
+LOCKED_ERR = "locked: open the enclosure"  # firmware/portable/console_policy.h
+# How long a real-board step waits for the operator to open or close the lid.
+LID_WAIT_S = float(os.environ.get("TALOS_LID_WAIT_S", "120"))
+
+
+def lid(b: Bench, open_: bool, wait_s: float | None = None) -> int | None:
+    """Puts the enclosure lid in the wanted state and returns `id`'s tamper reading.
+
+    Virtual board: `sim fault lid_open|lid_closed`, past the debounce. Real board: asks the
+    operator (stderr) and polls until the loop reads that way, or `wait_s` passes.
+    """
+    want = 1 if open_ else 0
+    if b.simulated():
+        b.cmd(f"sim fault {'lid_open' if open_ else 'lid_closed'}")
+        b.cmd("sim run 300")
+        return (b.cmd("id").record("id") or {}).get("tamper")
+    print(("OPEN the enclosure lid (the console is read-only while it is closed; this raises the "
+           "tamper alarm: start maintenance on the hub first)" if open_ else
+           "CLOSE the enclosure lid (or fit the bench tamper jumper)"),
+          file=sys.stderr, flush=True)
+    deadline = time.monotonic() + (LID_WAIT_S if wait_s is None else wait_s)
+    tamper = None
+    while time.monotonic() < deadline:
+        tamper = (b.cmd("id").record("id") or {}).get("tamper")
+        if tamper == want:
+            break
+        time.sleep(0.5)
+    return tamper
 
 
 def t_identity(b: Bench) -> Result:
@@ -92,7 +130,7 @@ def sensor_test(slot: int) -> Test:
     return Test(test_id, "sensors", run, requires=("S-M00",))
 
 
-def selftest(command: str, slot: int) -> Test:
+def selftest(command: str, slot: int) -> Test:  # needs the lid open (S-M21)
     test_id = f"N-06.{command}"
 
     def run(b: Bench) -> Result:
@@ -104,7 +142,7 @@ def selftest(command: str, slot: int) -> Test:
                 if command == "imu" else "SHT40 heater did not warm the die: heater, supply, or the "
                 "thermal tongue not routed out (copper sinking the heat)")
         return Result(test_id, "sensors", "fail", detail, diag)
-    return Test(test_id, "sensors", run, requires=(f"N-0{slot + 1}.{SENSORS[slot][0].lower()}",))
+    return Test(test_id, "sensors", run, requires=(f"N-0{slot + 1}.{SENSORS[slot][0].lower()}", "S-M21"))
 
 
 def t_pir_rail(b: Bench) -> Result:
@@ -126,14 +164,18 @@ def t_pir_rail(b: Bench) -> Result:
 
 
 def t_lamps(b: Bench) -> Result:
-    """N-08: every lamp. Dark on battery, lit in service mode; the USER lamp test blinks them all."""
+    """N-08: every lamp, lid open (S-M21): lit, TAMP on; service mode; the USER lamp test blinks them all.
+    Dark with the lid closed is S-M20."""
+    if b.simulated():
+        b.cmd("sim run 300")  # let the 150 ms event flashes from the previous step (rescan) pass
     led = b.cmd("led").record("led") or {}
     detail: dict = {"external_power": led.get("external_power"), "lamps": led.get("lamp_lit"),
-                    "sensor_lamps": led.get("slot_lit")}
+                    "sensor_lamps": led.get("slot_lit"), "unattended": led.get("unattended")}
     if led.get("lamp_lit") is None:
         return Result("N-08", "indicators", "fail", detail, "no board lamps reported: not the TL-SN-002 target")
-    if not led.get("external_power") and (any(led.get("lamp_lit")) or any(led.get("slot_lit"))):
-        return Result("N-08", "indicators", "fail", detail, "lamps lit on battery: they must stay dark")
+    if not led.get("unattended") or led.get("lamp_lit")[1] != 1:
+        return Result("N-08", "indicators", "fail", detail,
+                      "lid open but TAMP is dark: TCA9535 P05, its resistor or lamp (or the lid reads closed)")
     on = b.cmd("led service on").record("led") or {}
     b.cmd("led service off")
     detail.update(service_lamps=on.get("lamp_lit"), service_sensor_lamps=on.get("slot_lit"))
@@ -214,18 +256,63 @@ def t_battery(b: Bench) -> Result:
 
 def t_tamper(b: Bench) -> Result:
     """S-M17 on TL-SN-002: the lid + wall loop on GPIO13 reads closed."""
-    deadline = time.monotonic() + 2.0
-    while True:
-        tamper = (b.cmd("id").record("id") or {}).get("tamper")
-        if tamper in (0, 1) or time.monotonic() > deadline:
-            break
-        time.sleep(0.1)
+    if not b.simulated():
+        tamper = lid(b, False)  # the operator closes it (e.g. after flashing with it open)
+    else:
+        deadline = time.monotonic() + 2.0
+        while True:
+            tamper = (b.cmd("id").record("id") or {}).get("tamper")
+            if tamper in (0, 1) or time.monotonic() > deadline:
+                break
+            time.sleep(0.1)
     if tamper == 0:
         return Result("S-M17", "mcu", "pass", {"tamper": tamper})
     if tamper == 1:
         return Result("S-M17", "mcu", "fail", {"tamper": tamper},
                       "tamper loop open: lid or wall switch open, the loop not fitted (bench: jumper) or cut")
     return Result("S-M17", "mcu", "fail", {"tamper": tamper}, f"tamper state unknown: GPIO{TAMPER_GPIO}")
+
+
+def t_console_lock(b: Bench) -> Result:
+    """S-M20: lid closed: the USB console is read-only and every firmware lamp is dark (on USB)."""
+    rec = b.cmd("id").record("id") or {}
+    before = rec.get("console_refusals", 0)
+    detail: dict = {"console_locked": rec.get("console_locked")}
+    if rec.get("console_locked") is not True:
+        return Result("S-M20", "mcu", "fail", detail,
+                      "console NOT locked with the lid closed: not the TL-SN-002 target or its board table "
+                      "lost console_lock = kLidClosed. Do not ship: anyone with a cable could change the node")
+    refused = b.cmd("led service on")
+    detail["refusal"] = refused.done.get("err")
+    if refused.ok or refused.done.get("err") != LOCKED_ERR:
+        return Result("S-M20", "mcu", "fail", detail,
+                      "a mutating command was not refused with the lid closed: console lock broken")
+    led = b.cmd("led").record("led") or {}
+    after = (b.cmd("id").record("id") or {}).get("console_refusals", 0)
+    detail.update(external_power=led.get("external_power"), lamps=led.get("lamp_lit"),
+                  sensor_lamps=led.get("slot_lit"), stat=led.get("status_lit"), refusals=after)
+    if after != before + 1:
+        return Result("S-M20", "mcu", "fail", detail, "the refusal was not counted (console_refusals)")
+    if any(led.get("lamp_lit") or []) or any(led.get("slot_lit") or []) or led.get("status_lit"):
+        return Result("S-M20", "indicators", "fail", detail,
+                      "lamps lit with the lid closed: they must stay dark even on USB (LampGate::kLidOpen)")
+    if not b.simulated():
+        detail["manual"] = "look: with USB plugged in and the lid closed only PWR is lit; STAT and the 8 lamps dark"
+    return Result("S-M20", "mcu", "pass", detail)
+
+
+def t_open_lid(b: Bench) -> Result:
+    """S-M21: open the lid; the console takes commands again (the rest of the plan needs it)."""
+    tamper = lid(b, True)
+    rec = b.cmd("id").record("id") or {}
+    detail = {"tamper": tamper, "console_locked": rec.get("console_locked")}
+    if tamper != 1:
+        return Result("S-M21", "mcu", "fail", detail,
+                      "the lid never read open: open the enclosure (timed out), or the tamper loop on "
+                      f"GPIO{TAMPER_GPIO} is shorted to GND")
+    if rec.get("console_locked") is not False:
+        return Result("S-M21", "mcu", "fail", detail, "lid open but the console is still locked")
+    return Result("S-M21", "mcu", "pass", detail)
 
 
 def t_tamper_deep_sleep(b: Bench) -> Result:
@@ -256,11 +343,15 @@ def plan() -> list[Test]:
     tests = [Test("S-M00", "mcu", t_identity), Test("S-M16", "mcu", t_board_identity),
              Test("N-05", "mcu", t_root_bus)]
     tests += [sensor_test(s) for s in sorted(SENSORS)]
-    tests += [selftest("imu", 1), selftest("sht", 3),
-              Test("N-07", "power", t_pir_rail, requires=("N-03.pir",)),
-              Test("S-M17", "mcu", t_tamper, requires=("S-M00",)),
+    # Lid closed: tamper reads closed, the console is read-only, the lamps dark. Then open it.
+    tests += [Test("S-M17", "mcu", t_tamper, requires=("S-M00",)),
+              Test("S-M20", "mcu", t_console_lock, requires=("S-M17",)),
               Test("S-M19", "mcu", t_tamper_deep_sleep, requires=("S-M17",)),
-              Test("N-08", "indicators", t_lamps, requires=("N-05",)),
+              Test("S-M21", "mcu", t_open_lid, requires=("S-M17",))]
+    # Lid open from here: commands that change state.
+    tests += [selftest("imu", 1), selftest("sht", 3),
+              Test("N-07", "power", t_pir_rail, requires=("N-03.pir", "S-M21")),
+              Test("N-08", "indicators", t_lamps, requires=("N-05", "S-M21")),
               Test("N-09", "indicators", t_buttons, requires=("N-08",)),
               Test("N-10", "power", t_source, requires=("S-M00",)),
               Test("N-12", "power", t_battery, requires=("S-M00",))]

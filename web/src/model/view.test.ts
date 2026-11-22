@@ -17,6 +17,7 @@ import {
   bounds,
   describeEntry,
   deviceHealth,
+  diagnosticLabel,
   deviceTone,
   motionHeat,
   outcomeBadge,
@@ -419,5 +420,23 @@ describe("device tone", () => {
     expect(deviceTone(HealthStatus.OFFLINE, "stale", true, false)[1]).toBe("fault");
     expect(deviceTone(undefined, "fresh", false, false)).toEqual(["reporting", "fresh"]);
     expect(deviceTone(999 as HealthStatus, "fresh", false, false)).toEqual(["unknown", "unknown"]);
+  });
+});
+
+// ADR 0019 amendment 2026-11-22: console-lock refusals are a diagnostic, and the
+// hub's DEGRADED verdict for repeated ones never renders as success.
+describe("USB console lock", () => {
+  test("a refusal reads as a diagnostic, not an alarm", () => {
+    expect(diagnosticLabel("console.locked", 3n)).toBe(
+      "USB console: 3 command(s) refused, lid closed",
+    );
+    expect(diagnosticLabel("user.button", 2n)).toBe("USER: commissioning requested");
+    expect(diagnosticLabel("module.fault", 4n)).toBe("module.fault 4");
+  });
+  test("DEGRADED (USB console access attempts while closed) is never healthy", () => {
+    const [label, tone] = deviceTone(HealthStatus.DEGRADED, "fresh", false, false);
+    expect(label).toBe("degraded");
+    expect(tone).not.toBe("fresh");
+    expect(tone).not.toBe("fault");
   });
 });

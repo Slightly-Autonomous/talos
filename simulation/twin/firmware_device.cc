@@ -4,6 +4,7 @@
 #include <map>
 
 #include "firmware/bridge/hub_bridge.h"
+#include "firmware/portable/diag.h"
 
 namespace talos::sim {
 
@@ -184,7 +185,16 @@ void FirmwareDevice::boot(std::int64_t t_ms, Timestamp now, const World& world,
   drain(out);
 }
 
-void FirmwareDevice::sample(std::int64_t t_ms, Timestamp, World& world,
+namespace {
+// Collects a diag reply (the USB console's output) as text.
+class ReplyText final : public fw::IDiagOut {
+ public:
+  void write(const char* s, std::size_t n) override { text.append(s, n); }
+  std::string text;
+};
+}  // namespace
+
+void FirmwareDevice::sample(std::int64_t t_ms, Timestamp now, World& world,
                             const std::vector<std::pair<std::string, std::uint32_t>>& impacts,
                             std::vector<Uplink>& out) {
   apply_inputs(world);
@@ -217,6 +227,20 @@ void FirmwareDevice::sample(std::int64_t t_ms, Timestamp, World& world,
   }
   if (left > 0) node_->run_for(left);
   last_t_ms_ = t_ms;
+  // USB console lines: the firmware's own Diag decides (read-only while the lid is
+  // closed on TL-SN-002); a refusal comes back as a kConsoleLocked diagnostic.
+  for (const std::string& line : world.take_usb_console(id_)) {
+    ReplyText reply;
+    fw::Diag diag(node_->platform(), node_->runtime(),
+                  node_->has_board_io() ? &node_->board_io() : nullptr);
+    diag.handle_line(line.c_str(), reply);
+    const bool refused = reply.text.find(fw::kConsoleLockedError) != std::string::npos;
+    world.record(t_ms, refused ? "console.refused" : "console.accepted", id_, line);
+    if (diag.reboot_requested()) {
+      node_->link.downlink.clear();
+      power_on(now, world);
+    }
+  }
   drain(out);
 }
 
@@ -240,6 +264,10 @@ void FirmwareDevice::drain(std::vector<Uplink>& out) {
     if (auto env = fw::to_envelope(e, device_, property_)) {
       env->observed_at = start_ + Millis{static_cast<std::int64_t>(e.at_ms) + skew_ms_};
       out.push_back({id_, std::move(*env)});
+    } else if (e.kind == fw::EventKind::kConsoleLocked) {
+      // Observability plane, as the hub's device registry records it ("console.locked").
+      out.push_back({id_, DeviceDiagnostic{"console.locked", e.a}});
+      node_->link.downlink.push_back(fw::Ack{e.boot_epoch, e.seq});
     } else {
       // Diagnostics (module present, config applied, ...) belong to the observability
       // plane; the hub ACKs them on the wire so they are not retried.

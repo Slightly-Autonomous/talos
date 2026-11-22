@@ -1,5 +1,8 @@
 #include "server/device_registry.h"
 
+#include <algorithm>
+#include <string>
+
 namespace talos::server {
 
 namespace {
@@ -30,6 +33,8 @@ std::string kind_name(fw::EventKind k) {
       return "tamper";
     case fw::EventKind::kUserButton:
       return "user.button";
+    case fw::EventKind::kConsoleLocked:
+      return "console.locked";
   }
   return "unknown";
 }
@@ -114,6 +119,10 @@ void DeviceRegistry::observe(const DeviceId& device, const fw::DeviceEvent& e, T
         t.last_test_report = at;
       }
       break;
+    case fw::EventKind::kConsoleLocked:
+      t.console_refusals.emplace_back(at, static_cast<std::uint32_t>(e.a > 0 ? e.a : 1));
+      while (t.console_refusals.size() > kConsoleReportsPerDevice) t.console_refusals.pop_front();
+      break;
     default:
       break;
   }
@@ -197,8 +206,29 @@ const char* built_in_name(std::uint8_t slot) {
   return slot < 4 ? kNames[slot] : "sensor";
 }
 
+// USB console refusals received within kConsoleRefusalWindow before `now`.
+std::uint32_t recent_console_refusals(const DeviceTelemetry* t, Timestamp now) {
+  if (!t) return 0;
+  std::uint64_t n = 0;
+  for (const auto& [at, count] : t->console_refusals) {
+    if (now - at <= kConsoleRefusalWindow && at <= now) n += count;
+  }
+  return static_cast<std::uint32_t>(std::min<std::uint64_t>(n, 0xFFFFFFFFu));
+}
+
+std::string console_evidence(std::uint32_t n) {
+  return n >= kConsoleRefusalsDegraded
+             ? "USB console access attempts while closed: " + std::to_string(n) +
+                   " commands refused in 24 h"
+             : std::to_string(n) + " USB console command(s) refused while closed (24 h)";
+}
+
 talos::v1::Health telemetry_findings(talos::v1::Health h, const DeviceTelemetry* t,
-                                     bool primary_cells, bool built_in) {
+                                     bool primary_cells, bool built_in, Timestamp now) {
+  // Console refusals are named whatever else the device reports, so a worse status
+  // (low power, a fault) never hides them, and HEALTHY never does.
+  const std::uint32_t refused = recent_console_refusals(t, now);
+  if (refused > 0) h.add_evidence(console_evidence(refused));
   auto status = [&](talos::v1::HealthStatus s, std::string evidence, std::string action) {
     h.set_status(s);
     h.add_evidence(std::move(evidence));
@@ -252,6 +282,15 @@ talos::v1::Health telemetry_findings(talos::v1::Health h, const DeviceTelemetry*
   if (t->commission_requested) {
     // Informational: the hub does not pair on its own; the owner finishes it.
     h.add_evidence("commissioning requested from the USER button");
+  }
+  if (refused >= kConsoleRefusalsDegraded) {
+    // Repeated mutating commands on the outside USB-C port with the lid shut: the
+    // node refused them all (read-only console), but someone is trying.
+    h.set_status(talos::v1::HEALTH_STATUS_DEGRADED);
+    h.set_recommended_action(
+        "Someone sent commands to the node's USB-C port with the enclosure closed (all refused): "
+        "check the node and its cable plug, and who can reach it");
+    return h;
   }
   if (degraded) {
     h.set_status(talos::v1::HEALTH_STATUS_DEGRADED);
@@ -310,7 +349,7 @@ talos::v1::Health project_health(const DeviceId& device, const DeviceTelemetry* 
     const std::string note = "maintenance for " +
                              std::to_string((*maintenance_until - now).count / 60'000) +
                              " more min: tamper alarm suppressed";
-    talos::v1::Health rest = telemetry_findings(h, t, primary_cells, built_in_sensors);
+    talos::v1::Health rest = telemetry_findings(h, t, primary_cells, built_in_sensors, now);
     if (rest.status() != talos::v1::HEALTH_STATUS_HEALTHY) {
       rest.add_evidence(note);
       if (lid_open) rest.add_evidence("enclosure open");
@@ -323,10 +362,12 @@ talos::v1::Health project_health(const DeviceId& device, const DeviceTelemetry* 
     return h;
   }
   if (lid_open) {
+    if (const std::uint32_t n = recent_console_refusals(t, now))
+      h.add_evidence(console_evidence(n));
     return status(talos::v1::HEALTH_STATUS_FAULTED, "enclosure tamper: lid open or loop cut",
                   "Check the enclosure lid and its tamper switch wiring (J9)");
   }
-  return telemetry_findings(h, t, primary_cells, built_in_sensors);
+  return telemetry_findings(h, t, primary_cells, built_in_sensors, now);
 }
 
 bool board_has_primary_cells(const std::optional<BoardId>& board) {

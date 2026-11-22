@@ -258,6 +258,27 @@ struct UnusedExpanderPins {
   std::uint16_t mask = 0;
 };
 
+// USB console policy (ADR 0019 amendment 2026-11-22, open-decisions "USB-C attack
+// surface"). TL-SN-002's USB-C port stays reachable from outside the closed
+// enclosure, so its console must not let a passer-by change or blind the node.
+enum class ConsoleLock : std::uint8_t {
+  kNever = 0,      // full console at all times: TL-SN-001 (archived), bench and test boards
+  kLidClosed = 1,  // read-only unless the debounced tamper loop reads OPEN (TL-SN-002)
+};
+
+// Who may see the firmware lamps (STAT, LINK, per-sensor, TAMP, BATT, FLT).
+enum class LampGate : std::uint8_t {
+  // TL-SN-001: dark on battery, lit on USB or PV, or in service mode; STAT always
+  // shows its 20 ms blink codes (owner rule L-01/L-03).
+  kExternalPower = 0,
+  // TL-SN-002: lit only with the lid open (debounced tamper loop) or in service
+  // mode, and service mode starts only with the lid open. USB power alone lights
+  // nothing, so a power bank on the outside port reveals nothing (STAT included).
+  // The USER lamp test runs only with the lid open. The hardware PWR lamp on VBUS
+  // is not firmware's and stays (an accepted, minimal leak: "USB power present").
+  kLidOpen = 1,
+};
+
 struct BoardSupport {
   // Board family this table is for ("TL-SN-002"), nullptr = unnamed (test boards).
   // The write-once board-id must name it, so a label for one board can never be
@@ -317,6 +338,9 @@ struct BoardSupport {
   // under load, the lowest reading since the last heartbeat (taken after radio
   // sends), not the resting voltage, which hides an empty lithium cell.
   bool primary_battery = false;
+  // USB console and lamp policies (above). The defaults are TL-SN-001's behaviour.
+  ConsoleLock console_lock = ConsoleLock::kNever;
+  LampGate lamp_gate = LampGate::kExternalPower;
 };
 
 struct Platform {

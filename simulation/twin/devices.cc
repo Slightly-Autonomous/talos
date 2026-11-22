@@ -2,6 +2,8 @@
 
 #include <limits>
 
+#include "firmware/portable/console_policy.h"
+
 namespace talos::sim {
 
 namespace {
@@ -81,6 +83,8 @@ VirtualDevice::VirtualDevice(const v1::SiteDevice& spec, PropertyId property, st
   if (spec.has_lock()) lock_ = spec.lock();
   if (spec.has_notifier()) notifier_ = spec.notifier();
   if (spec.has_enclosure()) enclosure_ = spec.enclosure();
+  // TL-SN-002's board table (firmware/esp_idf/main/board_tl_sn_002.h) locks the console.
+  console_lock_ = spec.board_id() == "sensor_node_v2";
 }
 
 ObservationEnvelope VirtualDevice::envelope(Timestamp now, std::optional<std::uint8_t> slot,
@@ -145,6 +149,8 @@ void VirtualDevice::reboot(std::int64_t t_ms, Timestamp now, const World& world,
   sequence_ = 0;
   pending_.clear();
   for (auto& p : pirs_) p.optics.reset();
+  console_unreported_ = 0;  // RAM: lost in a reset, as on the node
+  console_reported_ms_.reset();
   start(t_ms, now, world, out);
 }
 
@@ -187,6 +193,25 @@ void VirtualDevice::sample(std::int64_t t_ms, Timestamp now, World& world,
       emit(out, envelope(now, std::nullopt, "tamper.enclosure",
                          open ? "tamper.opened" : "tamper.closed", TamperState{open}));
     }
+  }
+
+  // USB console (TL-SN-002, firmware/portable/console_policy.h): read-only while the
+  // lid is closed (as last reported, i.e. debounced). A refusal is counted and sent as
+  // a "console.locked" diagnostic: the first at once, later ones once per window.
+  for (const std::string& line : world.take_usb_console(id_)) {
+    const bool locked = console_lock_ && !enclosure_last_;
+    if (locked && fw::console_line_access(line.c_str()) == fw::ConsoleAccess::kMutating) {
+      world.record(t_ms, "console.refused", id_, line);
+      ++console_unreported_;
+    } else {
+      world.record(t_ms, "console.accepted", id_, line);
+    }
+  }
+  if (console_unreported_ > 0 &&
+      (!console_reported_ms_ || t_ms - *console_reported_ms_ >= fw::kConsoleReportMs)) {
+    out.push_back({id_, DeviceDiagnostic{"console.locked", console_unreported_}});
+    console_unreported_ = 0;
+    console_reported_ms_ = t_ms;
   }
 
   for (const auto& imp : impacts_) {

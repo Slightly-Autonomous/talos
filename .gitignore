@@ -31,6 +31,11 @@ web/playwright-report/
 # ESP-IDF
 firmware/esp_idf/build/
 firmware/esp_idf/build_tl_sn_001/
+firmware/esp_idf/build_production/
+# Secure Boot signing keys and flash-encryption keys are the owner's, kept offline (provisioning.md).
+*.pem
+secure_boot_signing_key*
+flash_encryption_key*
 firmware/esp_idf/sdkconfig
 firmware/esp_idf/sdkconfig.old
 firmware/esp_idf/managed_components/

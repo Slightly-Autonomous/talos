@@ -83,7 +83,7 @@ bool decode_event(const std::uint8_t* p, DeviceEvent& e) {
   const std::uint8_t kind = *p++;
   const std::uint8_t prio = *p++;
   const std::uint8_t flags = *p++;
-  if (kind > static_cast<std::uint8_t>(EventKind::kUserButton) || prio > 3 || flags > 1)
+  if (kind > static_cast<std::uint8_t>(EventKind::kConsoleLocked) || prio > 3 || flags > 1)
     return false;
   if (e.slot != kNoSlot && e.slot >= kSlots) return false;
   e.kind = static_cast<EventKind>(kind);

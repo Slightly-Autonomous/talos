@@ -20,6 +20,7 @@ cc_library(
         "//contracts/proto/talos/sim/v1:sim_cc_proto",
         "//core/events",
         "//core/execution",
+        "//firmware/portable",
         "//simulation/base",
     ],
 )

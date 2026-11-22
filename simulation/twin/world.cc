@@ -52,6 +52,19 @@ std::vector<std::uint32_t> World::take_user_presses(const std::string& device) {
   return out;
 }
 
+void World::usb_console(std::int64_t t_ms, const std::string& device, const std::string& line) {
+  console_lines_[device].push_back(line);
+  record(t_ms, "usb_console.line", device, line);
+}
+
+std::vector<std::string> World::take_usb_console(const std::string& device) {
+  auto it = console_lines_.find(device);
+  if (it == console_lines_.end()) return {};
+  auto out = std::move(it->second);
+  console_lines_.erase(it);
+  return out;
+}
+
 void World::set_battery(std::int64_t t_ms, const std::string& device, std::uint32_t mv) {
   batteries_[device] = mv;
   record(t_ms, "battery.set", device, std::to_string(mv) + " mV");

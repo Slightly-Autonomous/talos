@@ -258,5 +258,19 @@ TEST(Diag, LedServiceModeLightsSlotLedsOnBattery) {
   EXPECT_FALSE(done_ok(b.run("led blink")));
 }
 
+// The archived TL-SN-001 has its USB-C inside the enclosure: ConsoleLock::kNever, so
+// its console stays fully open with the lid closed (bench tooling depends on it).
+TEST(Diag, Tl001ConsoleNeverLocks) {
+  Bench b({{0, ModuleCode::kTlMod004Env}});
+  b.boot();
+  b.node.run_for(100);  // past the tamper debounce: the lid reads closed
+  ASSERT_EQ(b.node.runtime().tamper_open(), std::optional<bool>{false});
+  EXPECT_FALSE(b.node.runtime().console_locked());
+  EXPECT_NE(record(b.run("id"), "id").find("\"console_locked\":false"), std::string::npos);
+  EXPECT_TRUE(done_ok(b.run("led service on")));
+  EXPECT_TRUE(done_ok(b.run("rail 0 aon on")));
+  EXPECT_EQ(b.node.runtime().console_refusals(), 0u);
+}
+
 }  // namespace
 }  // namespace talos::fw::sim

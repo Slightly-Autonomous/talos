@@ -12,6 +12,7 @@
 #include <cstdint>
 #include <optional>
 
+#include "firmware/portable/console_policy.h"
 #include "firmware/portable/event_queue.h"
 #include "firmware/portable/hal.h"
 #include "firmware/portable/indicators.h"
@@ -134,9 +135,21 @@ class NodeRuntime final : public IEventSink {
   std::uint8_t power_strikes(std::uint8_t slot) const { return strikes_[slot]; }
 
   // Indicators (indicators.h). Service mode lights the slot LEDs on battery
-  // for SlotLedPolicy::kServiceMs (diag `led service`).
-  void start_service_mode();
+  // for SlotLedPolicy::kServiceMs (diag `led service`). With
+  // BoardSupport::lamp_gate = kLidOpen (TL-SN-002) it starts only while the lid
+  // reads open; returns whether service mode is on afterwards.
+  bool start_service_mode();
   void stop_service_mode();
+  // Lamps may light without service mode: external power (LampGate::kExternalPower)
+  // or the debounced lid open (LampGate::kLidOpen).
+  bool lamps_unattended_ok() const;
+  // USB console lock (BoardSupport::console_lock, console_policy.h): true while
+  // mutating diag commands are refused (kLidClosed and the lid not known open).
+  bool console_locked() const;
+  // A refused console command: counted, and reported to the hub as a
+  // kConsoleLocked diagnostic at most once per kConsoleReportMs.
+  void note_console_refusal();
+  std::uint32_t console_refusals() const { return console_refused_total_; }
   bool service_mode() const { return slot_leds_.service_active(p_.clock.now_ms()); }
   StatusCode status_code() const { return status_; }
   bool status_led_lit() const { return status_led_level_; }
@@ -200,6 +213,7 @@ class NodeRuntime final : public IEventSink {
   void poll_service_button(TimeMs now);
   void poll_user_button(TimeMs now);
   void start_lamp_test(TimeMs now);
+  void report_console_refusals(TimeMs now);
   std::optional<bool> tamper_raw();
   // Direct deep-sleep wake lines (TL-SN-002 tamper and USER): armed only while
   // they read idle, so a held button or an open lid can't re-wake the node forever.
@@ -307,6 +321,11 @@ class NodeRuntime final : public IEventSink {
   // closed and, above all, opened again (red team: a close and a re-open inside
   // one sleep were invisible until the next heartbeat).
   TimeMs tamper_poll_at_ = kNever;
+
+  // USB console lock: refusals since boot, not yet reported, and the last report.
+  std::uint32_t console_refused_total_ = 0;
+  std::uint32_t console_unreported_ = 0;
+  TimeMs console_reported_at_ = kNever;
 
   // Wake-line supervision.
   std::array<TimeMs, kSlots> wake_high_since_{};

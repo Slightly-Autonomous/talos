@@ -6,10 +6,15 @@
            through the H2's USB Serial/JTAG: `esptool --chip esp32h2 ... write_flash @flash_args`
            if esptool is installed, else `idf.py -p PORT flash`. Neither found: the step is
            "skipped" (said so, never faked), and the rest still runs on whatever is flashed.
-2. identity  board name, revision and unit serial into talos_id, write-once and read back
+2. lid     OPEN THE ENCLOSURE LID. TL-SN-002's USB console is read-only while the lid is closed
+           (ADR 0019 amendment 2026-11-22: the USB-C port is reachable from outside), so the identity
+           write needs it open. Opening it raises the tamper alarm: put the node in maintenance on
+           the hub first. On a real board the tool asks and waits; on the virtual board it opens it.
+3. identity  board name, revision and unit serial into talos_id, write-once and read back
            (talos_dbg program-id --node: the same code, tools/dbg/talos_dbg/node_id.py).
-3. self-test the TL-SN-002 bench plan (talos_bench.sn002): sensors, lamps, buttons, source,
-           PIR rail, tamper, battery. Manual steps stay "manual".
+4. self-test the TL-SN-002 bench plan (talos_bench.sn002): sensors, then CLOSE the lid for the
+           tamper and console-lock checks (S-M17, S-M20), then open it again (S-M21) for the
+           self-tests, lamps, buttons, source, PIR rail and battery. Manual steps stay "manual".
 
 One JSON line per step on stdout, then a summary line; exit 0 only if nothing failed.
 --no-flash skips step 1 (a board flashed by JLCPCB at assembly). --dry-run prints the flash
@@ -117,6 +122,15 @@ def main(argv: list[str] | None = None) -> int:
     transport = open_transport(args)
     try:
         console = Console(transport)
+        bench = Bench(console, {})
+        locked = (console.command("id").record("id") or {}).get("console_locked")
+        if locked:
+            # TL-SN-002 (or any board table with console_lock): the identity write needs the lid open.
+            tamper = sn002.lid(bench, True)
+            steps.append(step("lid.open", "pass" if tamper == 1 else "fail", {"tamper": tamper},
+                              "" if tamper == 1 else
+                              "the console is read-only while the enclosure is closed: open the lid "
+                              "(start maintenance on the hub first), then rerun"))
         try:
             rec = node_id.program(console, args.board, args.board_revision, args.unit_serial)
             steps.append(step("identity", "pass", {k: rec.get(k) for k in ("board", "rev", "serial")}))
@@ -124,7 +138,9 @@ def main(argv: list[str] | None = None) -> int:
             steps.append(step("identity", "fail", {}, str(e)))
         results = []
         if args.board == "TL-SN-002":
-            results = Bench(console, {}).run(sn002.plan())
+            if locked and bench.simulated():
+                sn002.lid(bench, False)  # the operator closes it for S-M17/S-M20 (a real board: S-M17 asks)
+            results = bench.run(sn002.plan())
             for r in results:
                 step(f"selftest.{r.test}", r.verdict, r.detail, r.diagnosis)
     finally:

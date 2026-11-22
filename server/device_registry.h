@@ -44,6 +44,12 @@ struct DeviceTelemetry {
   // never pairs or changes anything on its own because of it.
   std::optional<Timestamp> last_test_report;
   std::optional<Timestamp> commission_requested;
+  // USB console refusals (TL-SN-002, fw::EventKind::kConsoleLocked): (received,
+  // commands refused in that report), newest last, bounded. The node's console is
+  // read-only while the lid is closed, so a refusal means someone sent a mutating
+  // command over the outside USB-C port with the lid shut. Health evidence (and
+  // DEGRADED when repeated), never an alarm: the alarm is the lid itself.
+  std::deque<std::pair<Timestamp, std::uint32_t>> console_refusals;
   std::deque<talos::v1::Diagnostic> recent;  // newest last, bounded
   // Recent (boot_epoch, seq) of applied non-journaled events, bounded; the
   // journal's dedup covers the other kinds.
@@ -62,6 +68,8 @@ struct SourceAnomaly {
 class DeviceRegistry {
  public:
   static constexpr std::size_t kRecentPerDevice = 64;
+  // Console-refusal reports kept per device (the node sends at most one a minute).
+  static constexpr std::size_t kConsoleReportsPerDevice = 64;
   static constexpr std::size_t kSeenPerDevice = 256;
 
   // Applies an event the caller has already established as fresh (for
@@ -102,6 +110,10 @@ talos::v1::Health project_health(const DeviceId& device, const DeviceTelemetry* 
 // Boards whose battery is primary cells (never charged): low battery means
 // "replace the cells", not "charge". TL-SN-002 (ADR 0019): 2 x AA Li-FeS2.
 bool board_has_primary_cells(const std::optional<BoardId>& board);
+// USB console refusals within this window count as evidence; this many or more of
+// them make the device DEGRADED ("USB console access attempts while closed").
+inline constexpr Millis kConsoleRefusalWindow{24LL * 60 * 60 * 1000};
+inline constexpr std::uint32_t kConsoleRefusalsDegraded = 3;
 // Boards whose sensors are soldered on (ADR 0019): a sensor fault can't be fixed
 // by reseating a card, and a slot index names a built-in sensor.
 bool board_has_built_in_sensors(const std::optional<BoardId>& board);

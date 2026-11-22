@@ -28,6 +28,7 @@ cc_library(
         "battery.h",
         "board_io.h",
         "coap_link.h",
+        "console_policy.h",
         "diag.h",
         "event_queue.h",
         "hal.h",
@@ -63,6 +64,17 @@ cc_test(
     name = "indicators_test",
     size = "small",
     srcs = ["indicators_test.cc"],
+    copts = TALOS_COPTS,
+    deps = [
+        ":portable",
+        "@googletest//:gtest_main",
+    ],
+)
+
+cc_test(
+    name = "console_policy_test",
+    size = "small",
+    srcs = ["console_policy_test.cc"],
     copts = TALOS_COPTS,
     deps = [
         ":portable",

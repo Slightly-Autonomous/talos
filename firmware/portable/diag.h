@@ -20,6 +20,11 @@
 //   provision <device_id> <key hex, 16-32 bytes> | identity | reboot
 //   board-id [<board> <revision> <serial>]   write-once board identity (D-09)
 //   led | led service on|off                 indicator state; slot LEDs on battery (L-03)
+//
+// Console lock (BoardSupport::console_lock, console_policy.h): on TL-SN-002 the
+// console is read-only while the enclosure lid is closed. Mutating commands then
+// fail with err "locked: open the enclosure", are counted (`id` console_refusals)
+// and reported to the hub as a kConsoleLocked diagnostic, rate-limited.
 #pragma once
 
 #include <cstddef>
