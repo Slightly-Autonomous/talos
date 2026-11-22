@@ -41,6 +41,10 @@ const char* key_name(StoreKey k) {
       return "pack";
     case StoreKey::kBoardInfo:
       return "board";
+    case StoreKey::kMountBaseline:
+      return "mount";
+    case StoreKey::kThreadConfig:
+      return "thread";
   }
   // Ring slots between the two named ends: "p1".."p6".
   const auto i = static_cast<unsigned>(k) - static_cast<unsigned>(StoreKey::kPendingRing0);
