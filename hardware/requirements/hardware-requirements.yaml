@@ -133,3 +133,18 @@ requirements:
     status: verified_tool
     verification: layout_rules.py
 
+  - id: HWR-026
+    statement: TL-SN-002 senses its lid and its tool-free battery door on the board (SW4, SW5 in series on the tamper wake line) and tells them apart (TAMPER_DOOR on EXP P11); no wiring to fit at install (owner 2026-11-22, HD-049)
+    board: TL-SN-002
+    status: designed
+    verification: test_generators.py (tamper chain), sn002_tamper_test (sim); bench S-M22
+  - id: HWR-027
+    statement: TL-SN-002 carries housing keep-outs (User.Eco1), a conformal-coat keep-out map (User.Eco2) and a STEP export; the printed housing is generated from the routed board (B-04/B-05/B-06)
+    board: TL-SN-002
+    status: verified_tool
+    verification: layout_rules.py (housing marks), housing.py --check
+  - id: HWR-028
+    statement: Every TL-SN-002 footprint follows its part's datasheet drawing; the PIR223D-S0 uses its own 90-degree lead pattern (HD-044)
+    board: TL-SN-002
+    status: designed
+    verification: datasheet check 2026-11-22; bench fit on the first boards

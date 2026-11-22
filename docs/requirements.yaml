@@ -300,3 +300,21 @@ requirements:
     test: //simulation/runner:backend_parity_test (Binding.GarageNodesRunOnTheTlSn002Model, Corpus/*)
     severity: high
     status: verified_sim
+  - id: REQ-049
+    statement: A TL-SN-002 node reports each tamper cause as its own capability (tamper.enclosure, tamper.battery_door, tamper.mount, tamper.magnet); every cause alarms through the tamper rules and maintenance like the lid, and unknown is never shown as closed
+    subsystem: firmware/hub/web
+    test: //firmware/sim:sn002_tamper_test, //server:server_test (HubBridge.EachTamperCauseHasItsOwnCapability), //simulation/runner:backend_parity_test (garage_battery_door_tamper), web view.test.ts
+    severity: critical
+    status: verified_sim
+  - id: REQ-050
+    statement: A node's sleep design is configurable per device (deep sleep by default with event-to-hub <= 2 s, sleepy child, always on) and USB power always runs always-on
+    subsystem: firmware/hub
+    test: //firmware/portable:tamper_sleep_test, //firmware/sim:sn002_tamper_test (Sn002Sleep), //firmware/portable:wire_test (Config2); tools/otns/thread_latency.py for the Thread budget
+    severity: high
+    status: verified_sim
+  - id: REQ-051
+    statement: On primary cells below the low-battery threshold the radio is capped at +10 dBm; every cold boot reports its reset cause, and a USB reset with the enclosure shut counts as USB probing
+    subsystem: firmware/hub
+    test: //firmware/sim:sn002_tamper_test (Sn002TxPower, Sn002Reset), //server:server_test (Sn002UsbResetWhileClosedIsProbingEvidence)
+    severity: high
+    status: verified_sim

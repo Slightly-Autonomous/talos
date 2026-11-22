@@ -439,13 +439,24 @@ press RST (ROM download mode), or the UART0 Tag-Connect pads (GPIO23/24).
 | N-09 | buttons: USER short = test report + 10 s lamp test, USER long (3 s) = commissioning request, BOOT = service mode, RST = new boot epoch | sim; manual on a board |
 | N-10 | USB/battery switchover: USB_PRESENT (GPIO4) reads USB on USB; unplugged it reads battery and the node keeps running | USB side yes; battery side on the meter (the console is the USB) |
 | N-12 | AA pair under load reads above 2.2 V with a level estimate (Li-FeS2 curve, `power`) | yes |
-| S-M17 | tamper loop (lid + wall switches in series, GPIO13) reads closed | yes |
-| S-M19 | the lid opened in deep sleep wakes the node on GPIO13 | sim; manual until deep-sleep entry is wired |
+| S-M17 | tamper loop (SW4 lid + SW5 battery door in series, GPIO13) reads closed with the housing shut | yes |
+| S-M19 | the lid opened in deep sleep wakes the node on GPIO13 (deep-sleep entry wired 2026-11-22) | sim; manual on a board |
+| S-M22 | battery door: opening it reports `tamper.battery_door` (TAMPER_DOOR on EXP P11 high), not the lid; door + lid together each report; both close with the loop (HD-049) | sim (`sn002_tamper_test`); manual on a board |
+| S-M23 | magnet defeat: with the door magnet in place, a strong test magnet at the sensor raises `tamper.magnet` by the next heartbeat; a substitute at another angle at once | sim; manual (N52 test magnet) |
+| S-M24 | mount pose: close the lid after mounting, wait 10 s (pose captured), pry the node off: `tamper.mount` | sim; manual |
+| S-M25 | a reset through USB with the lid shut is reported (`device.reset`, cause USB) | sim; manual (`esptool --after hard_reset`) |
+| S-P20 | deep-sleep floor < 40 uA on the battery terminals; average, TX peak, regulator input at cold cell resistance (`python3 -m talos_bench.power --port <PPK2>`) | yes (PPK2) |
+| S-P21 | TX power: +18 dBm on healthy cells, +10 dBm once the loaded reading is under 2.2 V (PPK2 burst peak drops) | PPK2 + sim |
+| T-01 | Thread: `thread <dataset> <hub-ipv6>` (lid open), attach, then event to hub from deep sleep <= 2 s, compared with `tools/otns/thread_latency.py` | manual (border router) |
+| H-01 | housing test print: board fit, both spring fingers hold their switch closed and release with ~1 mm lift, door slide/detent, PIR lens, USB-C plug, magnet gap on the frame | manual |
 
 Still to verify on the bench (provisional numbers in firmware and manifest):
-- TMAG5273A2 default address 0x35, range +/-133 mT and 246 LSB/mT (datasheet table), and the
-  10/20 mT open/closed thresholds on the A2's coarser threshold step (1.04 mT).
-- PIR223D-S0 warm-up and block timing (firmware: 30 s minimum, fault at 60 s) and its current.
+- TMAG5273A2: address 0x35 and 250 LSB/mT are datasheet-checked (HD-045); the 10/20 mT
+  open/closed thresholds on the A2's coarser threshold step (1.04 mT) and the magnet-defeat
+  limits (100 mT ceiling, 3x baseline, 35 degrees) need a real door.
+- PIR223D-S0: footprint corrected to the datasheet's 90 degree lead pattern; warm-up (firmware
+  60 s after the spec's "one minute stabilization", fault at 120 s), 1 s hold / 2.3 s lock, 10 uA,
+  and its -20 C lower limit (HD-044).
 - AA under load: the 2.2 V low threshold (TPS63900 >= 1.8 V in an 18 dBm burst at -40 C,
   hardware/results/power-budget-sn2.md), the Li-FeS2 level curve, cold behaviour.
 - TPS2116 switchover without a reset when USB is unplugged mid-TX.
