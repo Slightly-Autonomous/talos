@@ -39,8 +39,9 @@ from kicad_sexpr import find, find_all, parse, unq  # noqa: E402
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 KICAD = ROOT / "hardware" / "kicad"
 RESULTS = ROOT / "hardware" / "results"
-BOARDS = ["TL-SN-001", "TL-SN-002", "TL-MOD-001", "TL-MOD-002", "TL-MOD-003", "TL-MOD-004", "TL-TEST-001", "TL-DBG-001"]
-CARDS = ["TL-MOD-001", "TL-MOD-002", "TL-MOD-003", "TL-MOD-004", "TL-TEST-001"]
+from boards import ACTIVE as BOARDS, kicad_dir  # noqa: E402
+
+CARDS: list[str] = []  # the edge cards are archived (hardware/archive/modular-2026-11)
 # Boards that host a card in a slot socket besides the main board: (board, socket ref).
 HOSTS = [("TL-DBG-001", "J2")]
 
@@ -73,7 +74,7 @@ def run(cmd: list[str]) -> str:
 def erc(cli: str, board: str, tmp: str, waivers: list[dict]) -> tuple[bool, list[str], dict]:
     out = os.path.join(tmp, f"{board}-erc.json")
     run([cli, "sch", "erc", "--format", "json", "--severity-all", "-o", out,
-         str(KICAD / board / f"{board}.kicad_sch")])
+         str(kicad_dir(board) / f"{board}.kicad_sch")])
     data = json.load(open(out))
     lines, counts, ok = [], {"error": 0, "warning": 0, "waived": 0}, True
     for sheet in data.get("sheets", []):
@@ -101,7 +102,7 @@ def pcb_drc(cli: str, board: str, tmp: str) -> tuple[bool, dict, list[str]]:
     """DRC with schematic parity on the PCB. Errors fail; warnings are counted and reported.
     A board whose layout-status says routing is "partial" may have unconnected items (reported, not fatal)."""
     partial = layout_status().get(board, {}).get("routing") == "partial"
-    pcb = KICAD / board / f"{board}.kicad_pcb"
+    pcb = kicad_dir(board) / f"{board}.kicad_pcb"
     if not pcb.exists():
         return True, {}, ["- PCB: not generated"]
     out = os.path.join(tmp, f"{board}-drc.json")
@@ -134,7 +135,7 @@ def pcb_drc(cli: str, board: str, tmp: str) -> tuple[bool, dict, list[str]]:
 def exported_netlist(cli: str, board: str, tmp: str) -> dict[tuple[str, str], str]:
     out = os.path.join(tmp, f"{board}.net")
     run([cli, "sch", "export", "netlist", "--format", "kicadsexpr", "-o", out,
-         str(KICAD / board / f"{board}.kicad_sch")])
+         str(kicad_dir(board) / f"{board}.kicad_sch")])
     root = parse(open(out).read())[0]
     nodes = {}
     for net in find_all(find(root, "nets"), "net"):
@@ -263,7 +264,7 @@ def export_pdfs(cli: str) -> None:
     out = RESULTS / "schematics"
     out.mkdir(parents=True, exist_ok=True)
     for b in BOARDS:
-        run([cli, "sch", "export", "pdf", "-o", str(out / f"{b}.pdf"), str(KICAD / b / f"{b}.kicad_sch")])
+        run([cli, "sch", "export", "pdf", "-o", str(out / f"{b}.pdf"), str(kicad_dir(b) / f"{b}.kicad_sch")])
 
 
 def write_pin_net(board: str, intended: dict) -> None:
@@ -284,7 +285,9 @@ def main() -> int:
     version = run([cli, "version"]).strip().splitlines()[-1]
     waivers = json.load(open(KICAD / "erc-waivers.json"))
     fpdir = footprint_dir()
-    intended = {b: json.load(open(KICAD / b / "intended-netlist.json")) for b in BOARDS}
+    intended = {b: json.load(open(kicad_dir(b) / "intended-netlist.json")) for b in BOARDS}
+    # The debug adapter mirrors the archived main board's slot: keep checking it against that frozen pinout.
+    intended["TL-SN-001"] = json.load(open(kicad_dir("TL-SN-001") / "intended-netlist.json"))
     report = ["# KiCad check results (generated)\n",
               f"`hardware/scripts/check_kicad.py`, kicad-cli **{version}**, {datetime.date.today().isoformat()}. "
               "This shows the schematics are self-consistent. **It is not an electrical design review.**\n",

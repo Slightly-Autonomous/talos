@@ -977,7 +977,10 @@ def main() -> int:
     TALOS_LIB.write_text(dump(library_node()) + "\n", encoding="utf-8")
     fps = write_library(LIB_DIR / "talos-footprints.pretty")
     libs = SymbolLibraries(STOCK, {"talos": str(TALOS_LIB)})
+    from boards import ACTIVE
     for b in boards():
+        if b.name not in ACTIVE and "--archived" not in sys.argv:
+            continue  # frozen in hardware/archive/modular-2026-11; --archived regenerates into hardware/kicad
         info = write_board(b, libs)
         print(f"{info['board']}: {info['parts']} parts, {info['nets']} nets")
     print(f"symbols: {', '.join(SYMBOLS)} -> {TALOS_LIB.relative_to(ROOT)}")

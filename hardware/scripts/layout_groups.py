@@ -17,7 +17,10 @@ import re
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
-BOARD = "TL-SN-001"
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+from boards import kicad_dir  # noqa: E402
+
+BOARD = "TL-SN-001"  # archived; kept so its frozen layout groups can be rebuilt
 PLANE = {"GND", "V3V3_CORE"}
 
 # (name, role, anchor, near, net patterns, why); order is priority
@@ -61,7 +64,7 @@ PINNED = {"U1": "mcu", "C1": "mcu", "C2": "mcu", "U2": "usb_in", "U3": "pmux", "
 
 
 def build() -> dict:
-    d = json.load(open(ROOT / "hardware" / "kicad" / BOARD / "intended-netlist.json"))
+    d = json.load(open(kicad_dir(BOARD) / "intended-netlist.json"))
     parts = d["parts"] if isinstance(d["parts"], dict) else {p["ref"]: p for p in d["parts"]}
     members: dict[str, list[str]] = {b[0]: [] for b in BLOCKS}
     loose = []
@@ -90,7 +93,7 @@ def main() -> int:
     sys.path.insert(0, str(ROOT / "hardware" / "scripts"))
     if loose:
         print(f"{len(loose)} part(s) match no block rule: {' '.join(loose)}")
-    out = ROOT / "hardware" / "kicad" / BOARD / f"{BOARD}.groups.json"
+    out = kicad_dir(BOARD) / f"{BOARD}.groups.json"
     out.write_text(json.dumps(g, indent=1) + "\n")
     for grp in g["groups"]:
         print(f"{grp['name']:10s} {len(grp['refs']):3d}  {' '.join(grp['refs'])}")

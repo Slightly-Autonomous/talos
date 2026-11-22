@@ -117,3 +117,28 @@ One base design with swappable lids and side caps would keep this to one print f
 2. Flat wall-mount nodes, or should some mount on a door frame (narrow, about 20–25 mm wide)? A frame
    mount argues for a different card layout, and the current 136 mm-wide assembly won't fit.
 3. Printer and material: what are you printing in (PLA, PETG, ASA), and do you have heat-set inserts?
+
+## 7. Owner answers (2026-11-22) for TL-SN-002 and its housing
+
+These replace §5's "no door-frame mount" and the flat-wall assumption for the self-contained node.
+
+- **Mount:** on the **door frame**, with the door magnet on the door. A chunky housing is fine. The
+  Hall sensor's board edge faces the door edge, and a separate printed magnet carrier goes on the door.
+- **Battery door:** **tool-free**, and opening it alerts like any other tamper. It is sensed on the
+  board (no wiring to fit) and reported separately from the lid: see HD-049 and
+  `docs/decisions/0019` amendment 2026-11-22.
+- **Wall/frame removal:** sensed without a back switch, from the accelerometer's gravity vector and
+  the magnet geometry (firmware), so the board stays zero-touch.
+- **Sealing:** splash-resistant only. A gasket channel, no IP rating claimed.
+- **Printer:** Bambu Lab P2S (256 × 256 × 256 mm, 0.4 mm nozzle). The housing is CadQuery source in
+  `hardware/mechanical/housing/`, which generates STEP and STL files.
+- **PIR lens:** chosen by the designer (see the housing README).
+- **Board changes approved (all six):**
+  - B-02: second tamper input, now the battery-door switch;
+  - B-04: housing keep-outs;
+  - B-05: STEP export;
+  - B-06: conformal-coating keep-out map;
+  - H-05: lid switch, now on the board;
+  - H-06: light-pipe positions.
+- **First build:** 3 boards for bench testing, plugged into the development computer over USB-C for
+  automated debug, test and Rev B changes. The JLCPCB quote waits until everything here is done.

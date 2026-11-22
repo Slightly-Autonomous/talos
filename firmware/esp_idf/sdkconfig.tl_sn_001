@@ -1,5 +1,0 @@
-# Archived TL-SN-001 build (ADR 0019 keeps it buildable). Use on top of sdkconfig.defaults:
-#   idf.py -B build_tl_sn_001 -D SDKCONFIG=build_tl_sn_001/sdkconfig \
-#          -D SDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.tl_sn_001" set-target esp32h2 build
-CONFIG_TALOS_BOARD_TL_SN_001=y
-# CONFIG_TALOS_BOARD_TL_SN_002 is not set

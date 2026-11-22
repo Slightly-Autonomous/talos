@@ -9,13 +9,9 @@ The Talos custom-hardware workstream. It follows `TALOS_CUSTOM_HARDWARE_HANDOFF_
 | ID | What | Bespoke? | State |
 |---|---|---|---|
 | TL-HUB-REF | Hub: Pi 5 / mini-PC + USB 802.15.4 RCP | No, bought | `bom/devkit_rig_v0.csv` |
-| TL-SN-001 | Four-slot Thread Sensor Node (ESP32-H2-MINI-1) | Yes | H3 schematic + H4 placed and routed 4-layer layout, 0 DRC errors, not yet reviewed ([layout](layout/README.md)) |
-| TL-MOD-001 | Magnetic contact card (TMAG5273 3-axis Hall, any orientation) | Yes | H3 schematic + H4 routed 2-layer layout |
-| TL-MOD-002 | PIR card (Panasonic EKMB 1 µA) | Yes | H3 schematic + H4 routed 2-layer layout |
-| TL-MOD-003 | Vibration/impact card (ST LIS2DW12) | Yes | H3 schematic + H4 routed 2-layer layout |
-| TL-MOD-004 | Temperature/humidity card (Sensirion SHT4x) | Yes | H3 schematic + H4 routed 2-layer layout |
-| TL-TEST-001 | Slot test cartridge | Yes | H3 schematic + H4 routed 2-layer layout |
-| TL-DBG-001 | One-slot USB debug adapter: one card on a PC (MCP2221A bridge, PPK2 meter headers) | Yes, bench tool | Schematic + routed 2-layer layout, 0 DRC errors ([HW-0007](architecture/decisions/0007-slot-socket-and-debug-adapter.md)) |
+| TL-SN-002 | Self-contained Thread Sensor Node: ESP32-H2, Hall + accel + T/RH + PIR, 2 × AA or USB-C, 10 lamps, 3 buttons (ADR 0019) | Yes | Schematic + routed 2-layer layout, 0 DRC errors, not yet reviewed |
+| TL-SN-001, TL-MOD-001..004, TL-TEST-001 | The four-slot modular node and its cards | – | **Archived** 2026-11-22: [archive/modular-2026-11](archive/modular-2026-11/README.md) (git tag `modular-checkpoint-2026-11`) |
+| TL-DBG-001 | One-slot USB debug adapter: one sensor_edge_v1 board on a PC, kept active for future sensor boards (MCP2221A bridge, PPK2 meter headers) | Yes, bench tool | Schematic + routed 2-layer layout, 0 DRC errors ([HW-0007](architecture/decisions/0007-slot-socket-and-debug-adapter.md)) |
 | TL-VN-001 | Vision Node (separate board, CM4/CM5/video SoC) | Yes | H5 study not started; manifest only |
 
 The camera **slot** module (`smart_camera_s3_v1`) is superseded by TL-VN-001 ([ADR HW-0001](architecture/decisions/0001-hardware-family.md)).

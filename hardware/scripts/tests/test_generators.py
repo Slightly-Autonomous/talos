@@ -24,7 +24,8 @@ except ImportError:
 
 
 def netlist(board: str) -> dict:
-    return json.loads((KICAD / board / "intended-netlist.json").read_text())["parts"]
+    from boards import kicad_dir
+    return json.loads((kicad_dir(board) / "intended-netlist.json").read_text())["parts"]
 
 
 class SchematicIntent(unittest.TestCase):

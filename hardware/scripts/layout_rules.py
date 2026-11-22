@@ -30,7 +30,7 @@ from silk_pass import LABELS  # noqa: E402
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 KICAD = ROOT / "hardware" / "kicad"
-BOARDS = ["TL-SN-001", "TL-SN-002", "TL-MOD-001", "TL-MOD-002", "TL-MOD-003", "TL-MOD-004", "TL-TEST-001", "TL-DBG-001"]
+from boards import ACTIVE as BOARDS  # noqa: E402
 CARDS = {"TL-MOD-001", "TL-MOD-002", "TL-MOD-003", "TL-MOD-004", "TL-TEST-001"}
 mm = pcbnew.ToMM
 

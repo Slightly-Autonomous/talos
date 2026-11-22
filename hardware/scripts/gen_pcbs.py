@@ -465,7 +465,8 @@ def slot_correspondence(parts: dict, groups: dict[str, list[str]], n_slots: int,
 
 
 def load_groups(board_name: str) -> dict[str, list[str]]:
-    path = KICAD / board_name / f"{board_name}.groups.json"
+    from boards import kicad_dir
+    path = kicad_dir(board_name) / f"{board_name}.groups.json"
     if not path.exists():
         return {}
     return {g["name"]: g["refs"] for g in json.load(open(path))["groups"]}
@@ -1047,7 +1048,8 @@ def build(board_name: str) -> dict:
 
 
 def main() -> int:
-    for b in sys.argv[1:] or list(SPECS):
+    from boards import ACTIVE
+    for b in sys.argv[1:] or ACTIVE:
         info = build(b)
         print(f"{info['board']}: {info['footprints']} footprints, {info['nets']} nets, {info['size']}, "
               f"{info['layers']} layers")

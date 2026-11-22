@@ -35,7 +35,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 KICAD = ROOT / "hardware" / "kicad"
 # Layout experiments route a board in a copy of its project folder (layout_search.py); default: the repo.
 BOARDS_DIR = pathlib.Path(os.environ.get("TALOS_LAYOUT_OUT", str(KICAD)))
-BOARDS = ["TL-SN-001", "TL-MOD-001", "TL-MOD-002", "TL-MOD-003", "TL-MOD-004", "TL-TEST-001", "TL-DBG-001"]
+from boards import ACTIVE as BOARDS  # noqa: E402  (archived boards are frozen, never re-routed)
 JAR = os.path.expanduser(os.environ.get("FREEROUTING_JAR", "~/.cache/talos-tools/freerouting-2.5.0.jar"))
 JAVA = os.environ.get("JAVA", "java")
 # macOS app bundle launcher (bundles its own Java runtime); used when set.

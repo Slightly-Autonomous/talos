@@ -131,7 +131,7 @@ def main() -> int:
     case = sys.argv[sys.argv.index("--case") + 1] if "--case" in sys.argv else None
     # Default (CI): both boards in their committed cases. --board/--case write one board for a kisi run.
     todo = [(board, case or ("battery" if board == "TL-SN-002" else "usb"))] if board else \
-        [(BOARD, "usb"), ("TL-SN-002", "battery")]
+        [("TL-SN-002", "battery")]  # TL-SN-001 is archived
     for b, c in todo:
         if c not in (("battery", "usb") if b == "TL-SN-002" else ("usb", "pv")):
             raise SystemExit(f"{b}: unknown case {c}")

@@ -1,0 +1,36 @@
+{
+ "TL-SN-001": {
+  "routing": "partial",
+  "note": "84 x 72 mm (2026-11-21). Autorouted after the board-practices additions; 2 connections left open by the router (Freerouting + completion pass + maze repair). Checkpoint only: the owner chose to replace the modular node with a self-contained board (hardware/sourcing/cost-study.md), so these are not being hand-finished.",
+  "warnings_allowed": {
+   "silk_edge_clearance": {
+    "max": 6,
+    "why": "Edge-mount HSEC8 sockets (and the ESP32-H2 module's antenna end on TL-SN-001) straddle the board edge by design; their footprint silkscreen crosses Edge.Cuts"
+   },
+   "silk_over_copper": {
+    "max": 1,
+    "why": "U5 pin-1 silk mark touches R18 in the regulator template (HD-036); checkpoint board, being replaced by the self-contained node"
+   }
+  },
+  "narrow_power_mm_max": 3.0,
+  "layout_rules_waived": {
+   "labels": "STAT (D1) and TAMPER (J9) found no silk room on the 84 x 72 checkpoint layout",
+   "thermal_vias": "U5's thermal pad got no vias on the 2026-11-21 route (plane_fanout found no legal spot next to the template's fanout); not fixed because the modular board is being replaced"
+  }
+ },
+ "TL-MOD-001": {
+  "routing": "complete"
+ },
+ "TL-MOD-002": {
+  "routing": "complete"
+ },
+ "TL-MOD-003": {
+  "routing": "complete"
+ },
+ "TL-MOD-004": {
+  "routing": "complete"
+ },
+ "TL-TEST-001": {
+  "routing": "complete"
+ }
+}

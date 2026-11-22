@@ -19,7 +19,7 @@ import subprocess
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
-NAME = sys.argv[sys.argv.index("--board") + 1] if "--board" in sys.argv else "TL-SN-001"
+NAME = sys.argv[sys.argv.index("--board") + 1] if "--board" in sys.argv else "TL-SN-002"
 BOARD = ROOT / "hardware" / "kicad" / NAME / f"{NAME}.kicad_pcb"
 OUT = ROOT / "hardware" / "results" / ("pi.md" if NAME == "TL-SN-001" else f"pi-{NAME.lower()}.md")
 CASE = {"TL-SN-001": "**USB worst case**: charging at 300 mA, radio transmitting, slots at the firmware's 800 mW "
