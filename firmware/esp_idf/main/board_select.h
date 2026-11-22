@@ -3,9 +3,8 @@
 // archived with its board and kept only for host tests of the slot code paths.
 #pragma once
 
-#include "sdkconfig.h"
-
 #include "board_tl_sn_002.h"
+#include "sdkconfig.h"
 namespace talos::fw::selected_board {
 using namespace ::talos::fw::board::sn002;
 inline BoardSupport make() { return ::talos::fw::board::sn002::tl_sn_002(); }

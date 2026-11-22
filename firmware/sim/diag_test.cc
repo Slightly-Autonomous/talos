@@ -7,6 +7,7 @@
 #include <string>
 #include <vector>
 
+#include "firmware/portable/thread_config.h"
 #include "firmware/sim/sim_faults.h"
 #include "firmware/sim/virtual_board.h"
 
@@ -270,6 +271,30 @@ TEST(Diag, Tl001ConsoleNeverLocks) {
   EXPECT_TRUE(done_ok(b.run("led service on")));
   EXPECT_TRUE(done_ok(b.run("rail 0 aon on")));
   EXPECT_EQ(b.node.runtime().console_refusals(), 0u);
+}
+
+// Thread credentials (thread_config.h): stored for the next boot, shown only as a
+// fingerprint, cleared again; malformed input refused.
+TEST(Diag, ThreadCredentialsAreStoredFingerprintedAndCleared) {
+  Bench b;
+  b.boot();
+  auto c = b.run("thread");
+  EXPECT_NE(record(c, "thread").find("\"configured\":false"), std::string::npos);
+  c = b.run("thread 0e080000000000010000000300000f fd00:db8::1 5683");
+  EXPECT_TRUE(done_ok(c));
+  const auto r = record(c, "thread");
+  EXPECT_NE(r.find("\"configured\":true"), std::string::npos);
+  EXPECT_NE(r.find("\"hub\":\"fd00:db8::1\""), std::string::npos);
+  EXPECT_EQ(r.find("0e08"), std::string::npos) << "the dataset itself is never echoed";
+  const auto cfg = load_thread_config(b.node.store);
+  ASSERT_TRUE(cfg.has_value());
+  EXPECT_EQ(cfg->dataset_len, 15u);
+  EXPECT_EQ(cfg->hub_port, 5683u);
+  EXPECT_FALSE(done_ok(b.run("thread zz fd00::1")));
+  EXPECT_FALSE(done_ok(b.run("thread 0e08 not-an-address")));
+  EXPECT_FALSE(done_ok(b.run("thread 0e08 fd00::1 70000")));
+  EXPECT_TRUE(done_ok(b.run("thread clear")));
+  EXPECT_FALSE(load_thread_config(b.node.store).has_value());
 }
 
 }  // namespace

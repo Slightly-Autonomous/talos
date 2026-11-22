@@ -24,3 +24,16 @@ CONFIG_ESP_TASK_WDT_TIMEOUT_S=5
 CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
 # Board table: TL-SN-002 (ADR 0019) by default; sdkconfig.tl_sn_001 selects the archived board.
 CONFIG_TALOS_BOARD_TL_SN_002=y
+# Thread (ADR 0014, ADR 0019 amendment 2026-11-22): OpenThread on the native
+# 802.15.4 radio as a Minimal Thread Device (sleepy end device by default).
+CONFIG_OPENTHREAD_ENABLED=y
+CONFIG_OPENTHREAD_RADIO_NATIVE=y
+CONFIG_OPENTHREAD_MTD=y
+CONFIG_OPENTHREAD_CLI=n
+# eventfd backs the OpenThread mainloop.
+CONFIG_VFS_SUPPORT_SELECT=y
+# Automatic light sleep between steps (sleep_policy.h kLight) and radio sleep
+# for the sleepy end device.
+CONFIG_PM_ENABLE=y
+CONFIG_FREERTOS_USE_TICKLESS_IDLE=y
+CONFIG_IEEE802154_SLEEP_ENABLE=y

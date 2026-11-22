@@ -38,11 +38,22 @@ CONFIG_SECURE_SIGNED_APPS_RSA_SCHEME=y
 
 CONFIG_SECURE_FLASH_ENC_ENABLED=y
 CONFIG_SECURE_FLASH_ENCRYPTION_MODE_RELEASE=y
-# NVS encryption would need an nvs_keys partition (or an HMAC eFuse key) and a
-# secure init of both NVS partitions (nvs, talos_id): not wired or tested yet, and
-# turned on by default with flash encryption it would make nvs_flash_init() fail at
-# run time. Off until done (docs/hardware/provisioning.md "Open").
-# CONFIG_NVS_ENCRYPTION is not set
+# NVS encryption (owner 2026-11-22): both NVS partitions (nvs, talos_id) are
+# encrypted with keys derived from an HMAC key in eFuse block KEY4, which the
+# firmware generates and burns at the first boot if the block is empty (part of the
+# same irreversible first boot). No nvs_keys partition, nothing to provision by hand.
+CONFIG_NVS_ENCRYPTION=y
+CONFIG_NVS_SEC_KEY_PROTECT_USING_HMAC=y
+CONFIG_NVS_SEC_HMAC_EFUSE_KEY_ID=4
+
+# Anti-rollback (owner 2026-11-22): the bootloader refuses an app whose secure
+# version is below the one burned in eFuse, and burns the running version once an
+# update is confirmed. Bump CONFIG_BOOTLOADER_APP_SECURE_VERSION only for a release
+# that must never be downgraded from (a security fix): each bump uses an eFuse bit
+# for good (16 bits = 16 bumps). docs/hardware/provisioning.md.
+CONFIG_BOOTLOADER_APP_ANTI_ROLLBACK=y
+CONFIG_BOOTLOADER_APP_SECURE_VERSION=1
+CONFIG_BOOTLOADER_APP_SEC_VER_SIZE_EFUSE_FIELD=16
 
 CONFIG_SECURE_ENABLE_SECURE_ROM_DL_MODE=y
 

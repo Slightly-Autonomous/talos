@@ -8,6 +8,7 @@
 #include "common/sha256/sha256.h"
 #include "firmware/portable/battery.h"
 #include "firmware/portable/serial_link.h"
+#include "firmware/portable/thread_config.h"
 
 namespace talos::fw {
 
@@ -188,8 +189,8 @@ void Diag::handle_line(const char* line, IDiagOut& out) {
     JsonLine()
         .str("t", "help")
         .str("cmds",
-             "id slots power i2c mux exp rail uart rescan selftest provision identity board-id led "
-             "reboot")
+             "id slots power i2c mux exp rail uart rescan selftest provision identity thread "
+             "board-id led reboot")
         .boolean("locked", rt_.console_locked())
         .emit(out);
     ok = true;
@@ -213,6 +214,8 @@ void Diag::handle_line(const char* line, IDiagOut& out) {
     ok = cmd_provision(a, out, err);
   } else if (is("identity")) {
     ok = cmd_identity(out);
+  } else if (is("thread")) {
+    ok = cmd_thread(a, out, err);
   } else if (is("board-id")) {
     ok = cmd_board_id(a, out, err);
   } else if (is("led")) {
@@ -384,6 +387,72 @@ bool Diag::cmd_provision(const Args& a, IDiagOut& out, const char*& err) {
       .str("t", "identity")
       .str("device_id", id.device_id)
       .hex("key_fingerprint", fingerprint(id.key, id.key_len))
+      .boolean("reboot", true)
+      .emit(out);
+  return true;
+}
+
+// thread                                  status (read-only)
+// thread <dataset-tlvs-hex> <hub-ipv6> [port]   store credentials, reboot onto Thread
+// thread clear                            forget them (back to the USB console link)
+bool Diag::cmd_thread(const Args& a, IDiagOut& out, const char*& err) {
+  if (a.n == 1) {
+    const auto c = load_thread_config(p_.store);
+    JsonLine line;
+    line.str("t", "thread").boolean("configured", c.has_value());
+    if (c) {
+      line.str("hub", c->hub_address.data())
+          .num("port", c->hub_port)
+          .hex("dataset_fingerprint", fingerprint(c->dataset.data(), c->dataset_len));
+    }
+    line.emit(out);
+    return true;
+  }
+  if (a.n == 2 && std::strcmp(a.v[1], "clear") == 0) {
+    ThreadConfig none;
+    none.version = 0;
+    if (!save_thread_config(p_.store, none)) {
+      err = "store write failed";
+      return false;
+    }
+    reboot_ = true;
+    JsonLine().str("t", "thread").boolean("configured", false).boolean("reboot", true).emit(out);
+    return true;
+  }
+  ThreadConfig c;
+  const std::size_t hex_len = a.n >= 3 ? std::strlen(a.v[1]) : 0;
+  const std::size_t addr_len = a.n >= 3 ? std::strlen(a.v[2]) : 0;
+  long port = ThreadConfig::kDefaultPort;
+  if (a.n == 4) port = std::strtol(a.v[3], nullptr, 10);
+  if ((a.n != 3 && a.n != 4) || hex_len == 0 || hex_len % 2 != 0 ||
+      hex_len / 2 > ThreadConfig::kMaxDataset || addr_len < 2 ||
+      addr_len > ThreadConfig::kMaxAddress || std::strchr(a.v[2], ':') == nullptr || port < 1 ||
+      port > 65535) {
+    err = "usage: thread <dataset tlvs as hex> <hub ipv6> [port] | thread clear";
+    return false;
+  }
+  for (std::size_t i = 0; i < hex_len / 2; ++i) {
+    const int hi = hex_digit(a.v[1][2 * i]), lo = hex_digit(a.v[1][2 * i + 1]);
+    if (hi < 0 || lo < 0) {
+      err = "dataset must be hex";
+      return false;
+    }
+    c.dataset[i] = static_cast<std::uint8_t>(hi * 16 + lo);
+  }
+  c.dataset_len = static_cast<std::uint8_t>(hex_len / 2);
+  std::memcpy(c.hub_address.data(), a.v[2], addr_len);
+  c.hub_port = static_cast<std::uint16_t>(port);
+  if (!save_thread_config(p_.store, c)) {
+    err = "store write failed";
+    return false;
+  }
+  reboot_ = true;  // OpenThread starts at boot from the stored dataset
+  JsonLine()
+      .str("t", "thread")
+      .boolean("configured", true)
+      .str("hub", c.hub_address.data())
+      .num("port", c.hub_port)
+      .hex("dataset_fingerprint", fingerprint(c.dataset.data(), c.dataset_len))
       .boolean("reboot", true)
       .emit(out);
   return true;

@@ -194,12 +194,14 @@ jobs:
                      CONFIG_SECURE_SIGNED_APPS_RSA_SCHEME=y CONFIG_SECURE_FLASH_ENC_ENABLED=y \
                      CONFIG_SECURE_FLASH_ENCRYPTION_MODE_RELEASE=y \
                      CONFIG_SECURE_ENABLE_SECURE_ROM_DL_MODE=y CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y \
-                     CONFIG_PARTITION_TABLE_OFFSET=0xF000 CONFIG_TALOS_BOARD_TL_SN_002=y; do
+                     CONFIG_PARTITION_TABLE_OFFSET=0xF000 CONFIG_TALOS_BOARD_TL_SN_002=y \
+                     CONFIG_NVS_ENCRYPTION=y CONFIG_NVS_SEC_KEY_PROTECT_USING_HMAC=y \
+                     CONFIG_BOOTLOADER_APP_ANTI_ROLLBACK=y CONFIG_OPENTHREAD_ENABLED=y; do
             grep -qix "$opt" "$cfg" || { echo "production profile lost $opt"; exit 1; }
           done
           for opt in CONFIG_SECURE_BOOT_BUILD_SIGNED_BINARIES CONFIG_SECURE_BOOT_ALLOW_JTAG \
                      CONFIG_SECURE_BOOT_INSECURE CONFIG_SECURE_FLASH_ENCRYPTION_MODE_DEVELOPMENT \
-                     CONFIG_SECURE_INSECURE_ALLOW_DL_MODE CONFIG_NVS_ENCRYPTION; do
+                     CONFIG_SECURE_INSECURE_ALLOW_DL_MODE; do
             if grep -q "^$opt=y" "$cfg"; then echo "production profile must not set $opt"; exit 1; fi
           done
 

@@ -28,6 +28,7 @@ class CoapLink final : public ILink {
 
   bool send(const DeviceEvent& e) override;
   std::optional<Downlink> receive() override;
+  bool set_tx_power_dbm(std::int8_t dbm) override { return net_.set_tx_power_dbm(dbm); }
 
   std::uint32_t rejected_replies() const { return rejected_; }
 

@@ -40,8 +40,8 @@ inline constexpr std::uint8_t kBootButton = 9;
 inline constexpr std::uint8_t kMagWake = 10;  // TMAG5273A2 INT_N through SN74AUP1G04
 inline constexpr std::uint8_t kAccInt = 11;   // LIS2DW12 INT1, push-pull active high
 inline constexpr std::uint8_t kPirOut = 12;   // PIR223D-S0 output, 1M pull-down
-inline constexpr std::uint8_t kTamper =
-    13;  // SW4 lid + SW5 battery door to GND, 1M pull-up + 10 nF
+// SW4 lid + SW5 battery door in series to GND, 1M pull-up + 10 nF.
+inline constexpr std::uint8_t kTamper = 13;
 inline constexpr std::uint8_t kUserButton = 14;  // to 3V3, 100k pull-down
 // GPIO0, 5, 22, 25: spare (GPIO0 on a test pad). GPIO23/24: U0RXD/U0TXD on the
 // Tag-Connect recovery pads. GPIO26/27: USB Serial/JTAG (flash, console, debug).

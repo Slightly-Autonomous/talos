@@ -116,6 +116,8 @@ enum class StoreKey : std::uint8_t {
   // Installed gravity vector (MountPose baseline, 3 x int32 mg), written when
   // the enclosure closes after installation (TamperCause::kMountMoved).
   kMountBaseline = 16,
+  // Thread dataset + hub address (thread_config.h), diag `thread`.
+  kThreadConfig = 17,
 };
 
 inline constexpr bool is_permanent(StoreKey k) {
@@ -231,6 +233,8 @@ class IDatagram {
   virtual bool send(const std::uint8_t* data, std::size_t n) = 0;
   // Returns bytes received into buf, or 0 if nothing is pending.
   virtual std::size_t receive(std::uint8_t* buf, std::size_t cap) = 0;
+  // Radio transmit power in dBm, when the datagrams ride a radio (Thread).
+  virtual bool set_tx_power_dbm(std::int8_t /*dbm*/) { return false; }
 };
 
 struct SlotWiring {

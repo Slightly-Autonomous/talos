@@ -92,6 +92,7 @@ class Diag {
   bool cmd_uart(const Args& a, IDiagOut& out, const char*& err);
   bool cmd_provision(const Args& a, IDiagOut& out, const char*& err);
   bool cmd_identity(IDiagOut& out);
+  bool cmd_thread(const Args& a, IDiagOut& out, const char*& err);
   bool cmd_board_id(const Args& a, IDiagOut& out, const char*& err);
   bool cmd_led(const Args& a, IDiagOut& out, const char*& err);
   bool selftest_i2c(IDiagOut& out);

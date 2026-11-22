@@ -33,19 +33,25 @@ Residual, accepted (open-decisions.md):
   what it wrote, so the node goes silent and the hub shows it OFFLINE. Optional: burn
   `DIS_USB_SERIAL_JTAG_DOWNLOAD_MODE` (step 7) so USB can no longer enter download mode at all
   (recovery then only over the Tag-Connect UART0 pads, inside the enclosure).
-- Until Thread lands (Phase 6) the node's hub link (CoAP frames, `@F` lines) also runs over this
-  USB console. Frames are authenticated with the device key; a host on the port can drop or
-  delay them (the hub then sees missed heartbeats). Production needs the Thread link.
-- NVS is **not** encrypted yet (identity and CoAP key in `talos_id` are plaintext in flash). With
-  secure download mode and JTAG off they are not readable over USB; reading them needs the chip
-  itself. NVS encryption (HMAC-derived key) is listed under "Open" below.
+- Without Thread credentials the node's hub link (CoAP frames, `@F` lines) runs over this USB
+  console (bench). With `thread <dataset> <hub-ipv6>` provisioned (diag, lid open), the same CoAP
+  link runs over OpenThread UDP (`firmware/esp_idf/main/thread_link.cc`); production uses Thread.
+- NVS is encrypted in the production profile: both partitions (`nvs`, `talos_id`) use keys
+  derived from an HMAC key in eFuse KEY4, generated and burned by the firmware at the first boot.
+- Anti-rollback: the bootloader refuses an image below the eFuse secure version
+  (`CONFIG_BOOTLOADER_APP_SECURE_VERSION`, 16 bumps available). Bump it only for releases that
+  must never be downgraded from.
+- A reset through the USB port is reported (`device.reset`, cause USB); with the lid shut it counts
+  toward the hub's USB-probing DEGRADED rule.
 
 ## Steps (owner, once per node, offline machine for the key)
 
 ESP-IDF v5.5 (the CI image is `espressif/idf:v5.5.6`). Paths are from `firmware/esp_idf`.
 
 1. **Make the signing key, offline, once for the fleet.** Keep it off the repository and off CI
-   (`.gitignore` ignores `*.pem`). Losing it means no more updates for every provisioned node;
+   (`.gitignore` ignores `*.pem` and `secrets/`). For the three bench boards a development key
+   already exists in `secrets/` (2026-11-22, `secrets/README.md`); `tools/provision/sign_firmware.sh`
+   builds and signs with it. Rotate before any node leaves the bench. Losing it means no more updates for every provisioned node;
    leaking it means anyone can sign firmware for them.
    ```bash
    espsecure.py generate_signing_key --version 2 --scheme rsa3072 secure_boot_signing_key.pem
@@ -108,9 +114,7 @@ ESP-IDF v5.5 (the CI image is `espressif/idf:v5.5.6`). Paths are from `firmware/
    before adding it to the hub's firmware store; a production node refuses unsigned images.
 
 ## Open (tracked under HD-016)
-- NVS encryption with an HMAC-derived key (`CONFIG_NVS_SEC_KEY_PROTECT_USING_HMAC`) and a secure
-  init of both NVS partitions (`nvs`, `talos_id`) in `esp_platform.cc`, tested on a board.
-- Anti-rollback (`CONFIG_BOOTLOADER_APP_ANTI_ROLLBACK`, eFuse security version) for OTA.
-- Reporting a USB host reset (`esp_reset_reason()` = USB) to the hub as its own diagnostic.
+- Bench: NVS encryption's first-boot HMAC key burn and the secure init of `talos_id`;
+  anti-rollback across a real OTA; the USB-reset report.
 - Everything above is compile-checked only: the eFuse flow, the signed boot, release-mode flash
   encryption and the console over a provisioned chip need a bench run (bench-test-plan §10).

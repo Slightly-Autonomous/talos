@@ -11,6 +11,7 @@
 #include "esp_task_wdt.h"
 #include "esp_timer.h"
 #include "nvs_flash.h"
+#include "sdkconfig.h"
 #include "soc/soc_caps.h"
 
 namespace talos::fw::esp {
@@ -227,7 +228,20 @@ std::optional<std::uint32_t> BatteryAdc::battery_mv() {
 Store::Store() {
   // Permanent partition first, and never erased by firmware: on any init error
   // its keys just fail (the runtime then holds the uplink and says so).
+#if CONFIG_NVS_ENCRYPTION
+  // Production profile: NVS encrypted with keys derived from an HMAC eFuse key
+  // (CONFIG_NVS_SEC_KEY_PROTECT_USING_HMAC). nvs_flash_init() handles the default
+  // partition itself; talos_id needs the secure init with the same keys.
+  nvs_sec_cfg_t sec_cfg = {};
+  esp_err_t perr = ESP_FAIL;
+  if (nvs_sec_scheme_t* scheme = nvs_flash_get_default_security_scheme()) {
+    perr = nvs_flash_read_security_cfg_v2(scheme, &sec_cfg);
+    if (perr != ESP_OK) perr = nvs_flash_generate_keys_v2(scheme, &sec_cfg);
+  }
+  if (perr == ESP_OK) perr = nvs_flash_secure_init_partition(kPermanentPartition, &sec_cfg);
+#else
   esp_err_t perr = nvs_flash_init_partition(kPermanentPartition);
+#endif
   if (perr == ESP_OK)
     perr = nvs_open_from_partition(kPermanentPartition, "talos", NVS_READWRITE, &perm_);
   perm_ok_ = perr == ESP_OK;
@@ -289,6 +303,12 @@ Sleep::Sleep() {
 #endif
       }
       break;
+    case ESP_RST_USB:  // USB Serial/JTAG asked for it (the outside USB-C port on TL-SN-002)
+      info_.cause = ResetCause::kUsb;
+      break;
+    case ESP_RST_BROWNOUT:  // the cells sagged under a burst (HD-043)
+      info_.cause = ResetCause::kBrownout;
+      break;
     case ESP_RST_SW:
     case ESP_RST_PANIC:
     case ESP_RST_INT_WDT:
@@ -319,6 +339,30 @@ bool Sleep::set_wake_enabled(std::uint8_t line, bool enabled) {
   (void)enabled;
   return false;
 #endif
+}
+
+void Sleep::enter_deep(std::uint64_t sleep_ms) {
+  // The ext1 mask is already armed (set_wake_enabled); add the timer and go.
+  // Deep sleep is a reset on the ESP32-H2: app_main starts again on wake.
+  if (sleep_ms > 0) (void)esp_sleep_enable_timer_wakeup(sleep_ms * 1000ULL);
+  esp_deep_sleep_start();
+}
+
+void Sleep::arm_light_sleep_wake() {
+  // Automatic light sleep (esp_pm) wakes on the same lines the deep-sleep mask
+  // holds: every armed wake line is active high (HD-034); a line stuck high is
+  // already masked by the runtime, so it can't keep the CPU awake.
+  for (std::uint8_t line = 0; line < 32; ++line) {
+    const bool armed = (mask_ >> line) & 1u;
+    if (armed == ((gpio_wake_ >> line) & 1u)) continue;
+    if (armed) {
+      (void)gpio_wakeup_enable(static_cast<gpio_num_t>(line), GPIO_INTR_HIGH_LEVEL);
+    } else {
+      (void)gpio_wakeup_disable(static_cast<gpio_num_t>(line));
+    }
+    gpio_wake_ = armed ? (gpio_wake_ | (1u << line)) : (gpio_wake_ & ~(1u << line));
+  }
+  if (gpio_wake_) (void)esp_sleep_enable_gpio_wakeup();
 }
 
 std::uint8_t* Sleep::retained() {

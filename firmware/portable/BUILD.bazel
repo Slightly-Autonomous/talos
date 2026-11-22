@@ -39,6 +39,7 @@ cc_library(
         "serial_link.h",
         "sleep_policy.h",
         "tamper_detect.h",
+        "thread_config.h",
         "types.h",
         "wire.h",
     ],

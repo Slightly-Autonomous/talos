@@ -86,10 +86,11 @@ class Store final : public IStore {
 };
 
 // Reset cause, ext1 wake lines and LP RAM for NodeRuntime (deep-sleep wakes are
-// resets on the ESP32-H2). Sleep entry itself is not wired yet: main.cc still
-// light-polls. The ext1 mask is kept armed so entering deep sleep needs no
-// further setup. Every wake line on TL-SN-001 is active high (slot WAKE, and
-// EXP_WAKE through the inverter), so one ANY_HIGH mask serves them all (HD-034).
+// resets on the ESP32-H2). main.cc follows NodeRuntime::sleep_plan(): deep sleep
+// via enter_deep(), light sleep through esp_pm automatic light sleep with the
+// same lines armed as GPIO wake sources. The ext1 mask is kept armed so entering
+// deep sleep needs no further setup. Every wake line is active high (TL-SN-002's
+// five LP lines; TL-SN-001's slot WAKE and inverted EXP_WAKE): one ANY_HIGH mask (HD-034).
 class Sleep final : public ISleep {
  public:
   Sleep();
@@ -97,10 +98,15 @@ class Sleep final : public ISleep {
   bool set_wake_enabled(std::uint8_t line, bool enabled) override;
   std::uint8_t* retained() override;
   std::size_t retained_size() const override;
+  // Never returns: the chip resets on wake (timer after sleep_ms, or a wake line).
+  [[noreturn]] void enter_deep(std::uint64_t sleep_ms);
+  // Mirrors the armed lines into light-sleep GPIO wake sources.
+  void arm_light_sleep_wake();
 
  private:
   WakeInfo info_;
   std::uint64_t mask_ = 0;
+  std::uint32_t gpio_wake_ = 0;
 };
 
 // Task watchdog with a panic (and so a reset) on timeout, subscribed for the

@@ -4,6 +4,7 @@ idf_component_register(
   SRCS
     "main.cc"
     "esp_platform.cc"
+    "thread_link.cc"
     "${TALOS_ROOT}/firmware/portable/board_io.cc"
     "${TALOS_ROOT}/firmware/portable/coap_link.cc"
     "${TALOS_ROOT}/firmware/portable/serial_link.cc"
@@ -16,5 +17,6 @@ idf_component_register(
     "${TALOS_ROOT}/firmware/portable/runtime.cc"
     "${TALOS_ROOT}/common/sha256/sha256.cc"
   INCLUDE_DIRS "." "${TALOS_ROOT}"
-  REQUIRES driver esp_adc esp_driver_usb_serial_jtag esp_driver_i2c esp_driver_gpio esp_timer nvs_flash esp_system app_update)
+  REQUIRES driver esp_adc esp_driver_usb_serial_jtag esp_driver_i2c esp_driver_gpio esp_timer nvs_flash esp_system app_update
+           openthread esp_pm vfs esp_event nvs_sec_provider)
 target_compile_options(${COMPONENT_LIB} PRIVATE -Wall -Wextra)

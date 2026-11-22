@@ -2,7 +2,7 @@
 # Secure Boot v2 + flash encryption bootloader). Same partitions and sizes as
 # partitions.csv, shifted up; app slots stay 64 KiB aligned (Secure Boot requires it).
 # Flash encryption covers the bootloader, this table, otadata and the app slots; the
-# NVS partitions are not encrypted (NVS encryption is still open, provisioning.md).
+# NVS partitions are encrypted by NVS encryption (HMAC scheme, sdkconfig.production).
 # Name,     Type, SubType, Offset,   Size
 nvs,        data, nvs,     0x10000,  0x10000
 otadata,    data, ota,     0x20000,  0x2000

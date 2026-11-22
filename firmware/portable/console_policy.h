@@ -47,7 +47,7 @@ inline ConsoleAccess console_access(const char* const* argv, int argc) {
   if (is("help") || is("id") || is("slots") || is("power") || is("identity") || is("exp")) {
     return ConsoleAccess::kReadOnly;
   }
-  if (is("mux") || is("board-id") || is("led")) {
+  if (is("mux") || is("board-id") || is("led") || is("thread")) {
     return argc == 1 ? ConsoleAccess::kReadOnly : ConsoleAccess::kMutating;
   }
   if (is("i2c")) {

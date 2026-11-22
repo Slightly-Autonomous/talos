@@ -84,6 +84,7 @@ class ProvisionedLink final : public ILink {
   ProvisionedLink(IDatagram& net, IStore& store);
   bool send(const DeviceEvent& e) override { return link_ ? link_->send(e) : false; }
   std::optional<Downlink> receive() override { return link_ ? link_->receive() : std::nullopt; }
+  bool set_tx_power_dbm(std::int8_t dbm) override { return link_ && link_->set_tx_power_dbm(dbm); }
   bool provisioned() const { return link_.has_value(); }
   const char* device_id() const { return id_.device_id; }
 
