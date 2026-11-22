@@ -50,7 +50,8 @@ class ModuleTableMatchesFirmware(unittest.TestCase):
     def test_every_rev_a_card_has_a_code(self):
         for card, code in CARDS.items():
             self.assertIn(code, MODULES, card)
-            self.assertTrue((ROOT / "hardware/kicad" / card).is_dir(), card)
+            # The cards are archived with the modular node (2026-11-22).
+            self.assertTrue((ROOT / "hardware/archive/modular-2026-11/kicad" / card).is_dir(), card)
 
 
 class FirmwareBoardTableMatchesSchematic(unittest.TestCase):
@@ -65,7 +66,7 @@ class FirmwareBoardTableMatchesSchematic(unittest.TestCase):
 
     def setUp(self):
         self.header = (ROOT / "firmware/esp_idf/main/board_tl_sn_001.h").read_text()
-        parts = json.loads((ROOT / "hardware/kicad/TL-SN-001/intended-netlist.json").read_text())["parts"]
+        parts = json.loads((ROOT / "hardware/archive/modular-2026-11/kicad/TL-SN-001/intended-netlist.json").read_text())["parts"]
         self.consts = {k: int(v, 16) for k, v in re.findall(r"(kExp[ABC])\s*=\s*(0x[0-9A-Fa-f]+)", self.header)}
         # Each TCA9535 by its address straps (A0/A1/A2 = PW pins 21/2/3).
         self.parts = parts
@@ -191,7 +192,9 @@ class Sn002ManifestMatchesFirmware(unittest.TestCase):
             self.assertIn(f"{{pin: P0{n}, net: LED_{name}_N, direction: output, active_low: true}}", self.manifest)
         self.assertIn("{pin: P10, net: PIR_PWR, direction: output}", self.manifest)
         self.assertEqual(self.const("kPirPowerPin"), 8)
-        self.assertIn("unused_pins[0] = {kExp, 0xFE00}", self.header)
+        self.assertIn("{pin: P11, net: TAMPER_DOOR, direction: input}", self.manifest)
+        self.assertEqual(self.const("kBatteryDoorPin"), 9)
+        self.assertIn("unused_pins[0] = {kExp, 0xFC00}", self.header)
 
     def test_battery_thresholds(self):
         for key, field in (("low_mv", "battery_low_mv"), ("critical_mv", "battery_critical_mv")):

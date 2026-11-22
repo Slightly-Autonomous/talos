@@ -55,7 +55,7 @@ expanders:
       - {pin: P06, net: LED_BATT_N, direction: output, active_low: true}
       - {pin: P07, net: LED_FLT_N, direction: output, active_low: true}
       - {pin: P10, net: PIR_PWR, direction: output}
-      - {pin: P11, direction: unused}
+      - {pin: P11, net: TAMPER_DOOR, direction: input}   # high = battery door open (HD-049)
       - {pin: P12, direction: unused}
       - {pin: P13, direction: unused}
       - {pin: P14, direction: unused}

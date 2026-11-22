@@ -8,7 +8,7 @@ import unittest
 from talos_bench.runner import ROOT_PARTS, SLOT_PARTS
 
 ROOT = pathlib.Path(__file__).resolve().parents[3]
-PARTS = json.loads((ROOT / "hardware/kicad/TL-SN-001/intended-netlist.json").read_text())["parts"]
+PARTS = json.loads((ROOT / "hardware/archive/modular-2026-11/kicad/TL-SN-001/intended-netlist.json").read_text())["parts"]
 
 
 def nets(ref):
