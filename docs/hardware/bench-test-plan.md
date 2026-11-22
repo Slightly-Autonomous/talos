@@ -405,3 +405,48 @@ What the decisions became in hardware and firmware:
 - Size of the USB D+ → VBUS backfeed on battery.
 - ESP32-H2 ext1 with five active-high pins (GPIO10–14, ANY_HIGH). Per-pin levels are no longer needed on TL-SN-001: EXP_INT_N is inverted onto EXP_WAKE (HD-034).
 - Whether the HSEC8 socket mates odd fingers to odd pads given the mirrored footprint (HD-002, sample socket).
+
+## 10. TL-SN-002 (self-contained node, ADR 0019)
+
+TL-SN-002 has its sensors soldered on, so stages 1-3 and 6 (TL-DBG-001, TL-TEST-001, cards,
+per-slot rails, branch isolation, flipped cards) do not apply to it; they stay for the archived
+TL-SN-001. **Everything here is PROVISIONAL**: the schematic does not exist yet, so diagnoses
+name parts and nets, not reference designators.
+
+**One command over USB-C** flashes, programs the identity and runs the automated steps:
+
+```bash
+cd firmware/esp_idf && idf.py set-target esp32h2 build      # TL-SN-002 is the default target
+cd ../../tools/bench
+python3 -m talos_bench.flash --port /dev/cu.usbmodem1101 --unit-serial SN2-A-0007
+# board flashed at assembly (JLCPCB): add --no-flash. Bench plan alone:
+python3 -m talos_bench --board TL-SN-002 --port /dev/cu.usbmodem1101
+```
+
+Flashing uses `esptool --chip esp32h2 ... write_flash @build/flash_args` or `idf.py flash`; with
+neither installed the step reports `skipped`. Recovery when USB will not enumerate: hold BOOT,
+press RST (ROM download mode), or the UART0 Tag-Connect pads (GPIO23/24).
+
+| Test | What | Automated |
+|---|---|---|
+| S-M00 | node answers; the lamp expander (0x20) took its safe state | yes |
+| S-M16 | board identity `TL-SN-002` rev `A` with a serial (D-09) | yes |
+| N-05 | `selftest i2c`: the bus holds exactly 0x19 LIS2DW12, 0x20 TCA9535, 0x35 TMAG5273A2, 0x44 SHT40 | yes |
+| N-01..N-04 | each built-in sensor (MAG, VIB, PIR, ENV) is discovered and running | yes |
+| N-06 | LIS2DW12 self-test, SHT40 heater | yes |
+| N-07 | PIR rail: PIR_PWR (EXP P10) on after discovery, follows `rail 2 aon off/on`. Scope the RC-filtered rail | yes + scope |
+| N-08 | lamps: dark on battery; service mode lights LINK and MAG/VIB/PIR/ENV. Look at all eight in the USER lamp test; PWR (hardware, VBUS) lit on USB only | yes + look |
+| N-09 | buttons: USER short = test report + 10 s lamp test, USER long (3 s) = commissioning request, BOOT = service mode, RST = new boot epoch | sim; manual on a board |
+| N-10 | USB/battery switchover: USB_PRESENT (GPIO4) reads USB on USB; unplugged it reads battery and the node keeps running | USB side yes; battery side on the meter (the console is the USB) |
+| N-12 | AA pair under load reads above 2.2 V with a level estimate (Li-FeS2 curve, `power`) | yes |
+| S-M17 | tamper loop (lid + wall switches in series, GPIO13) reads closed | yes |
+| S-M19 | the lid opened in deep sleep wakes the node on GPIO13 | sim; manual until deep-sleep entry is wired |
+
+Still to verify on the bench (provisional numbers in firmware and manifest):
+- TMAG5273A2 default address 0x35, range +/-133 mT and 246 LSB/mT (datasheet table), and the
+  10/20 mT open/closed thresholds on the A2's coarser threshold step (1.04 mT).
+- PIR223D-S0 warm-up and block timing (firmware: 30 s minimum, fault at 60 s) and its current.
+- AA under load: the 2.2 V low threshold (TPS63900 >= 1.8 V in an 18 dBm burst at -40 C,
+  hardware/results/power-budget-sn2.md), the Li-FeS2 level curve, cold behaviour.
+- TPS2116 switchover without a reset when USB is unplugged mid-TX.
+- Tamper RC (1 MOhm / 10 nF) against the 50 ms debounce; USER 100k pull-down; VBUS divider.

@@ -32,7 +32,7 @@ RESET,SW_SPST_PTS810,jlc,C221895,PTS810SJG250SMTRLFS,C&K,,SJM variant low stock;
 BOOT,SW_SPST_PTS810,jlc,C221895,PTS810SJG250SMTRLFS,C&K,,SJM variant low stock; SJG is the same body
 *,TestPoint_Pad_D1.0mm,board_feature,,,,,bare copper pad
 sensor_edge_v1 card fingers,CardEdge_sensor_edge_v1_2x10_P0.8mm,board_feature,,,,,gold fingers are part of the PCB
-ESP32-H2-MINI-1-H4S,ESP32-H2-MINI-1,not_placed,C47967030,ESP32-H2-MINI-1-H4S,Espressif,HD-023,JLCPCB stock 2 (2026-11-20): consign or buy from a distributor; only the -1U (U.FL antenna) has stock
+ESP32-H2-MINI-1-H4S,ESP32-H2-MINI-1,jlc_global,C47967030,ESP32-H2-MINI-1-H4S,Espressif,HD-023,owner-approved 2026-11-21: JLCPCB global-sources it (DigiKey) and places it; 9-20 business days
 TPS22917DBVR,SOT-23-6,jlc,C2681320,TPS22917DBVR,TI,,
 TCA9546APWR,TSSOP-16_4.4x5mm_P0.65mm,jlc,C201653,TCA9546APWR,TI,,
 TCA9535PWR,TSSOP-24_4.4x7.8mm_P0.65mm,jlc,C130204,TCA9535PWR,TI,,
@@ -64,5 +64,11 @@ TC2030 PROG,Tag-Connect_TC2030-IDC-NL_2x03_P1.27mm_Vertical,board_feature,,,,,Ta
 LED_GREEN,LED_0603_1608Metric,jlc,C2986030,19-217/G7C-AN1P2/6T,Everlight,,yellow-green 2.0 V: lights on a 3.3 V anode at 0.5 mA (InGaN green needs ~2.6 V)
 LED_RED,LED_0603_1608Metric,jlc,C2286,KT-0603R,Hubei KENTO,,red basic
 1u/25V,C_0402_1005Metric,jlc,C52923,CL05A105KA5NQNC,Samsung,,25 V X5R basic
-GND hook,TestPoint_Keystone_5000-5004_Miniature,not_placed,,5001,Keystone,HD-042,THT loop: hand-fitted after assembly
+GND hook,TestPoint_Keystone_5000-5004_Miniature,jlc,C238122,5001,Keystone,,THT loop; JLCPCB through-hole assembly (stock found 2026-11-21, closes HD-042)
 10n,C_0402_1005Metric,jlc,C15195,CL05B103KB5NNNC,Samsung,,50 V X7R basic (tamper RC)
+2xAA Li-FeS2,BatteryHolder_Keystone_2462_2xAA,jlc,C3029547,2462,Keystone,,through-hole 2xAA holder; JLCPCB THT assembly; KiCad stock footprint
+100,R_0402_1005Metric,jlc,C25076,0402WGF1000TCE,UNI-ROYAL,,basic
+USER,SW_SPST_PTS810,jlc,C221895,PTS810SJG250SMTRLFS,C&K,,same body as RESET/BOOT
+TPS2116DRLR,SOT-583-8,jlc,C3235557,TPS2116DRLR,TI,,USB/battery priority power mux
+TMAG5273A2QDBVT,SOT-23-6,jlc,C3020565,TMAG5273A2QDBVT,TI,,3-axis Hall A2 range; stock ~490: watch
+PIR223D-S0,PIR_Panasonic_EKMB_TO-5,jlc,C2887901,PIR223D-S0,NEWOPTO,,digital PIR TO-5; JLCPCB THT assembly; pinout VERIFY

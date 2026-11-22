@@ -33,6 +33,16 @@ enum class EventKind : std::uint8_t {
   // loop cut); b = 1 for a state report (cold boot), 0 for a transition.
   // Opening is P0, a restore P1. Appended: never renumber the kinds above.
   kTamper,
+  // USER button (TL-SN-002, ADR 0019), slot = kNoSlot, P1. a = UserButtonAction.
+  // A short press also sends a heartbeat (the test report) and runs the lamp
+  // test; a long press asks the hub to commission or pair the node. Appended.
+  kUserButton,
+};
+
+// EventKind::kUserButton `a`.
+enum class UserButtonAction : std::int32_t {
+  kTestReport = 1,         // short press: "is this node alive and heard?"
+  kCommissionRequest = 2,  // long press (>= UserButton::kLongPressMs): commission / pair
 };
 
 struct DeviceEvent {
@@ -47,6 +57,16 @@ struct DeviceEvent {
   std::uint32_t b = 0;
   bool operator==(const DeviceEvent&) const = default;
 };
+
+// Board-level debug lamps besides the per-slot (per-sensor) ones (TL-SN-002,
+// ADR 0019). Each is an expander pin, active low (BoardSupport::lamp_n).
+enum class Lamp : std::uint8_t {
+  kLink = 0,     // Thread/hub state: solid = joined, slow blink = joining or failing
+  kTamper = 1,   // enclosure loop open
+  kBattery = 2,  // cells low or missing
+  kFault = 3,    // any fault (sensor, board, epoch) in the last kFaultLampMs
+};
+inline constexpr std::size_t kLampCount = 4;
 
 enum class PowerMode : std::uint8_t { kNormal = 0, kLowPower = 1, kCritical = 2 };
 // kUnknown: the source could not be read (expander or charger not answering).

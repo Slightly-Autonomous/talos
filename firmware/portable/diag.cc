@@ -6,6 +6,7 @@
 #include <cstring>
 
 #include "common/sha256/sha256.h"
+#include "firmware/portable/battery.h"
 #include "firmware/portable/serial_link.h"
 
 namespace talos::fw {
@@ -140,6 +141,7 @@ constexpr std::uint8_t kCardExp = TestCardDriver::kExpanderAddr;
 }  // namespace
 
 bool Diag::select(std::uint8_t slot) {
+  if (p_.board.mux_address == 0) return true;  // no mux (TL-SN-002): root bus
   const auto branch = p_.board.slots[slot].i2c_branch;
   if (branch == 0xFF) return false;
   const std::uint8_t mask = static_cast<std::uint8_t>(1u << branch);
@@ -147,6 +149,7 @@ bool Diag::select(std::uint8_t slot) {
 }
 
 void Diag::deselect() {
+  if (p_.board.mux_address == 0) return;
   const std::uint8_t none = 0;
   p_.i2c.write(p_.board.mux_address, &none, 1);
 }
@@ -252,6 +255,7 @@ bool Diag::cmd_id(IDiagOut& out) {
       .boolean("board_ok", rt_.board_ok())
       .num("queued", static_cast<std::int64_t>(rt_.queued()))
       .num("mode", static_cast<std::int64_t>(rt_.power_mode()))
+      .str("target", p_.board.name ? p_.board.name : "")
       .str("board", info ? info->board : "")
       .str("rev", info ? info->revision : "")
       .str("serial", info ? info->serial : "")
@@ -275,6 +279,7 @@ bool Diag::cmd_slots(IDiagOut& out) {
         .num("fault", static_cast<std::int64_t>(st.fault))
         .boolean("enabled", st.enabled)
         .num("present", present ? (*present ? 1 : 0) : -1);
+    if (rt_.fixed(i)) line.boolean("built_in", true);  // TL-SN-002 (ADR 0019)
     if (io_) {
       line.boolean("aon", io_->rail_on(i, Rail::kAlwaysOn3v3))
           .boolean("sw", io_->rail_on(i, Rail::kSwitched3v3));
@@ -290,6 +295,18 @@ bool Diag::cmd_power(IDiagOut& out, const char*& err) {
       .str("source", source_name(p_.power.source()))
       .num("battery_mv", p_.power.battery_mv())
       .emit(out);
+  if (p_.board.primary_battery) {
+    // TL-SN-002: primary AA cells, no charger. Level from the voltage under load.
+    JsonLine()
+        .str("t", "battery")
+        .str("chemistry", "li-fes2-2s")
+        .num("loaded_mv", rt_.battery_mv())
+        .num("percent", lifes2_pair_percent(rt_.battery_mv()))
+        .boolean("low", rt_.battery_low())
+        .num("mode", static_cast<std::int64_t>(rt_.power_mode()))
+        .emit(out);
+    return true;
+  }
   if (!io_) return true;
   const auto st = io_->charger_status();
   if (!st) {
@@ -428,6 +445,8 @@ bool Diag::cmd_board_id(const Args& a, IDiagOut& out, const char*& err) {
                       std::strcmp(have->serial, want.serial) == 0;
     if (have && !same) {
       err = "board-id already programmed (write-once)";
+    } else if (!have && p_.board.name && std::strcmp(want.board, p_.board.name) != 0) {
+      err = "board-id names another board than this firmware's table";
     } else if (!have && !save_board_info(p_.store, want)) {
       err = "store write failed";
     }
@@ -464,7 +483,15 @@ bool Diag::cmd_led(const Args& a, IDiagOut& out, const char*& err) {
       .boolean("external_power", rt_.external_power());
   std::int32_t lit[kSlots];
   for (std::uint8_t i = 0; i < kSlots; ++i) lit[i] = rt_.slot_led_lit(i) ? 1 : 0;
-  line.nums("slot_lit", lit, kSlots).emit(out);
+  line.nums("slot_lit", lit, kSlots);
+  bool any_lamp = false;
+  for (const auto& l : p_.board.lamp_n) any_lamp |= l.wired();
+  if (any_lamp) {  // TL-SN-002 board lamps, in Lamp order: link, tamp, batt, flt
+    std::int32_t lamps[kLampCount];
+    for (std::size_t i = 0; i < kLampCount; ++i) lamps[i] = rt_.lamp_lit(static_cast<Lamp>(i));
+    line.nums("lamp_lit", lamps, kLampCount).boolean("lamp_test", rt_.lamp_test_active());
+  }
+  line.emit(out);
   return err == nullptr;
 }
 
@@ -675,7 +702,24 @@ bool Diag::selftest_i2c(IDiagOut& out) {
   }
   add(p_.board.tamper_n.address);  // EXP_C: slot LEDs and the tamper loop
   for (const auto& led : p_.board.slot_led_n) add(led.address);
+  for (const auto& lamp : p_.board.lamp_n) add(lamp.address);
   add(p_.board.charger_address);
+  // Built-in sensors (TL-SN-002) sit on the root bus.
+  for (std::uint8_t i = 0; i < kSlots; ++i) {
+    switch (static_cast<ModuleCode>(p_.board.slots[i].fixed_module)) {
+      case ModuleCode::kTmag5273A2:
+        add(Tmag5273ContactDriver::kAddr);
+        break;
+      case ModuleCode::kLis2dw12:
+        add(Lis2dw12Driver::kAddr);
+        break;
+      case ModuleCode::kSht40:
+        add(Sht40Driver::kAddr);
+        break;
+      default:
+        break;
+    }
+  }
   for (std::size_t i = 1; i < nwant; ++i) {  // sort for a stable comparison
     for (std::size_t j = i; j > 0 && want[j - 1] > want[j]; --j) {
       const auto t = want[j];
@@ -701,19 +745,21 @@ bool Diag::selftest_i2c(IDiagOut& out) {
   // Mux control register: every single-branch and multi-branch mask reads back.
   bool mux_ok = true;
   std::int32_t bad = -1;
-  for (std::uint8_t m = 0; m <= 0x0F && mux_ok; ++m) {
+  for (std::uint8_t m = 0; p_.board.mux_address != 0 && m <= 0x0F && mux_ok; ++m) {
     std::uint8_t r = 0xFF;
     mux_ok = p_.i2c.write(p_.board.mux_address, &m, 1) &&
              p_.i2c.write_read(p_.board.mux_address, nullptr, 0, &r, 1) && r == m;
     if (!mux_ok) bad = m;
   }
   deselect();
-  JsonLine()
-      .str("t", "i2c.mux_readback")
-      .boolean("ok", mux_ok)
-      .num("first_bad_mask", bad)
-      .emit(out);
-  all &= mux_ok;
+  if (p_.board.mux_address != 0) {
+    JsonLine()
+        .str("t", "i2c.mux_readback")
+        .boolean("ok", mux_ok)
+        .num("first_bad_mask", bad)
+        .emit(out);
+    all &= mux_ok;
+  }
 
   if (io_) {
     for (std::size_t i = 0; i < nwant; ++i) {

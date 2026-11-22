@@ -8,3 +8,11 @@ cc_library(
     visibility = ["//visibility:public"],
     deps = ["//firmware/portable"],
 )
+
+# TL-SN-002 (ADR 0019), the default ESP-IDF target (Kconfig TALOS_BOARD).
+cc_library(
+    name = "board_tl_sn_002",
+    hdrs = ["board_tl_sn_002.h"],
+    visibility = ["//visibility:public"],
+    deps = ["//firmware/portable"],
+)

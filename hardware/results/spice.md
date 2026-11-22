@@ -114,6 +114,41 @@ How long until a card's AON rail is below 0.5 V, with and without the TPS22917 q
 
 - pass = below 0.5 V within a 20 ms off time (EST firmware power-cycle window)
 
+## B10 TL-SN-002 USB priority threshold (TPS2116 PR1)
+
+At what VBUS does the mux pick USB over the AA cells, across VREF and resistor tolerance?
+
+| Case | min (V) | max (V) | Result |
+|---|---:|---:|---|
+| resistors ±1% | 3.355 | 4.055 | pass |
+| resistors ±5% | 3.167 | 4.303 | pass |
+
+- USB at the device can droop to ~4.4 V; must still win
+
+## B11 TL-SN-002 USB unplug during a TX burst
+
+Does VSYS stay above the TPS63900's 1.8 V minimum while the mux switches from USB to the cells?
+
+| Case | dip (V) | VSYS min (V) | Result |
+|---|---:|---:|---|
+| VBUS 4.4 V, cells 2.2 V | 0.123 | 2.200 | pass |
+| VBUS 4.4 V, cells 3.0 V | 0.123 | 3.000 | pass |
+| VBUS 5.0 V, cells 2.2 V | 0.109 | 2.200 | pass |
+| VBUS 5.0 V, cells 3.0 V | 0.109 | 3.000 | pass |
+
+- 2.2 V = the firmware low-battery threshold (power-budget-sn2.md)
+
+## B12 TL-SN-002 PIR rail from an expander pin
+
+Does the TCA9535 pin power the PIR through 100 R + 4.7 uF within its current limit, and how fast does PIR_VDD reach the PIR's 2.7 V minimum?
+
+| Case | pin peak (mA) | to 2.7 V (ms) | PIR_VDD (V) | Result |
+|---|---:|---:|---:|---|
+| VDD 3.0 V | 8.569 | 3.805 | 2.798 | pass |
+| VDD 3.6 V | 10.283 | 2.285 | 3.358 | pass |
+
+- firmware waits for the PIR223D warm-up after enabling the rail anyway
+
 ## Parameters
 
 | Name | Value | Source |
@@ -162,3 +197,13 @@ How long until a card's AON rail is below 0.5 V, with and without the TPS22917 q
 | card_idle_r_mod004 | 1.65e+06 | EST: TL-MOD-004 idle ~2 uA at 3.3 V (SHT40 + EEPROM sleep) |
 | card_idle_r_mod003 | 66000 | EST: TL-MOD-003 idle ~50 uA at 3.3 V (LIS2DW12 low-power wake mode) |
 | por_v | 0.5 | EST: discharged enough for every card part to see a clean power-on reset |
+| tps2116_vref_min | 0.92 | TPS2116 PR1 VREF min (SLVSFG1A 6.5) |
+| tps2116_vref_max | 1.08 | TPS2116 PR1 VREF max (SLVSFG1A 6.5) |
+| tps2116_tsw | 1.77e-05 | TPS2116 break-before-make switchover, worst listed (VIN 1.8 V) (SLVSFG1A 6.6) |
+| sn2_vsys_c | 2e-05 | TL-SN-002 C7 10 uF + C11 10 uF on VSYS/SYS_REG |
+| sn2_vin_min | 1.8 | TPS63900 input minimum (SLVSET3D) |
+| pir_i | 1e-05 | PIR223D-S0 supply current (NEWOPTO/LCSC listing) |
+| pir_rc_r | 330 | TL-SN-002 R17 PIR supply filter (330 R; 100 R peaked at ~30 mA) |
+| pir_rc_c | 4.7e-06 | TL-SN-002 C18 PIR supply filter |
+| tca_pin_max | 0.05 | TCA9535 max current per I/O (SCPS201 abs max 50 mA) |
+| pir_vmin | 2.7 | PIR223D-S0 supply minimum (listing) |

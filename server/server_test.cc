@@ -1384,4 +1384,75 @@ TEST(SupabaseAuth, OutOfRangeTimeClaimsIssuerAndDottedLocalTokens) {
 }
 
 }  // namespace
+// TL-SN-002 (ADR 0019): USER-button events are diagnostics (never journaled,
+// never acted on); AA low battery asks for new cells; a built-in sensor fault
+// does not say "reseat".
+TEST(DeviceRegistry, Sn002UserButtonAaLowBatteryAndBuiltInFaults) {
+  DeviceRegistry reg;
+  const DeviceId dev("node-sn2");
+  const Timestamp now{1'000'000};
+  fw::DeviceEvent press;
+  press.boot_epoch = 1;
+  press.seq = 1;
+  press.kind = fw::EventKind::kUserButton;
+  press.a = static_cast<std::int32_t>(fw::UserButtonAction::kCommissionRequest);
+  ASSERT_TRUE(reg.observe_unjournaled(dev, press, now));
+  EXPECT_FALSE(reg.observe_unjournaled(dev, press, now));  // a replay changes nothing
+  const auto* t = reg.find(dev);
+  ASSERT_TRUE(t && t->commission_requested);
+  EXPECT_EQ(reg.diagnostics(dev).back().kind(), "user.button");
+  auto h = project_health(dev, t, Freshness::kFresh, now, now, Millis{60'000}, nullptr, false,
+                          std::nullopt, true, true);
+  EXPECT_EQ(h.status(), talos::v1::HEALTH_STATUS_HEALTHY);
+  bool noted = false;
+  for (const auto& e : h.evidence()) noted |= e.find("commissioning") != std::string::npos;
+  EXPECT_TRUE(noted);
+
+  fw::DeviceEvent beat;
+  beat.boot_epoch = 1;
+  beat.seq = 2;
+  beat.kind = fw::EventKind::kHeartbeat;
+  beat.a = 2'150;
+  beat.b = static_cast<std::uint32_t>(fw::PowerMode::kLowPower);
+  reg.observe(dev, beat, now);
+  h = project_health(dev, reg.find(dev), Freshness::kFresh, now, now, Millis{60'000}, nullptr,
+                     false, std::nullopt, true, true);
+  EXPECT_EQ(h.status(), talos::v1::HEALTH_STATUS_LOW_POWER);
+  EXPECT_NE(h.recommended_action().find("AA"), std::string::npos);
+  EXPECT_EQ(h.recommended_action().find("Charge"), std::string::npos);
+
+  beat.seq = 3;
+  beat.b = static_cast<std::uint32_t>(fw::PowerMode::kNormal);
+  reg.observe(dev, beat, now);
+  fw::DeviceEvent fault;
+  fault.boot_epoch = 1;
+  fault.seq = 4;
+  fault.slot = 2;
+  fault.kind = fw::EventKind::kModuleFault;
+  fault.a = static_cast<std::int32_t>(fw::ModuleFault::kWarmupTimeout);
+  ASSERT_TRUE(reg.observe_unjournaled(dev, fault, now));
+  h = project_health(dev, reg.find(dev), Freshness::kFresh, now, now, Millis{60'000}, nullptr,
+                     false, std::nullopt, true, true);
+  EXPECT_EQ(h.status(), talos::v1::HEALTH_STATUS_FAULTED);
+  EXPECT_EQ(h.recommended_action().find("Reseat"), std::string::npos);
+  EXPECT_NE(h.evidence(0).find("motion sensor"), std::string::npos);
+  // Red team: on USB with no cells the mode stays normal; health must not say healthy.
+  beat.seq = 5;
+  beat.a = 0;
+  beat.b = static_cast<std::uint32_t>(fw::PowerMode::kNormal);
+  DeviceRegistry usb_only;
+  usb_only.observe(dev, beat, now);
+  h = project_health(dev, usb_only.find(dev), Freshness::kFresh, now, now, Millis{60'000}, nullptr,
+                     false, std::nullopt, true, true);
+  EXPECT_EQ(h.status(), talos::v1::HEALTH_STATUS_DEGRADED);
+  EXPECT_NE(h.recommended_action().find("AA"), std::string::npos);
+  // A modular board's 0 mV heartbeat keeps its old meaning.
+  h = project_health(dev, usb_only.find(dev), Freshness::kFresh, now, now, Millis{60'000}, nullptr,
+                     false, std::nullopt, false, false);
+  EXPECT_EQ(h.status(), talos::v1::HEALTH_STATUS_HEALTHY);
+  EXPECT_TRUE(board_has_primary_cells(BoardId("sensor_node_v2")));
+  EXPECT_FALSE(board_has_primary_cells(BoardId("sensor_node_proto_a")));
+  EXPECT_FALSE(board_has_built_in_sensors(std::nullopt));
+}
+
 }  // namespace talos::server

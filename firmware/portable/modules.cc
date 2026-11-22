@@ -12,6 +12,8 @@ constexpr ModuleInfo kRegistry[] = {
     {ModuleCode::kReedContact, "reed_contact_v1", true, false, true, 0},
     {ModuleCode::kTmag5273Contact, "tl_mod_001_magnetic", true, false, true, 0},
     {ModuleCode::kTlMod002Pir, "tl_mod_002_pir", true, false, true, 0},
+    {ModuleCode::kTmag5273A2, "tmag5273a2_magnetic", true, false, true, 0},
+    {ModuleCode::kPir223d, "pir223d_motion", true, false, true, 0},
     {ModuleCode::kLis2dw12, "vibration_lis2dw12_v1", true, false, true, 1},
     {ModuleCode::kTlMod003Imu, "tl_mod_003_imu", true, false, true, 0},
     {ModuleCode::kSht40, "environment_sht40_v1", false, false, false, 1},
@@ -72,6 +74,7 @@ bool reset_mux(Platform& p) {
 }  // namespace
 
 bool SlotIo::select_branch() {
+  if (p_.board.mux_address == 0) return true;  // no mux: the device is on the root bus
   const auto branch = wiring().i2c_branch;
   if (branch == 0xFF) return false;
   const std::uint8_t mask = static_cast<std::uint8_t>(1u << branch);
@@ -82,7 +85,7 @@ bool SlotIo::select_branch() {
 }
 
 bool SlotIo::deselect() {
-  if (!selected_) return true;
+  if (!selected_ || p_.board.mux_address == 0) return true;
   selected_ = false;
   const std::uint8_t none = 0;
   if (p_.i2c.write(p_.board.mux_address, &none, 1)) return true;
@@ -166,22 +169,22 @@ void PirDriver::poll(SlotIo& io, IEventSink& sink, TimeMs now) {
     } else {
       seen_low_at_ = now;
     }
-    if (now - powered_at_ >= kWarmMinMs && !high && now - low_since_ >= kQuietMs) {
+    if (now - powered_at_ >= timing_.warm_min_ms && !high && now - low_since_ >= timing_.quiet_ms) {
       warming_ = false;
-    } else if (now - powered_at_ >= kWarmMaxMs) {
+    } else if (now - powered_at_ >= timing_.warm_max_ms) {
       if (!timeout_reported_) {
         timeout_reported_ = true;
         sink.emit(io.slot(), EventKind::kModuleFault, Priority::kP2Health, false,
                   static_cast<std::int32_t>(ModuleFault::kWarmupTimeout), 0);
       }
       // Still toggling: someone kept moving through warm-up (red team RT-08).
-      if (now - seen_low_at_ <= kToggleWindowMs) warming_ = false;
+      if (now - seen_low_at_ <= timing_.toggle_window_ms) warming_ = false;
     }
     if (warming_) return;
   }
   if (high && !reported_) {
     if (high_since_ == kNever) high_since_ = now;
-    if (now - high_since_ >= kGlitchMs) {
+    if (now - high_since_ >= timing_.glitch_ms) {
       reported_ = true;
       sink.emit(io.slot(), EventKind::kMotion, Priority::kP0Critical, true, 0, 0);
     }
@@ -208,7 +211,7 @@ bool PirDriver::resume(SlotIo& io, IEventSink& sink, TimeMs now, std::uint8_t st
 
 TimeMs PirDriver::due_ms(TimeMs) const {
   if (warming_) return next_check_;  // check the settle condition a few times a second
-  if (high_since_ != kNever && !reported_) return high_since_ + kGlitchMs;
+  if (high_since_ != kNever && !reported_) return high_since_ + timing_.glitch_ms;
   return kNever;
 }
 
@@ -247,8 +250,9 @@ void ContactDriver::poll(SlotIo& io, IEventSink& sink, TimeMs now) {
 
 // --- TMAG5273 contact -------------------------------------------------------------------
 
-std::uint8_t Tmag5273ContactDriver::threshold_code(std::int32_t ut) {
-  std::int32_t code = (ut * 128 + 39'999) / 40'000;
+std::uint8_t Tmag5273ContactDriver::threshold_code(std::int32_t ut, std::int32_t range_mt) {
+  const std::int32_t full_ut = range_mt * 1000;
+  std::int32_t code = (ut * 128 + full_ut - 1) / full_ut;
   if (code < 1) code = 1;
   if (code > 127) code = 127;
   return static_cast<std::uint8_t>(code);
@@ -260,7 +264,7 @@ bool Tmag5273ContactDriver::read_field(SlotIo& io, std::int32_t (&ut)[3]) {
   for (int axis = 0; axis < 3; ++axis) {
     const auto v = static_cast<std::int16_t>(
         static_cast<std::uint16_t>((raw[2 * axis] << 8) | raw[2 * axis + 1]));
-    ut[axis] = static_cast<std::int32_t>(v) * 1000 / kLsbPerMt;
+    ut[axis] = static_cast<std::int32_t>(v) * 1000 / lsb_per_mt_;
   }
   return true;
 }
@@ -293,7 +297,7 @@ bool Tmag5273ContactDriver::arm(SlotIo& io, const std::int32_t (&ut)[3]) {
   const std::uint8_t channels = open_ ? 0x7 : static_cast<std::uint8_t>(1u << dominant);
   for (int axis = 0; axis < 3; ++axis) {
     const bool checked = open_ || axis == dominant;
-    const std::uint8_t code = checked ? threshold_code(open_ ? kCloseUt : kOpenUt) : 0;
+    const std::uint8_t code = checked ? threshold_code(open_ ? kCloseUt : kOpenUt, range_mt_) : 0;
     if (!io.reg_write(kAddr, static_cast<std::uint8_t>(kXThr + axis), code)) return false;
   }
   return io.reg_write(kAddr, kSensorConfig2, open_ ? 0x00 : 0x20) &&  // MAG_THR_DIR: above/below

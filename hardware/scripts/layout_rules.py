@@ -30,7 +30,7 @@ from silk_pass import LABELS  # noqa: E402
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 KICAD = ROOT / "hardware" / "kicad"
-BOARDS = ["TL-SN-001", "TL-MOD-001", "TL-MOD-002", "TL-MOD-003", "TL-MOD-004", "TL-TEST-001", "TL-DBG-001"]
+BOARDS = ["TL-SN-001", "TL-SN-002", "TL-MOD-001", "TL-MOD-002", "TL-MOD-003", "TL-MOD-004", "TL-TEST-001", "TL-DBG-001"]
 CARDS = {"TL-MOD-001", "TL-MOD-002", "TL-MOD-003", "TL-MOD-004", "TL-TEST-001"}
 mm = pcbnew.ToMM
 
@@ -43,8 +43,12 @@ TEMPLATE_RULES = [
     ("C11", "SYS_REG", "U5", ("1", "10"), 3.5),
     ("C12", "V3V3_REG", "U5", ("6",), 3.5),
 ]
-HOLES = {"TL-SN-001": 2.7, "TL-DBG-001": 3.2}
+HOLES = {"TL-SN-001": 2.7, "TL-SN-002": 2.7, "TL-DBG-001": 3.2}
 LAMP_STRIP = ("D1", "D8", "D9", "D10", "D11", "D12")
+# TL-SN-002 (ADR 0019): the same TPS63900 template, lamps on the left edge, SHT40 on the slotted tongue,
+# the Hall sensor on the right edge facing the door magnet.
+SN2_TEMPLATE = [r for r in TEMPLATE_RULES if r[2] == "U5"]
+SN2_LAMPS = ("D8", "D1", "D9", "D10", "D11", "D12", "D13", "D14", "D15", "D16")
 
 
 def _pad(fp, net=None, number=None):
@@ -107,6 +111,31 @@ def check(name: str, status: dict) -> list[str]:
             gap = mm(edge.GetBottom() - fps[ref].GetPosition().y)
             if gap > 3.0:
                 problems.append(f"{ref} is {gap:.1f} mm from the bottom edge: the lamp strip must stay on it (M-06)")
+
+    if name == "TL-SN-002":
+        for part, net, anchor, pins, limit in SN2_TEMPLATE:
+            pad = _pad(fps[part], net)
+            d = min(_dist(pad, _pad(fps[anchor], number=n)) for n in pins)
+            if d > limit:
+                problems.append(f"{part} {net} pad is {d:.2f} mm from {anchor} pin {'/'.join(pins)} "
+                                f"(template allows {limit}) (HD-036)")
+        ep = max(fps["U5"].Pads(), key=lambda p: p.GetSize().x * p.GetSize().y)
+        n = sum(1 for t in board.GetTracks() if t.GetClass() == "PCB_VIA" and ep.HitTest(t.GetPosition()))
+        if n < 2 and "thermal_vias" not in waived:
+            problems.append(f"U5 thermal pad has {n} via(s), needs >= 2 (HD-041)")
+        for ref in SN2_LAMPS:
+            gap = mm(fps[ref].GetPosition().x - edge.GetX())
+            if gap > 3.0:
+                problems.append(f"{ref} is {gap:.1f} mm from the left edge: the lamp strip must stay on it (M-06)")
+        import gen_pcbs as _g  # tongue geometry lives with the generator
+        tx0 = min(c[0] for c in _g.SN2_TONGUE_SLOTS)
+        ty0, ty1 = _g.SN2_TONGUE_SLOTS[0][3], _g.SN2_TONGUE_SLOTS[1][1]
+        x, y = (mm(v) - o for v, o in zip((fps["U9"].GetPosition().x, fps["U9"].GetPosition().y), (_g.ORIGIN)))
+        if not (x > tx0 and ty0 < y < ty1):
+            problems.append(f"SHT40 U9 at ({x:.1f}, {y:.1f}) is off the thermal tongue")
+        gap = mm(edge.GetRight() - fps["U6"].GetPosition().x)
+        if gap > 3.0:
+            problems.append(f"Hall sensor U6 is {gap:.1f} mm from the right edge (it must face the door magnet)")
 
     if name in CARDS:
         j1 = fps["J1"]

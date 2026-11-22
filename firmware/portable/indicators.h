@@ -212,4 +212,59 @@ class ServiceButton {
   LevelDebouncer level_{kDebounceMs};
 };
 
+// --- USER button (TL-SN-002, ADR 0019) ---------------------------------------------------
+
+// The USER button (to 3V3, pull-down: high = pressed). Debounced like BOOT. A
+// press released before kLongPressMs is a short press (reported on release); a
+// press held kLongPressMs is a long press, reported once while still held, and
+// its release reports nothing more. A button already held at a cold boot does
+// nothing until it was seen released; after a deep-sleep wake from this line the
+// press that woke the node counts from boot (begin_held()).
+class UserButton {
+ public:
+  enum class Press : std::uint8_t { kNone, kShort, kLong };
+  static constexpr std::uint32_t kDebounceMs = 30;
+  static constexpr std::uint32_t kLongPressMs = 3'000;
+
+  Press sample(bool pressed, TimeMs now);
+  // The press that woke the node from deep sleep started at `now`.
+  void begin_held(TimeMs now);
+  bool held() const { return held_; }
+  // Next time sample() must run without an edge: debounce end, or the long-press mark.
+  TimeMs due_ms() const;
+  bool pending() const { return level_.pending() || (held_ && !long_sent_ && armed_); }
+
+ private:
+  LevelDebouncer level_{kDebounceMs};
+  bool armed_ = false;  // seen released at least once (or woken by it)
+  bool held_ = false;
+  bool long_sent_ = false;
+  TimeMs pressed_at_ = 0;
+};
+
+// --- Board lamps (TL-SN-002) ------------------------------------------------------------
+
+// Lamp test after a short USER press: every lamp blinks kLampTestHalfMs on/off
+// for kLampTestMs, lit even on battery (the owner asked for it), then the normal
+// policy (dark on battery unless service mode) takes over again.
+inline constexpr std::uint32_t kLampTestMs = 10'000;
+inline constexpr std::uint32_t kLampTestHalfMs = 250;
+// FLT stays lit this long after the last fault report of any kind.
+inline constexpr std::uint32_t kFaultLampMs = 10u * 60u * 1000u;
+
+struct LampInputs {
+  bool lit_allowed = false;  // external power or service mode
+  bool joined = false;       // hub answering, link not failing
+  std::optional<bool> tamper_open;
+  bool battery_low = false;
+  bool fault = false;
+};
+
+// Level of each Lamp at `now` (bit n = Lamp n), without the lamp test.
+std::uint8_t lamp_levels(const LampInputs& in, TimeMs now);
+// Lamp-test level at `now` for a test that started at `started`.
+inline bool lamp_test_on(TimeMs started, TimeMs now) {
+  return ((now - started) / kLampTestHalfMs) % 2 == 0;
+}
+
 }  // namespace talos::fw

@@ -84,6 +84,13 @@ class World {
   // Bounces raised since the last call for this device: durations in ms.
   std::vector<std::uint32_t> take_enclosure_bounces(const std::string& device);
 
+  // USER button presses (TL-SN-002) since the last call for this device: hold times in ms.
+  void press_user_button(std::int64_t t_ms, const std::string& device, std::uint32_t hold_ms);
+  std::vector<std::uint32_t> take_user_presses(const std::string& device);
+  // Battery voltage override (ground truth per device), if a stimulus set one.
+  void set_battery(std::int64_t t_ms, const std::string& device, std::uint32_t mv);
+  std::optional<std::uint32_t> battery_mv(const std::string& device) const;
+
   std::optional<std::string> zone_at(Vec2 p) const;
   const std::vector<Segment>& walls() const { return walls_; }
   const std::map<std::string, Actor>& actors() const { return actors_; }
@@ -106,6 +113,8 @@ class World {
   std::vector<TruthEvent> truth_;
   std::map<std::string, bool> enclosures_;
   std::map<std::string, std::vector<std::uint32_t>> bounces_;
+  std::map<std::string, std::vector<std::uint32_t>> user_presses_;
+  std::map<std::string, std::uint32_t> batteries_;
 };
 
 }  // namespace talos::sim

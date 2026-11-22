@@ -227,6 +227,20 @@ TEST(Diag, BoardIdIsWrittenOnceAndSurvivesAWorkingPartitionErase) {
             std::string::npos);
 }
 
+// Red team: the write-once label must name the board this firmware runs, so a
+// flash step that silently left another image (or the wrong --board) can't burn a
+// wrong, permanent identity.
+TEST(Diag, BoardIdMustNameThisFirmwaresBoard) {
+  Bench b;
+  b.boot();
+  EXPECT_NE(record(b.run("id"), "id").find("\"target\":\"TL-SN-001\""), std::string::npos);
+  auto w = b.run("board-id TL-SN-002 A SN2-A-0001");
+  EXPECT_FALSE(done_ok(w)) << w.text;
+  EXPECT_NE(w.text.find("another board"), std::string::npos);
+  EXPECT_NE(record(w, "board_id").find("\"programmed\":false"), std::string::npos);
+  EXPECT_TRUE(done_ok(b.run("board-id TL-SN-001 A SN-A-0001")));
+}
+
 TEST(Diag, LedServiceModeLightsSlotLedsOnBattery) {
   Bench b({{0, ModuleCode::kTlMod004Env}});
   apply_fault(b.node, "no_vin");

@@ -99,8 +99,8 @@ std::optional<ChargerStatus> Bq25186::status() {
 
 // --- BoardIo ----------------------------------------------------------------------------
 
-BoardIo::BoardIo(II2c& i2c, IClock& clock, IBatteryAdc& adc, const BoardSupport& board)
-    : i2c_(i2c), clock_(clock), adc_(adc), board_(board) {
+BoardIo::BoardIo(II2c& i2c, IClock& clock, IBatteryAdc& adc, const BoardSupport& board, IGpio* gpio)
+    : i2c_(i2c), clock_(clock), adc_(adc), board_(board), gpio_(gpio) {
   auto add = [&](const ExpanderPin& p) {
     if (!p.wired() || expander(p.address)) return;
     for (auto& e : expanders_) {
@@ -122,6 +122,7 @@ BoardIo::BoardIo(II2c& i2c, IClock& clock, IBatteryAdc& adc, const BoardSupport&
     add(*p);
   }
   for (const auto& p : board_.slot_led_n) add(p);
+  for (const auto& p : board_.lamp_n) add(p);
   for (const auto& u : board_.unused_pins) {
     if (u.address && u.mask) add(ExpanderPin{u.address, 0});
   }
@@ -152,14 +153,16 @@ BoardIo::BoardIo(II2c& i2c, IClock& clock, IBatteryAdc& adc, const BoardSupport&
   plan(board_.uart_mux_en_n, true);   // UART mux parked
   plan(board_.uart_sel0, false);
   plan(board_.uart_sel1, false);
-  for (const auto& led : board_.slot_led_n) {
+  auto plan_led = [&](const ExpanderPin& led) {
     plan(led, true);  // active low: dark
     for (std::size_t i = 0; i < expanders_.size(); ++i) {
       if (expanders_[i] && led.wired() && expanders_[i]->address() == led.address) {
         led_mask_[i] = static_cast<std::uint16_t>(led_mask_[i] | (1u << led.pin));
       }
     }
-  }
+  };
+  for (const auto& led : board_.slot_led_n) plan_led(led);
+  for (const auto& lamp : board_.lamp_n) plan_led(lamp);
   for (const auto& u : board_.unused_pins) {
     for (std::uint8_t pin = 0; pin < 16; ++pin) {
       if (u.address && (u.mask & (1u << pin))) plan(ExpanderPin{u.address, pin}, false);
@@ -312,6 +315,11 @@ std::uint32_t BoardIo::battery_mv() {
 }
 
 PowerSource BoardIo::source() {
+  // TL-SN-002: the power mux prefers USB (IN1); the VBUS divider says which one runs.
+  if (board_.usb_present_line != 0xFF) {
+    if (!gpio_) return PowerSource::kUnknown;
+    return gpio_->read(board_.usb_present_line) ? PowerSource::kUsb : PowerSource::kBatteryOnly;
+  }
   const auto pg = ref(board_.charger_pg_n);
   const auto st = ref(board_.source_st);
   if (!pg.chip || !st.chip || pg.chip != st.chip) return PowerSource::kUnknown;
@@ -379,6 +387,12 @@ std::optional<bool> BoardIo::tamper_open() {
 bool BoardIo::set_slot_led(std::uint8_t slot, bool on) {
   if (slot >= kSlots || !board_.slot_led_n[slot].wired() || !ensure_ready()) return false;
   return drive(board_.slot_led_n[slot], !on);  // active low
+}
+
+bool BoardIo::set_lamp(Lamp lamp, bool on) {
+  const auto i = static_cast<std::size_t>(lamp);
+  if (i >= kLampCount || !board_.lamp_n[i].wired() || !ensure_ready()) return false;
+  return drive(board_.lamp_n[i], !on);  // active low
 }
 
 void BoardIo::service_interrupt() {

@@ -1,0 +1,19 @@
+menu "Talos node"
+
+choice TALOS_BOARD
+    prompt "Board"
+    default TALOS_BOARD_TL_SN_002
+    help
+        Which board table (BoardSupport) the firmware runs on. TL-SN-002 is the
+        self-contained node (ADR 0019); TL-SN-001 is the archived four-slot
+        modular board (checkpoint f097b26), kept buildable.
+
+config TALOS_BOARD_TL_SN_002
+    bool "TL-SN-002 self-contained sensor node (ADR 0019)"
+
+config TALOS_BOARD_TL_SN_001
+    bool "TL-SN-001 four-slot modular sensor node (archived)"
+
+endchoice
+
+endmenu

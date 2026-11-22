@@ -39,6 +39,22 @@ probe further, for example a seated card that does not answer:
    reference designator).
 5. Sensors answer but the ID EEPROM does not: card fault.
 
+## TL-SN-002 (ADR 0019)
+
+The self-contained node has its sensors built in: no `--expect`, no slot steps.
+
+```bash
+python3 -m talos_bench --board TL-SN-002 --port /dev/cu.usbmodem1101
+# flash + board identity + self-test in one command over USB-C:
+python3 -m talos_bench.flash --port /dev/cu.usbmodem1101 --unit-serial SN2-A-0007 [--no-flash] [--dry-run]
+```
+
+`talos_bench.flash` shells out to `esptool` (with `firmware/esp_idf/build/flash_args`) or `idf.py`; with
+neither installed the flash step is reported `skipped`. Steps: N-01..N-12, S-M16/17/19
+([bench-test-plan.md §10](../../docs/hardware/bench-test-plan.md)). Virtual board:
+`bench_node --board=TL-SN-002` (faults: `tmag_missing`, `lis_missing`, `sht_missing`, `pir_stuck`,
+`lid_open`, `usb_off`, `user_press`, `boot_press`, `battery_mv=<mV>`, ...).
+
 ## Tests
 
 ```bash

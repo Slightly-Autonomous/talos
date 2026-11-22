@@ -294,7 +294,10 @@ class Lis2dw12 final : public RegisterDevice {
 // is the card's WAKE: INT_N through the on-card inverter, so high = asserted.
 class Tmag5273 final : public RegisterDevice {
  public:
-  Tmag5273(Gpio& gpio, std::uint8_t wake_line, const Clock& clock);
+  // range_mt / lsb_per_mt: 40 / 820 for the A1 (TL-MOD-001), 133 / 246 for the
+  // TMAG5273A2 built into TL-SN-002.
+  Tmag5273(Gpio& gpio, std::uint8_t wake_line, const Clock& clock, std::int32_t range_mt = 40,
+           std::int32_t lsb_per_mt = Tmag5273ContactDriver::kLsbPerMt);
   // The magnet moved: new field at the sensor, microtesla per axis.
   void set_field(std::int32_t x_ut, std::int32_t y_ut, std::int32_t z_ut);
   bool write(const std::uint8_t* data, std::size_t n) override;
@@ -311,8 +314,35 @@ class Tmag5273 final : public RegisterDevice {
   Gpio& gpio_;
   std::uint8_t line_;
   const Clock& clock_;
+  std::int32_t range_mt_;
+  std::int32_t lsb_per_mt_;
   TimeMs continuous_since_ = 0;
   std::array<std::int32_t, 3> field_ut_{};
+};
+
+// TL-SN-002 Rev A (ADR 0019): one TCA9535 for eight lamps and PIR_PWR, built-in
+// sensors on the root bus, direct GPIO inputs (tamper, USER, USB_PRESENT).
+// Mirrors firmware/esp_idf/main/board_tl_sn_002.h (pull resistors included).
+class Sn002Board {
+ public:
+  explicit Sn002Board(const BoardSupport& board);
+  Tca9535Model exp;
+  bool lid_open = false;        // lid or wall switch open, or the loop cut: TAMPER high
+  bool usb = true;              // VBUS present: USB_PRESENT high, power mux on USB
+  bool user_pressed = false;    // USER button (to 3V3): high while pressed
+  bool pir_out = false;         // what the PIR's output would do if powered
+  bool pir_stuck_high = false;  // fault: PIR output stuck high whenever powered
+  // PIR_PWR (EXP P10 driven high).
+  bool pir_powered() const;
+  // Lamp lit (its expander pin an output driven low; 2.2k to 3V3).
+  bool lamp(Lamp l) const;
+  bool sensor_led(std::uint8_t slot) const;
+  std::uint32_t pir_power_cycles = 0;  // PIR_PWR high -> low transitions
+
+ private:
+  bool pin_lit(const ExpanderPin& p) const;
+  const BoardSupport& board_;
+  bool pir_was_on_ = false;
 };
 
 // SHT40 (SHT4x datasheet): NACKs while a command is executing (high-precision
@@ -445,6 +475,12 @@ class Node {
   // Present on boards with expanders (tl_sn_001_board()): the real BoardIo runs
   // against these models and is the platform's IPower.
   RevABoard& rev_a() { return *rev_a_; }
+  // Present on TL-SN-002 (tl_sn_002_board()).
+  Sn002Board& sn002() { return *sn002_; }
+  bool is_sn002() const { return sn002_.has_value(); }
+  // Drive a sensor's output line: on TL-SN-002 the PIR line only follows while
+  // PIR_PWR is on; everything else is a plain GPIO level.
+  void set_line(std::uint8_t line, bool level);
   BoardIo& board_io() { return *board_io_; }
   bool has_board_io() const { return board_io_.has_value(); }
   void remove(std::uint8_t slot);
@@ -495,15 +531,18 @@ class Node {
   std::array<bool, 32> last_lines_{};
   TimeMs next_poll_ = 0;
   IPower& select_power();
-  std::optional<RevABoard> rev_a_;
-  std::optional<BoardIo> board_io_;
-  Platform platform_;
-  std::optional<NodeRuntime> runtime_;
+  void attach_built_ins();
+  // Declared before platform_: select_power() (in platform_'s initializer) fills them on TL-SN-002.
   std::map<std::uint8_t, std::unique_ptr<IdEeprom>> eeproms_;
   std::map<std::uint8_t, std::unique_ptr<Lis2dw12>> imus_;
   std::map<std::uint8_t, std::unique_ptr<Sht40>> shts_;
   std::map<std::uint8_t, std::unique_ptr<Tmag5273>> halls_;
   std::map<std::uint8_t, std::unique_ptr<Tca9535Model>> test_cards_;
+  std::optional<RevABoard> rev_a_;
+  std::optional<Sn002Board> sn002_;
+  std::optional<BoardIo> board_io_;
+  Platform platform_;
+  std::optional<NodeRuntime> runtime_;
   std::uint32_t reboots_ = 0;
 };
 
@@ -512,5 +551,7 @@ class Node {
 BoardSupport default_board();
 // TL-SN-001 Rev A: the ESP build's board table (expanders, charger, presence).
 BoardSupport tl_sn_001_board();
+// TL-SN-002 Rev A (ADR 0019): built-in sensors, one expander, direct lines.
+BoardSupport tl_sn_002_board();
 
 }  // namespace talos::fw::sim

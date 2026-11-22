@@ -2,7 +2,7 @@
 #include <algorithm>
 #include <cstdio>
 
-#include "board_tl_sn_001.h"
+#include "board_select.h"
 #include "driver/usb_serial_jtag.h"
 #include "driver/usb_serial_jtag_vfs.h"
 #include "esp_log.h"
@@ -67,12 +67,12 @@ extern "C" void app_main(void) {
   usb_serial_jtag_driver_config_t usb_cfg = USB_SERIAL_JTAG_DRIVER_CONFIG_DEFAULT();
   usb_serial_jtag_driver_install(&usb_cfg);
   usb_serial_jtag_vfs_use_driver();
-  static const BoardSupport board = board::tl_sn_001();
+  static const BoardSupport board = selected_board::make();
   static esp::Clock clock;
   static esp::Gpio gpio(board);
-  static esp::I2c i2c(board::kI2cSda, board::kI2cScl);
+  static esp::I2c i2c(selected_board::kI2cSda, selected_board::kI2cScl);
   static esp::BatteryAdc adc;
-  static BoardIo power(i2c, clock, adc, board);  // expanders, rails, source, charger
+  static BoardIo power(i2c, clock, adc, board, &gpio);  // expanders, rails, lamps, source
   static esp::Store store;
   // Longer than any blocking stretch in a step: an NVS page erase (tens of ms),
   // four slot power-ups at ~20 ms each, a full console line. PROVISIONAL.
@@ -89,6 +89,7 @@ extern "C" void app_main(void) {
   runtime.boot();
   // Stable, parseable lines for bench checks and HIL tests (tests/hil).
   static const char* kTag = "talos";
+  ESP_LOGI(kTag, "talos target=%s", selected_board::kBoardName);
   ESP_LOGI(kTag, "talos boot epoch=%lu version=%lu reset=%d board_ok=%d",
            static_cast<unsigned long>(runtime.boot_epoch()),
            static_cast<unsigned long>(runtime.running_version()),

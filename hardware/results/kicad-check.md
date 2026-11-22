@@ -5,6 +5,7 @@
 | Board | Parts | ERC errors | ERC warnings | Waived | Netlist round-trip | Safe defaults | PCB DRC errors | PCB DRC warnings |
 |---|---:|---:|---:|---:|---|---|---:|---:|
 | TL-SN-001 | 232 | 0 | 0 | 4 | match | ok | 2 | 7 |
+| TL-SN-002 | 117 | 0 | 0 | 1 | match | ok | 0 | 3 |
 | TL-MOD-001 | 11 | 0 | 0 | 0 | match | ok | 0 | 0 |
 | TL-MOD-002 | 8 | 0 | 0 | 0 | match | ok | 0 | 0 |
 | TL-MOD-003 | 9 | 0 | 0 | 1 | match | ok | 0 | 0 |
@@ -25,6 +26,12 @@
 - Netlist: KiCad export equals the intended netlist
 - PCB DRC (with schematic parity): unconnected_items 2, silk_edge_clearance 6, silk_over_copper 1
 - **Routing incomplete** (2 unconnected items): 84 x 72 mm (2026-11-21). Autorouted after the board-practices additions; 2 connections left open by the router (Freerouting + completion pass + maze repair). Checkpoint only: the owner chose to replace the modular node with a self-contained board (hardware/sourcing/cost-study.md), so these are not being hand-finished.
+
+## TL-SN-002
+
+  - waived `pin_to_pin`: Pins of type Bidirectional and Power output are connected (Symbol U8 Pin 3 [SDO/SA0, Bidirectional, Line]; Symbol #FLG06 Pin 1 [Power output, Line]). Justification: LIS2DW12 SDO/SA0 strapped to V3V3 for I2C address 0x19; an address input in I2C mode (DS11811 6), as on TL-MOD-003.
+- Netlist: KiCad export equals the intended netlist
+- PCB DRC (with schematic parity): silk_edge_clearance 2, silk_over_copper 1
 
 ## TL-MOD-001
 

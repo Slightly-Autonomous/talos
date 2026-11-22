@@ -8,9 +8,11 @@ import {
   armLabel,
   describeEntry,
   deviceHealth,
+  deviceSensors,
   deviceTone,
   formatRemaining,
   maintenanceFor,
+  sensorsLabel,
   tamperLabel,
   tamperStatus,
 } from "../model/view";
@@ -124,6 +126,7 @@ export function Live() {
               const fallback = deviceHealth(state, d.id);
               const tamper = tamperStatus(property, state, d.id);
               const maint = maintenanceFor(state, d.id, now);
+              const sensors = deviceSensors(d);
               const [label, tone] = deviceTone(
                 projected?.status,
                 fallback,
@@ -134,6 +137,15 @@ export function Live() {
                 <li key={d.id} data-testid={`health-${d.id}`}>
                   <span className={`dot dot-${tone}`} aria-hidden /> {d.id}
                   <span className="muted"> · {label}</span>
+                  {sensors && (
+                    <div
+                      className="muted small"
+                      data-testid={`sensors-${d.id}`}
+                      data-sensors={sensors.kind}
+                    >
+                      {sensorsLabel(sensors)}
+                    </div>
+                  )}
                   {tamper && (
                     <div
                       className={tamper.display === "open" ? "error small" : "muted small"}

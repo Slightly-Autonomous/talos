@@ -1,5 +1,7 @@
 # Talos hardware overview (H0–H3)
 
+> **2026-11-21:** new nodes are **TL-SN-002**, one self-contained board (ADR 0019: USB-C, 2 × AA, every sensor on board, debug lamps, RST/BOOT/USER). This overview describes the archived four-slot TL-SN-001 checkpoint unless a section says otherwise; TL-SN-002's pins are in `firmware/esp_idf/main/board_tl_sn_002.h` and its netlist in `hardware/kicad/TL-SN-002/`.
+
 Status: **provisional engineering draft, 2026-11-16.** It turns the hardware handoff into concrete, checkable choices. Every IC listed below has a datasheet entry in [`../requirements/datasheet-register.md`](../requirements/datasheet-register.md). Numbers marked *(src)* come from that datasheet. Numbers marked *(est)* are estimates that a bench must confirm.
 
 ## 1. Board family

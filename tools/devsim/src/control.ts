@@ -66,6 +66,9 @@ export function controlHandler(sim: DevSim, allowedOrigins: readonly string[]) {
         case "POST /v1/sim/tamper":
           await sim.tamper(id, body.open === true);
           return send(200, { ok: true });
+        case "POST /v1/sim/user_button":
+          await sim.userButton(id);
+          return send(200, { ok: true });
         case "POST /v1/sim/fault":
           sim.setFault(id, String(body.fault) as Fault);
           return send(200, { ok: true });

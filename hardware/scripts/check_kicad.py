@@ -39,7 +39,7 @@ from kicad_sexpr import find, find_all, parse, unq  # noqa: E402
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 KICAD = ROOT / "hardware" / "kicad"
 RESULTS = ROOT / "hardware" / "results"
-BOARDS = ["TL-SN-001", "TL-MOD-001", "TL-MOD-002", "TL-MOD-003", "TL-MOD-004", "TL-TEST-001", "TL-DBG-001"]
+BOARDS = ["TL-SN-001", "TL-SN-002", "TL-MOD-001", "TL-MOD-002", "TL-MOD-003", "TL-MOD-004", "TL-TEST-001", "TL-DBG-001"]
 CARDS = ["TL-MOD-001", "TL-MOD-002", "TL-MOD-003", "TL-MOD-004", "TL-TEST-001"]
 # Boards that host a card in a slot socket besides the main board: (board, socket ref).
 HOSTS = [("TL-DBG-001", "J2")]

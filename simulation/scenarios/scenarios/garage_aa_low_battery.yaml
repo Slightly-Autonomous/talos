@@ -1,0 +1,39 @@
+name: garage_aa_low_battery
+description: >-
+  node_garage's two AA lithium cells (TL-SN-002, ADR 0019) sag to 2.15 V under load, below the 2.2 V
+  low-battery threshold. The next heartbeat carries the loaded voltage, and the node still reports the
+  side door opening and the owner is notified: low battery degrades reporting cadence, never intrusion
+  sensing.
+site: sites/garage_driveway.yaml
+seed: 42
+start_unix_ms: 1794740400000
+duration_ms: 70000
+principals:
+  - {id: owner, kind: PRINCIPAL_KIND_HUMAN, max_risk: RISK_CLASS_SECURITY_CRITICAL}
+rules:
+  - id: garage_door_notify
+    revision: 1
+    property_id: garage-01
+    principal_id: "rule:garage_door_notify"
+    enabled: true
+    trigger_event_type: contact.opened
+    trigger_zone_id: garage
+    armed_modes: [ARM_MODE_ARMED_AWAY]
+    actions:
+      - operation: notify
+        target: {device_id: notifier, capability_id: notify}
+        args: {notify: {recipient_role: owner, text: "Garage side door opened"}}
+        ttl_ms: 5000
+        verification: VERIFICATION_MODE_ACK_ONLY
+        verification_window_ms: 3000
+stimuli:
+  - {at_ms: 0, arm_mode_set: {principal_id: owner, mode: ARM_MODE_ARMED_AWAY}}
+  - {at_ms: 1000, battery_set: {device_id: node_garage, mv: 2150}}
+  - {at_ms: 62000, portal_set: {portal_id: side_door, open: true}}
+expect:
+  - name: heartbeat carries the loaded voltage
+    capability_state: {ref: {device_id: node_garage, capability_id: device.health}, payload: {heartbeat: {battery_mv: 2150}}}
+  - name: door still reported
+    observation: {event_type: contact.opened, device_id: node_garage, from_ms: 62000, to_ms: 63000, min_count: 1, max_count: 1}
+  - name: owner notified
+    command: {operation: notify, final_status_in: [COMMAND_STATUS_COMPLETED_UNVERIFIED], count: 1}

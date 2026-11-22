@@ -55,8 +55,10 @@ TEST(YamlLoader, SampleFourSlotNodeValidatesAgainstPowerSource) {
 TEST(YamlLoader, SampleDevicesDeclareOnlyWhatTheirModulesProvide) {
   auto property = load_property(kDir + "properties/sample_backyard.yaml").value();
   auto catalog = load_catalog();
-  auto reed = load_module_manifest(kDir + "modules/reed_contact_v1.yaml").value();
-  catalog.emplace(reed.id, reed);
+  for (const char* extra : {"reed_contact_v1", "tmag5273a2_magnetic", "pir223d_motion"}) {
+    auto m = load_module_manifest(kDir + "modules/" + extra + ".yaml").value();
+    catalog.emplace(m.id, m);
+  }
   const Device* node = property.find_device(DeviceId("node-07"));
   ASSERT_NE(node, nullptr);
   EXPECT_EQ(node->board_revision, std::optional<std::string>("proto-a"));
@@ -64,11 +66,12 @@ TEST(YamlLoader, SampleDevicesDeclareOnlyWhatTheirModulesProvide) {
     ASSERT_FALSE(d->capabilities.empty());
     for (const auto& cap : d->capabilities) {
       // Board-level capabilities (the lid loop) come from the board manifest.
+      // TL-SN-002 (sensor_node_v2) declares it too (ADR 0019).
+      const std::string board_file = d->board == BoardId("sensor_node_v2")
+                                         ? "boards/sensor_node_v2.yaml"
+                                         : "boards/universal_controller_proto_a.yaml";
       bool provided = cap == CapabilityId("tamper.enclosure") &&
-                      d->board == BoardId("universal_controller_v1") &&
-                      load_board_manifest(kDir + "boards/universal_controller_proto_a.yaml")
-                              .value()
-                              .board_capabilities ==
+                      load_board_manifest(kDir + board_file).value().board_capabilities ==
                           std::vector<CapabilityId>{CapabilityId("tamper.enclosure")};
       for (const auto& slot : d->slots) {
         if (!slot || !catalog.contains(*slot)) continue;
@@ -336,4 +339,84 @@ TEST(SensorNodeRevA, RootAddressConflictRejected) {
 }
 
 }  // namespace
+// ---- TL-SN-002 (ADR 0019): built-in modules --------------------------------------------
+
+ModuleCatalog load_sn002_catalog() {
+  ModuleCatalog c;
+  for (const char* name : {"tmag5273a2_magnetic", "vibration_lis2dw12_v1", "pir223d_motion",
+                           "environment_sht40_v1", "tl_mod_003_imu"}) {
+    auto m = load_module_manifest(kDir + "modules/" + name + ".yaml");
+    EXPECT_TRUE(m.ok()) << name << ": " << m.error().message;
+    if (m.ok()) c.emplace(m.value().id, m.value());
+  }
+  return c;
+}
+
+BoardManifest sensor_node_v2() {
+  auto b = load_board_manifest(kDir + "boards/sensor_node_v2.yaml");
+  EXPECT_TRUE(b.ok()) << b.error().message;
+  return b.value();
+}
+
+TEST(SensorNodeV2, LoadsProvisionalWithBuiltInsBatteryAndNoSlotHardware) {
+  auto b = sensor_node_v2();
+  EXPECT_TRUE(b.provisional);
+  EXPECT_EQ(b.board_family, "TL-SN-002");
+  EXPECT_TRUE(b.connector_standard.empty());
+  ASSERT_EQ(b.slots.size(), 4u);
+  const char* want[] = {"tmag5273a2_magnetic", "vibration_lis2dw12_v1", "pir223d_motion",
+                        "environment_sht40_v1"};
+  for (std::size_t i = 0; i < 4; ++i) {
+    ASSERT_TRUE(b.slots[i].built_in_module.has_value()) << i;
+    EXPECT_EQ(b.slots[i].built_in_module->str(), want[i]);
+    EXPECT_FALSE(b.slots[i].i2c_branch.has_value()) << "no mux";
+  }
+  ASSERT_TRUE(b.battery.has_value());
+  EXPECT_EQ(b.battery->chemistry, "li-fes2");
+  EXPECT_EQ(b.battery->cells_in_series, 2u);
+  EXPECT_FALSE(b.battery->rechargeable);
+  EXPECT_EQ(b.battery->low_mv, 2200u);
+  EXPECT_EQ(b.wake_lines.size(), 5u);
+  for (const auto& w : b.wake_lines) EXPECT_TRUE(w.active_high) << w.net;
+  EXPECT_EQ(b.indicators.size(), 10u);
+  EXPECT_EQ(b.board_capabilities, std::vector<CapabilityId>{CapabilityId("tamper.enclosure")});
+  bool has_solar = false;
+  for (const auto& p : b.power_sources) has_solar |= p.source == PowerSource::kSolarBattery;
+  EXPECT_FALSE(has_solar) << "no PV input on TL-SN-002";
+  for (const auto& [id, m] : load_sn002_catalog()) EXPECT_TRUE(m.provisional) << id.str();
+}
+
+TEST(SensorNodeV2, BuiltInsAreAlwaysPopulatedAndPassOnBothSources) {
+  const auto b = sensor_node_v2();
+  const auto catalog = load_sn002_catalog();
+  // No assignment at all: the four built-ins are still there and fit.
+  EXPECT_TRUE(validate_configuration(b, catalog, {}, PowerSource::kBatteryOnly).ok());
+  EXPECT_TRUE(validate_configuration(b, catalog, {}, PowerSource::kUsb).ok());
+  // Naming a built-in with its own module is fine (connector and bus checks skipped).
+  EXPECT_TRUE(validate_configuration(b, catalog, {{2, ModuleId("pir223d_motion")}},
+                                     PowerSource::kBatteryOnly)
+                  .ok());
+  EXPECT_FALSE(validate_configuration(b, catalog, {}, PowerSource::kSolarBattery).ok());
+}
+
+TEST(SensorNodeV2, ACardModuleCantReplaceABuiltIn) {
+  const auto r = validate_configuration(sensor_node_v2(), load_sn002_catalog(),
+                                        {{1, ModuleId("tl_mod_003_imu")}}, PowerSource::kUsb);
+  EXPECT_TRUE(r.has(ManifestIssueCode::kBuiltInMismatch));
+  EXPECT_FALSE(r.has(ManifestIssueCode::kConnectorMismatch));
+}
+
+TEST(SensorNodeV2, BuiltInsOnTheRootBusMustNotCollide) {
+  auto b = sensor_node_v2();
+  auto catalog = load_sn002_catalog();
+  catalog.at(ModuleId("tmag5273a2_magnetic")).i2c_addresses = {0x44};  // a D-variant TMAG
+  const auto r = validate_configuration(b, catalog, {}, PowerSource::kUsb);
+  EXPECT_TRUE(r.has(ManifestIssueCode::kI2cAddressConflict));
+  // And the board's own expander address is off limits.
+  catalog = load_sn002_catalog();
+  catalog.at(ModuleId("tmag5273a2_magnetic")).i2c_addresses = {0x20};
+  EXPECT_TRUE(validate_configuration(b, catalog, {}, PowerSource::kUsb)
+                  .has(ManifestIssueCode::kI2cRootConflict));
+}
+
 }  // namespace talos::codec

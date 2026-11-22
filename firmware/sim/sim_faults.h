@@ -1,4 +1,4 @@
-// Named faults for the virtual TL-SN-001, shared by bench_node and tests so the
+// Named faults for the virtual TL-SN-001 and TL-SN-002, shared by bench_node and tests so the
 // bench fault trees (tools/bench) can be exercised against every one of them.
 #pragma once
 
@@ -41,6 +41,46 @@ inline bool apply_fault(Node& n, const std::string& fault) {
     return true;
   };
   std::uint8_t s = 0;
+  if (n.is_sn002()) {
+    // TL-SN-002 (ADR 0019): built-in sensors, one expander, direct lines.
+    Sn002Board& b = n.sn002();
+    if (fault == "lid_open") {
+      b.lid_open = true;
+    } else if (fault == "lid_closed") {
+      b.lid_open = false;
+    } else if (fault == "usb_off") {
+      b.usb = false;  // unplugged: the power mux falls back to the cells
+    } else if (fault == "usb_on") {
+      b.usb = true;
+    } else if (fault == "user_press") {
+      b.user_pressed = true;
+    } else if (fault == "user_release") {
+      b.user_pressed = false;
+    } else if (fault == "boot_press") {
+      n.gpio.set(n.board.service_button_line, false);  // BOOT_N low (after boot: service mode)
+    } else if (fault == "boot_release") {
+      n.gpio.set(n.board.service_button_line, true);
+    } else if (fault == "exp_nack") {
+      b.exp.nack = true;
+    } else if (fault == "pir_stuck") {
+      b.pir_stuck_high = true;
+    } else if (fault == "tmag_missing") {
+      n.i2c.detach(I2cBus::kRoot, Tmag5273ContactDriver::kAddr);
+    } else if (fault == "lis_missing") {
+      n.i2c.detach(I2cBus::kRoot, Lis2dw12Driver::kAddr);
+    } else if (fault == "sht_missing") {
+      n.i2c.detach(I2cBus::kRoot, Sht40Driver::kAddr);
+    } else if (fault == "imu_no_selftest") {
+      n.imu(1).self_test_mg = 0;
+    } else if (fault == "sht_dead_heater") {
+      n.sht(3).heater_rise_c = 0;
+    } else if (fault.rfind("battery_mv=", 0) == 0) {
+      n.adc.mv = static_cast<std::uint32_t>(std::strtoul(fault.c_str() + 11, nullptr, 10));
+    } else {
+      return false;
+    }
+    return true;
+  }
   if (fault == "mux_nack") {
     n.i2c.mux_nack = true;
   } else if (fault == "expa_nack" && n.has_board_io()) {

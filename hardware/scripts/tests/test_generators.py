@@ -91,6 +91,71 @@ class SchematicIntent(unittest.TestCase):
         self.assertEqual(g["_loose"], [])
 
 
+class SelfContainedNode(unittest.TestCase):
+    """TL-SN-002 (ADR 0019): what the owner decided stays in the netlist."""
+
+    def setUp(self):
+        self.p = netlist("TL-SN-002")
+
+    def test_five_active_high_wake_lines_on_lp_gpios(self):
+        mcu = self.p["U1"]["pins"]  # pads 20, 21, 16, 12, 13 = GPIO10..14
+        self.assertEqual([mcu[k] for k in ("20", "21", "16", "12", "13")],
+                         ["MAG_WAKE", "ACC_INT", "PIR_OUT", "TAMPER", "USER_BTN"])
+        self.assertEqual(self.p["U7"]["pins"]["4"], "MAG_WAKE")  # TMAG INT_N through the inverter
+        self.assertEqual(self.p["SW3"]["pins"]["2"], "V3V3")  # USER pulls up: active high
+
+    def test_usb_priority_mux_and_primary_cells_never_charged(self):
+        u3 = self.p["U3"]["pins"]
+        self.assertEqual((u3["3"], u3["5"], u3["6"]), ("USB_VBUS", "USB_VBUS", "VBAT"))  # priority mode
+        self.assertFalse(any("BQ25" in q["value"] for q in self.p.values()))  # no charger at all
+        self.assertEqual(self.p["Q1"]["pins"]["3"], "BATT_RAW")  # reverse-cell P-FET on the cells
+
+    def test_every_sensor_and_the_pir_are_fitted(self):
+        values = {q["value"] for q in self.p.values() if not q.get("dnp")}
+        for v in ("TMAG5273A2QDBVT", "LIS2DW12TR", "SHT40-AD1B", "PIR223D-S0", "TCA9535PWR"):
+            self.assertIn(v, values)
+
+    def test_usb_c_buttons_and_ten_lamps(self):
+        self.assertIn("J1", self.p)
+        self.assertEqual({self.p[r]["value"] for r in ("SW1", "SW2", "SW3")}, {"RESET", "BOOT", "USER"})
+        lamps = [r for r, q in self.p.items() if q["lib_id"] == "Device:LED"]
+        self.assertEqual(len(lamps), 10)
+
+    def test_firmware_pin_table_matches_the_netlist(self):
+        """board_tl_sn_002.h (firmware) and the generated netlist must name the same GPIOs (ADR 0013 rule:
+        pins live in the BoardSupport table; this keeps it honest against the hardware)."""
+        import csv
+        import re
+        hdr = (ROOT / "firmware" / "esp_idf" / "main" / "board_tl_sn_002.h").read_text()
+        const = {m.group(1): int(m.group(2), 0) for m in
+                 re.finditer(r"constexpr (?:std::uint8_t|int) (k\w+) = (0x[0-9A-Fa-f]+|\d+);", hdr)}
+        ledger = list(csv.DictReader(open(ROOT / "hardware" / "pins" / "esp32h2_mini1_pin_ledger.csv")))
+        pad_of_gpio = {int(r["gpio"]): r["pad"] for r in ledger if r["gpio"].strip().isdigit()}
+        mcu = self.p["U1"]["pins"]
+        expect = {"kI2cSda": "I2C_SDA", "kI2cScl": "I2C_SCL", "kBatterySenseAdc": "VBAT_SENSE",
+                  "kUsbPresent": "USB_PRESENT", "kStatusLed": "STATUS_LED_N", "kBootButton": "BOOT_N",
+                  "kMagWake": "MAG_WAKE", "kAccInt": "ACC_INT", "kPirOut": "PIR_OUT", "kTamper": "TAMPER",
+                  "kUserButton": "USER_BTN"}
+        for name, net in expect.items():
+            self.assertIn(name, const, f"{name} missing from board_tl_sn_002.h")
+            self.assertEqual(mcu[pad_of_gpio[const[name]]], net, f"{name} = GPIO{const[name]}")
+        exp = self.p["U14"]["pins"]  # TCA9535: P10 (pin 13) is expander pin 8 in firmware numbering
+        self.assertEqual(const.get("kExp"), 0x20)
+        self.assertEqual(exp["13"], "PIR_PWR")
+        self.assertEqual(const.get("kPirPowerPin"), 8)
+
+    def test_fully_jlcpcb_assembled(self):
+        import csv
+        rows = list(csv.DictReader(open(ROOT / "hardware" / "sourcing" / "jlc-parts.csv")))
+        for ref, q in self.p.items():
+            if q.get("dnp"):
+                continue
+            fp = (q["footprint"] or "").split(":")[-1]
+            match = [r for r in rows if (r["value"] == q["value"] or r["value"] == "*") and r["footprint"] == fp]
+            self.assertTrue(match, f"{ref} {q['value']} has no sourcing row")
+            self.assertNotEqual(match[0]["assembly"], "not_placed", f"{ref} would need hand assembly")
+
+
 class FabOutputs(unittest.TestCase):
     def test_ipc356_test_pad_map(self):
         import export_fab

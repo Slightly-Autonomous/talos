@@ -76,6 +76,16 @@ class NodeRuntime final : public IEventSink {
   static constexpr std::uint32_t kWakeMaskMs = 30'000;
   static constexpr std::uint32_t kMaskedPollMs = 1'000;
   static constexpr std::uint32_t kWakeStuckFaultMs = 10u * 60u * 1000u;
+  // A built-in sensor (ADR 0019) that failed or was quarantined is retried after
+  // this long, doubling per further failure up to kFixedRetryMaxMs. The PIR's
+  // retry is a power cycle of PIR_PWR; the others have no rail to cycle.
+  static constexpr std::uint32_t kFixedRetryMs = 60u * 60u * 1000u;           // 1 h
+  static constexpr std::uint32_t kFixedRetryMaxMs = 24u * 60u * 60u * 1000u;  // 24 h
+  // USER (TL-SN-002): one test report (event + heartbeat + lamp test) and one
+  // commissioning request per this long at most. Further presses inside it do
+  // nothing, so a jammed, bouncing or abused button can't flood the radio, drain
+  // the cells or push older P1 state out of the queue (red team).
+  static constexpr std::uint32_t kUserCooldownMs = 10'000;
 
   explicit NodeRuntime(Platform& p, IWatchdog* watchdog = nullptr, ISleep* sleep = nullptr)
       : p_(p), ota_(p, watchdog), watchdog_(watchdog), sleep_(sleep) {}
@@ -131,8 +141,19 @@ class NodeRuntime final : public IEventSink {
   StatusCode status_code() const { return status_; }
   bool status_led_lit() const { return status_led_level_; }
   bool slot_led_lit(std::uint8_t slot) const { return (slot_led_shadow_ >> slot) & 1u; }
-  // USB or PV present (CHG_PG_N low), as last read.
+  // USB or PV present (CHG_PG_N low, or TL-SN-002 USB_PRESENT), as last read.
   bool external_power() const { return external_power_; }
+  // Board lamps (TL-SN-002): level as last written, and the USER lamp test.
+  bool lamp_lit(Lamp l) const { return (lamp_shadow_ >> static_cast<unsigned>(l)) & 1u; }
+  bool lamp_test_active() const { return p_.clock.now_ms() < lamp_test_until_; }
+  // Battery as last reported (mV; under load for primary cells, 0 = unknown).
+  std::uint32_t battery_mv() const { return battery_mv_; }
+  // Cells below BoardSupport::battery_low_mv, or missing (BATT lamp).
+  bool battery_low() const { return battery_mv_ < p_.board.battery_low_mv; }
+  // True while a built-in sensor is held off after a fault (bit n = slot n).
+  std::uint8_t fixed_quarantined() const { return fixed_quarantined_; }
+  // Is slot i a built-in module (BoardSupport SlotWiring::fixed_module)?
+  bool fixed(std::uint8_t i) const { return i < kSlots && p_.board.slots[i].fixed_module != 0; }
   // Debounced enclosure tamper loop: true = open or cut, nullopt = not known yet.
   std::optional<bool> tamper_open() const { return tamper_.state(); }
   // EXP_WAKE held high after servicing every expander: masked as a wake source.
@@ -157,7 +178,7 @@ class NodeRuntime final : public IEventSink {
   void feed_watchdog() {
     if (watchdog_) watchdog_->feed();
   }
-  PowerMode compute_mode();
+  PowerMode compute_mode(std::uint32_t battery_mv);
   void handle(const Downlink& d);
   void emit_ota_status(Priority priority);
   void persist_critical(const DeviceEvent& e);
@@ -175,11 +196,24 @@ class NodeRuntime final : public IEventSink {
   void sample_tamper(TimeMs now);
   void refresh_external_power();
   void update_indicators(TimeMs now);
+  void update_lamps(TimeMs now);
   void poll_service_button(TimeMs now);
+  void poll_user_button(TimeMs now);
+  void start_lamp_test(TimeMs now);
+  std::optional<bool> tamper_raw();
+  // Direct deep-sleep wake lines (TL-SN-002 tamper and USER): armed only while
+  // they read idle, so a held button or an open lid can't re-wake the node forever.
+  void arm_direct_wake_lines();
+  // Battery for heartbeats and the power mode; primary cells: lowest since the last call.
+  std::uint32_t take_battery_mv();
+  void sample_battery_under_load();
+  void update_power_mode(std::uint32_t mv);
+  void quarantine_fixed(std::uint8_t i, ModuleFault why, TimeMs now);
+  TimeMs fixed_backoff_ms(std::uint8_t i) const;
   std::array<SlotLedMode, kSlots> slot_led_modes() const;
   StatusInputs status_inputs(TimeMs now) const;
   void arm_wake_lines();
-  void send_due(TimeMs now);
+  int send_due(TimeMs now);
   TimeMs send_gate_ms(TimeMs now) const;
   bool slot_critical(std::uint8_t slot) const;
   std::uint32_t sustained_budget_mw();
@@ -249,6 +283,30 @@ class NodeRuntime final : public IEventSink {
   bool exp_wake_high_ = false;
   bool exp_wake_masked_ = false;
   TimeMs next_exp_poll_ = 0;
+
+  // TL-SN-002: USER button, board lamps, battery under load, built-in sensor quarantine.
+  UserButton user_;
+  TimeMs lamp_test_started_ = 0;
+  TimeMs lamp_test_until_ = 0;
+  std::uint8_t lamp_shadow_ = 0;
+  bool lamps_known_ = false;
+  TimeMs fault_lamp_until_ = 0;
+  std::uint32_t battery_mv_ = 0;
+  std::uint32_t loaded_mv_ = ~std::uint32_t{0};
+  std::uint8_t fixed_quarantined_ = 0;
+  std::uint8_t quarantine_pending_ = 0;  // set inside emit(), applied after the driver returns
+  std::array<ModuleFault, kSlots> quarantine_why_{};
+  std::array<TimeMs, kSlots> fixed_retry_at_{};
+  std::array<std::uint8_t, kSlots> fixed_failures_{};
+  std::uint32_t direct_wake_armed_ = 0;  // bit n: GPIO n armed by arm_direct_wake_lines()
+  bool direct_wake_known_ = false;
+  TimeMs last_user_report_ms_ = kNever;
+  TimeMs last_user_commission_ms_ = kNever;
+  // Direct tamper line reported open: it is masked as a wake source (ANY_HIGH
+  // would re-wake forever), so the node polls it this often to see the lid
+  // closed and, above all, opened again (red team: a close and a re-open inside
+  // one sleep were invisible until the next heartbeat).
+  TimeMs tamper_poll_at_ = kNever;
 
   // Wake-line supervision.
   std::array<TimeMs, kSlots> wake_high_since_{};

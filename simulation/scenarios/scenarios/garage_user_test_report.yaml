@@ -1,0 +1,24 @@
+name: garage_user_test_report
+description: >-
+  The installer presses USER on node_garage (TL-SN-002, ADR 0019). A short press sends a test report: a
+  heartbeat right away, between the scheduled ones; a second short press within 10 s does nothing (cooldown). A long press (4 s) is a commissioning request, which
+  only the observability plane sees: no heartbeat, no journal entry, no rule, no command.
+site: sites/garage_driveway.yaml
+seed: 42
+start_unix_ms: 1794740400000
+duration_ms: 20000
+principals:
+  - {id: owner, kind: PRINCIPAL_KIND_HUMAN, max_risk: RISK_CLASS_SECURITY_CRITICAL}
+stimuli:
+  - {at_ms: 5000, user_button: {device_id: node_garage, hold_ms: 200}}
+  - {at_ms: 7000, user_button: {device_id: node_garage, hold_ms: 200}}  # inside the 10 s cooldown: nothing
+  - {at_ms: 10000, user_button: {device_id: node_garage, hold_ms: 4000}}
+expect:
+  - name: joining report at boot
+    observation: {event_type: device.heartbeat, device_id: node_garage, to_ms: 1000, min_count: 1, max_count: 1}
+  - name: short press is a test report
+    observation: {event_type: device.heartbeat, device_id: node_garage, from_ms: 5000, to_ms: 6500, min_count: 1, max_count: 1}
+  - name: long press reports no heartbeat (boot and test report only)
+    observation: {event_type: device.heartbeat, device_id: node_garage, to_ms: 20000, min_count: 2, max_count: 2}
+  - name: nothing acts on a button press
+    no_command: {operation: notify}

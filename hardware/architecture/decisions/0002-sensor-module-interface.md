@@ -1,5 +1,7 @@
 # HW-0002: Sensor module interface `sensor_edge_v1` (20 contacts, coplanar edge socket)
 
+> **Superseded for new nodes by [ADR 0019](../../../docs/decisions/0019-self-contained-sensor-node.md) (2026-11-21).** This decision still describes the slot/card interface of the archived TL-SN-001 checkpoint, which stays in the repo and in CI; new nodes (TL-SN-002) have no slots.
+
 **Status:** Proposed. Needs connector samples and EE review before H4.
 
 ## Decision

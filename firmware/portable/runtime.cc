@@ -73,7 +73,7 @@ StoreKey ring_key(std::size_t i) {
 
 // Runtime state kept in LP RAM across an ESP32-H2 deep sleep (which is a reset).
 // Only trusted on a deep-sleep wake, and only with the magic and CRC intact.
-constexpr std::uint32_t kRetainedMagic = 0x544C5331u;  // "TLS1"
+constexpr std::uint32_t kRetainedMagic = 0x544C5332u;  // "TLS2" (TLS1 had no fixed_quarantined)
 struct RetainedState {
   std::uint32_t magic;
   std::uint32_t boot_epoch;  // already persisted: a wake never writes NVS for it
@@ -89,9 +89,23 @@ struct RetainedState {
   // bit 0 link failing, bit 1 ACKs not yet in NVS, bit 2 tamper state known,
   // bit 3 tamper open, bit 4 EXP_WAKE masked as a wake source.
   std::uint8_t flags;
+  // Built-in sensors (ADR 0019): held off after a fault, their failure counts and
+  // when each is retried (relative, like heartbeat_in_ms). Without these a node
+  // that wakes more often than the retry period would never retry (red team).
+  std::uint8_t fixed_quarantined;
+  std::array<std::uint8_t, kSlots> fixed_failures;
+  std::uint8_t power_mode;  // PowerMode: the hysteresis needs the mode it leaves
+  // Primary cells: the battery level under load and the lowest reading since the
+  // last heartbeat (0xFFFF = none yet). A wake must not fall back to the resting
+  // voltage, which hides an empty Li-FeS2 pair (red team).
+  std::uint16_t battery_mv;
+  std::uint16_t loaded_mv;
+  std::array<std::uint32_t, kSlots> fixed_retry_in_ms;
   std::uint32_t crc;
 };
 static_assert(std::is_trivially_copyable_v<RetainedState>);
+static_assert(sizeof(RetainedState) <= ISleep::kMinRetainedBytes,
+              "LP RAM block too big: every deep-sleep wake would become a cold boot");
 
 std::uint32_t retained_crc(const RetainedState& rs) {
   return crc8(reinterpret_cast<const std::uint8_t*>(&rs), offsetof(RetainedState, crc));
@@ -133,9 +147,21 @@ bool NodeRuntime::slot_critical(std::uint8_t slot) const {
 
 void NodeRuntime::emit(std::uint8_t slot, EventKind kind, Priority priority, bool flag,
                        std::int32_t a, std::uint32_t b) {
+  // A built-in sensor can't be reseated: one that fails to start is lost sensing too.
+  const bool fixed_lost = fixed(slot) && static_cast<ModuleFault>(a) == ModuleFault::kInitFailed;
   if (kind == EventKind::kModuleFault && priority != Priority::kP0Critical &&
-      is_supervision_fault(a, b) && slot_critical(slot)) {
+      (is_supervision_fault(a, b) || fixed_lost) && slot_critical(slot)) {
     priority = Priority::kP0Critical;  // intrusion sensing is lost: a trouble alarm
+  }
+  if (kind == EventKind::kModuleFault) {
+    fault_lamp_until_ = p_.clock.now_ms() + kFaultLampMs;
+    // A built-in sensor stuck in warm-up or with its line stuck high is
+    // quarantined (disabled, PIR rail off) once the driver has returned.
+    const auto f = static_cast<ModuleFault>(a);
+    if (fixed(slot) && (f == ModuleFault::kWarmupTimeout || f == ModuleFault::kStuckInterrupt)) {
+      quarantine_pending_ = static_cast<std::uint8_t>(quarantine_pending_ | (1u << slot));
+      quarantine_why_[slot] = f;
+    }
   }
   DeviceEvent e;
   e.boot_epoch = boot_epoch_;
@@ -158,7 +184,8 @@ void NodeRuntime::emit(std::uint8_t slot, EventKind kind, Priority priority, boo
   }
   // L-03: a wake event from a slot is a short flash of its LED (when lit at all).
   if (slot < kSlots &&
-      (kind == EventKind::kMotion || kind == EventKind::kContact || kind == EventKind::kImpact)) {
+      (kind == EventKind::kMotion || kind == EventKind::kContact || kind == EventKind::kImpact ||
+       (kind == EventKind::kEnvironment && fixed(slot)))) {  // TL-SN-002 ENV lamp: per reading
     slot_leds_.note_wake(slot, e.at_ms);
   }
 }
@@ -294,6 +321,15 @@ void NodeRuntime::save_retained() {
     rs.flags = static_cast<std::uint8_t>((outage_ ? 1u : 0u) | (acks_dirty_ ? 2u : 0u) |
                                          (tamper ? 4u : 0u) | (tamper.value_or(false) ? 8u : 0u) |
                                          (exp_wake_masked_ ? 16u : 0u));
+    rs.fixed_quarantined = fixed_quarantined_;
+    rs.fixed_failures = fixed_failures_;
+    rs.power_mode = static_cast<std::uint8_t>(mode_);
+    for (std::uint8_t i = 0; i < kSlots; ++i) {
+      const TimeMs in = fixed_retry_at_[i] > now ? fixed_retry_at_[i] - now : 0;
+      rs.fixed_retry_in_ms[i] = static_cast<std::uint32_t>(std::min<TimeMs>(in, kFixedRetryMaxMs));
+    }
+    rs.battery_mv = static_cast<std::uint16_t>(std::min<std::uint32_t>(battery_mv_, 0xFFFE));
+    rs.loaded_mv = static_cast<std::uint16_t>(std::min<std::uint32_t>(loaded_mv_, 0xFFFF));
     rs.crc = retained_crc(rs);
   }
   std::memcpy(sleep_->retained(), &rs, sizeof rs);
@@ -381,6 +417,29 @@ void NodeRuntime::boot() {
   hub_heard_ = warm && !outage_;
   tamper_ = TamperDebouncer{};
   button_ = ServiceButton{};
+  user_ = UserButton{};
+  // The USER press that woke the node counts from now (a cold boot ignores a held button).
+  if (warm && p_.board.user_button_line < 32 && (wake_.lines & (1u << p_.board.user_button_line))) {
+    user_.begin_held(t0);
+  }
+  lamp_test_until_ = 0;
+  lamp_shadow_ = 0;
+  lamps_known_ = !resumed_cards_;  // begin() wrote every lamp dark
+  fault_lamp_until_ = 0;
+  // Primary cells: keep the loaded minimum across a deep sleep (a wake that read
+  // only the resting voltage would report a full-looking empty pair).
+  loaded_mv_ = warm && rs.loaded_mv != 0xFFFF ? rs.loaded_mv : ~std::uint32_t{0};
+  direct_wake_known_ = false;
+  quarantine_pending_ = 0;
+  tamper_poll_at_ = kNever;
+  last_user_report_ms_ = kNever;
+  last_user_commission_ms_ = kNever;
+  fixed_quarantined_ = warm ? rs.fixed_quarantined : 0;
+  for (std::uint8_t i = 0; i < kSlots; ++i) {
+    fixed_failures_[i] = warm ? rs.fixed_failures[i] : 0;
+    fixed_retry_at_[i] = t0 + (warm ? std::min<TimeMs>(rs.fixed_retry_in_ms[i], kFixedRetryMaxMs)
+                                    : TimeMs{kFixedRetryMs});
+  }
   if (warm && (rs.flags & 4u)) tamper_.restore((rs.flags & 8u) != 0);
   exp_wake_masked_ = warm && (rs.flags & 16u);
   exp_wake_high_ = false;
@@ -389,7 +448,17 @@ void NodeRuntime::boot() {
   status_led_known_ = false;
   slot_led_shadow_ = 0;
   slot_leds_known_ = !resumed_cards_;  // begin() wrote every slot LED dark
-  mode_ = compute_mode();
+  if (warm && p_.board.primary_battery) {
+    // The level under load from before the sleep stands until the next heartbeat;
+    // a fresh reading only ever lowers it (as between heartbeats).
+    battery_mv_ = std::min<std::uint32_t>(rs.battery_mv, p_.power.battery_mv());
+  } else {
+    battery_mv_ = take_battery_mv();
+  }
+  mode_ = warm && rs.power_mode <= static_cast<std::uint8_t>(PowerMode::kCritical)
+              ? static_cast<PowerMode>(rs.power_mode)
+              : PowerMode::kNormal;
+  mode_ = compute_mode(battery_mv_);
   Resume r;
   if (resumed_cards_) {
     r.active = true;
@@ -402,6 +471,10 @@ void NodeRuntime::boot() {
   // EXP_WAKE first: on a wake from it this reads TAMPER_N and releases INT.
   service_expanders(p_.clock.now_ms());
   sample_tamper(p_.clock.now_ms());
+  if (p_.board.tamper_line != 0xFF && tamper_.state() == std::optional<bool>{true}) {
+    tamper_poll_at_ = p_.clock.now_ms() + kMaskedPollMs;
+  }
+  poll_user_button(p_.clock.now_ms());
   arm_wake_lines();
 
   const TimeMs now = p_.clock.now_ms();
@@ -417,7 +490,7 @@ void NodeRuntime::boot() {
     (void)d;
     emit_ota_status(Priority::kP1State);
     emit(kNoSlot, EventKind::kHeartbeat, Priority::kP2Health, false,
-         static_cast<std::int32_t>(p_.power.battery_mv()), static_cast<std::uint32_t>(mode_));
+         static_cast<std::int32_t>(battery_mv_), static_cast<std::uint32_t>(mode_));
     next_heartbeat_ = now + config_.heartbeat_interval_ms;
   }
   update_indicators(now);
@@ -468,6 +541,13 @@ void NodeRuntime::discover_slot(std::uint8_t i, TimeMs now, const Resume* r) {
   st = SlotState{};
   const SlotWiring& w = p_.board.slots[i];
   if (!w.present) return;
+  if (fixed(i) && (fixed_quarantined_ & (1u << i))) {
+    // Held off after a fault (state from before a deep sleep): retried on schedule.
+    st.code = static_cast<ModuleCode>(w.fixed_module);
+    st.fault = ModuleFault::kInitFailed;
+    unpower_slot(i);
+    return;
+  }
   if (!power_slot(i)) return;
   bool keep_powered = true;
   {
@@ -489,14 +569,27 @@ void NodeRuntime::unpower_slot(std::uint8_t i) {
 bool NodeRuntime::init_slot(std::uint8_t i, SlotIo& io, TimeMs now, const Resume* r) {
   SlotState& st = slots_[i];
   const SlotWiring& w = p_.board.slots[i];
-  const IdRead id = read_module_id(io, p_.board.id_eeprom_address);
+  // A built-in module (ADR 0019) has no ID EEPROM and no presence line: it is
+  // whatever the board table says, from boot.
+  IdRead id;
+  if (fixed(i)) {
+    id.status = IdRead::Status::kOk;
+    id.code = static_cast<ModuleCode>(w.fixed_module);
+  } else {
+    id = read_module_id(io, p_.board.id_eeprom_address);
+  }
   st.code = id.code;
   auto fault = [&](ModuleFault f) {
     st.fault = f;
+    if (fixed(i)) {
+      fixed_retry_at_[i] = now + fixed_backoff_ms(i);
+      if (fixed_failures_[i] < 0xFF) ++fixed_failures_[i];
+    }
     emit(i, EventKind::kModuleFault, Priority::kP2Health, false, static_cast<std::int32_t>(f),
          static_cast<std::uint32_t>(st.code));
   };
-  const std::optional<bool> seated = p_.power.slot_present(i);
+  const std::optional<bool> seated =
+      fixed(i) ? std::optional<bool>{true} : p_.power.slot_present(i);
   switch (id.status) {
     case IdRead::Status::kAbsent:
       // A seated card whose ID does not answer is a fault, not an empty slot.
@@ -533,8 +626,10 @@ bool NodeRuntime::init_slot(std::uint8_t i, SlotIo& io, TimeMs now, const Resume
   bool ok = false;
   switch (st.code) {
     case ModuleCode::kPirEkmb:
-    case ModuleCode::kTlMod002Pir: {
+    case ModuleCode::kTlMod002Pir:
+    case ModuleCode::kPir223d: {
       auto& d = st.driver.emplace<PirDriver>();
+      if (st.code == ModuleCode::kPir223d) d.set_timing(PirDriver::kPir223d);
       ok = resume ? d.resume(io, *this, now, rs) : d.init(io, *this, now);
       break;
     }
@@ -546,8 +641,12 @@ bool NodeRuntime::init_slot(std::uint8_t i, SlotIo& io, TimeMs now, const Resume
       ok = resume ? d.resume(io, *this, now, rs) : d.init(io, *this, now);
       break;
     }
-    case ModuleCode::kTmag5273Contact: {
+    case ModuleCode::kTmag5273Contact:
+    case ModuleCode::kTmag5273A2: {
       auto& d = st.driver.emplace<Tmag5273ContactDriver>();
+      if (st.code == ModuleCode::kTmag5273A2) {
+        d.set_range(Tmag5273ContactDriver::kA2RangeMt, Tmag5273ContactDriver::kA2LsbPerMt);
+      }
       ok = resume ? d.resume(io, *this, now, rs) : d.init(io, *this, now);
       break;
     }
@@ -574,11 +673,37 @@ bool NodeRuntime::init_slot(std::uint8_t i, SlotIo& io, TimeMs now, const Resume
     return false;
   }
   st.enabled = true;
+  if (fixed(i)) {
+    fixed_failures_[i] = 0;
+    fixed_quarantined_ = static_cast<std::uint8_t>(fixed_quarantined_ & ~(1u << i));
+  }
   if (!resume) {
     emit(i, EventKind::kModulePresent, Priority::kP2Health, true,
          static_cast<std::int32_t>(st.code), 0);
   }
   return true;
+}
+
+TimeMs NodeRuntime::fixed_backoff_ms(std::uint8_t i) const {
+  TimeMs ms = kFixedRetryMs;
+  for (unsigned n = 0; n < fixed_failures_[i] && ms < kFixedRetryMaxMs; ++n) ms *= 2;
+  return ms < kFixedRetryMaxMs ? ms : kFixedRetryMaxMs;
+}
+
+// Built-in sensors can't be reseated: a faulting one is disabled and reported,
+// and retried with backoff. The PIR loses its rail (PIR_PWR), which is also how
+// its retry power-cycles it; nothing else on TL-SN-002 has a rail to cycle.
+void NodeRuntime::quarantine_fixed(std::uint8_t i, ModuleFault why, TimeMs now) {
+  SlotState& st = slots_[i];
+  if (!st.enabled) return;
+  st.enabled = false;
+  st.fault = why;
+  st.driver = std::monostate{};
+  unpower_slot(i);
+  fixed_quarantined_ = static_cast<std::uint8_t>(fixed_quarantined_ | (1u << i));
+  fixed_retry_at_[i] = now + fixed_backoff_ms(i);
+  if (fixed_failures_[i] < 0xFF) ++fixed_failures_[i];
+  arm_wake_lines();
 }
 
 void NodeRuntime::save_slot_power(std::uint8_t powering) {
@@ -702,6 +827,35 @@ void NodeRuntime::arm_wake_lines() {
   if (p_.board.expander_wake_line != 0xFF) {
     sleep_->set_wake_enabled(p_.board.expander_wake_line, !exp_wake_masked_);
   }
+  direct_wake_known_ = false;
+  arm_direct_wake_lines();
+}
+
+void NodeRuntime::arm_direct_wake_lines() {
+  if (!sleep_) return;
+  std::uint32_t want = 0;
+  std::uint32_t wired = 0;
+  // Tamper loop: a wake source while closed (or not yet known). Once the opening
+  // is reported the line stays high: masked until it is closed again (the
+  // restore is then seen at the next step or heartbeat).
+  if (const std::uint8_t line = p_.board.tamper_line; line < 32) {
+    wired |= 1u << line;
+    if (tamper_.state() != std::optional<bool>{true}) want |= 1u << line;
+  }
+  // USER: a wake source while released; masked while held.
+  if (const std::uint8_t line = p_.board.user_button_line; line < 32) {
+    wired |= 1u << line;
+    if (!p_.gpio.read(line)) want |= 1u << line;
+  }
+  if (!wired || (direct_wake_known_ && want == direct_wake_armed_)) return;
+  for (std::uint8_t line = 0; line < 32; ++line) {
+    const auto bit = 1u << line;
+    if ((wired & bit) && (!direct_wake_known_ || ((want ^ direct_wake_armed_) & bit))) {
+      sleep_->set_wake_enabled(line, (want & bit) != 0);
+    }
+  }
+  direct_wake_armed_ = want;
+  direct_wake_known_ = true;
 }
 
 // --- expanders, tamper and indicators ---------------------------------------------------
@@ -711,9 +865,14 @@ void NodeRuntime::refresh_external_power() {
   external_power_ = s == PowerSource::kUsb || s == PowerSource::kSolarBattery;
 }
 
+std::optional<bool> NodeRuntime::tamper_raw() {
+  if (p_.board.tamper_line != 0xFF) return p_.gpio.read(p_.board.tamper_line);  // high = open
+  return p_.power.tamper_open();
+}
+
 void NodeRuntime::sample_tamper(TimeMs now) {
   const bool known = tamper_.state().has_value();
-  if (!tamper_.sample(p_.power.tamper_open(), now)) return;
+  if (!tamper_.sample(tamper_raw(), now)) return;
   const bool open = *tamper_.state();
   // Cold boot: a state report (b = 1), so the hub also learns that a lid it saw
   // open was closed while the node was off. Afterwards, transitions (b = 0).
@@ -766,6 +925,44 @@ void NodeRuntime::poll_service_button(TimeMs now) {
   } else {
     start_service_mode();
   }
+}
+
+// USER (TL-SN-002): short press = test report (a heartbeat now) plus a 10 s lamp
+// test; long press = a commissioning/pairing request to the hub. Both are P1
+// kUserButton events: the hub logs them (diagnostics) and never acts on its own.
+void NodeRuntime::poll_user_button(TimeMs now) {
+  const std::uint8_t line = p_.board.user_button_line;
+  if (line == 0xFF) return;
+  switch (user_.sample(p_.gpio.read(line), now)) {
+    case UserButton::Press::kNone:
+      return;
+    case UserButton::Press::kShort: {
+      if (last_user_report_ms_ != kNever && now - last_user_report_ms_ < kUserCooldownMs) return;
+      last_user_report_ms_ = now;
+      emit(kNoSlot, EventKind::kUserButton, Priority::kP1State, false,
+           static_cast<std::int32_t>(UserButtonAction::kTestReport), 0);
+      const std::uint32_t mv = take_battery_mv();
+      emit(kNoSlot, EventKind::kHeartbeat, Priority::kP2Health, false,
+           static_cast<std::int32_t>(mv), static_cast<std::uint32_t>(mode_));
+      start_lamp_test(now);
+      return;
+    }
+    case UserButton::Press::kLong:
+      if (last_user_commission_ms_ != kNever && now - last_user_commission_ms_ < kUserCooldownMs) {
+        return;
+      }
+      last_user_commission_ms_ = now;
+      emit(kNoSlot, EventKind::kUserButton, Priority::kP1State, true,
+           static_cast<std::int32_t>(UserButtonAction::kCommissionRequest), 0);
+      start_lamp_test(now);
+      return;
+  }
+}
+
+void NodeRuntime::start_lamp_test(TimeMs now) {
+  lamp_test_started_ = now;
+  lamp_test_until_ = now + kLampTestMs;
+  update_indicators(now);
 }
 
 void NodeRuntime::start_service_mode() {
@@ -829,6 +1026,7 @@ void NodeRuntime::update_indicators(TimeMs now) {
     const TimeMs edge = status_next_edge(status_, now - status_since_);
     if (edge != kNever) led_due_ms_ = status_since_ + edge;
   }
+  update_lamps(now);
   bool wired = false;
   for (const auto& led : p_.board.slot_led_n) wired |= led.wired();
   if (!wired) return;
@@ -842,6 +1040,7 @@ void NodeRuntime::update_indicators(TimeMs now) {
       want = static_cast<std::uint8_t>(want | (1u << i));
     }
   }
+  if (now < lamp_test_until_) want = lamp_test_on(lamp_test_started_, now) ? 0x0F : 0x00;
   if (slot_leds_known_ && want == slot_led_shadow_) return;
   bool ok = true;
   for (std::uint8_t i = 0; i < kSlots; ++i) {
@@ -855,12 +1054,89 @@ void NodeRuntime::update_indicators(TimeMs now) {
   slot_leds_known_ = ok;
 }
 
-PowerMode NodeRuntime::compute_mode() {
+// TL-SN-002 board lamps (Lamp): same rule as the slot LEDs (dark on battery
+// unless service mode), except the USER lamp test, which blinks them all.
+void NodeRuntime::update_lamps(TimeMs now) {
+  bool wired = false;
+  for (const auto& l : p_.board.lamp_n) wired |= l.wired();
+  if (!wired) return;
+  auto consider = [&](TimeMs t) {
+    if (t > now && t < led_due_ms_) led_due_ms_ = t;
+  };
+  std::uint8_t want = 0;
+  if (now < lamp_test_until_) {
+    want = lamp_test_on(lamp_test_started_, now) ? 0x0F : 0x00;
+    const TimeMs k = (now - lamp_test_started_) / kLampTestHalfMs + 1;
+    consider(std::min<TimeMs>(lamp_test_started_ + k * kLampTestHalfMs, lamp_test_until_));
+  } else {
+    const StatusInputs st = status_inputs(now);
+    LampInputs in;
+    in.lit_allowed = slot_leds_.lit_allowed(now, external_power_);
+    in.joined = hub_heard_ && !outage_;
+    in.tamper_open = tamper_.state();
+    in.battery_low = battery_low();
+    in.fault = st.fault || st.card_error || now < fault_lamp_until_;
+    want = lamp_levels(in, now);
+    if (!external_power_ && slot_leds_.service_active(now)) consider(slot_leds_.service_until());
+    if (in.lit_allowed) {
+      if (!in.joined) {
+        const TimeMs t = now % SlotLedPolicy::kSlowBlinkPeriodMs;
+        consider(now - t +
+                 (t < SlotLedPolicy::kSlowBlinkOnMs ? SlotLedPolicy::kSlowBlinkOnMs
+                                                    : SlotLedPolicy::kSlowBlinkPeriodMs));
+      }
+      if (now < fault_lamp_until_) consider(fault_lamp_until_);
+    }
+  }
+  if (lamps_known_ && want == lamp_shadow_) return;
+  bool ok = true;
+  for (std::size_t i = 0; i < kLampCount; ++i) {
+    const auto bit = static_cast<std::uint8_t>(1u << i);
+    if (!p_.board.lamp_n[i].wired()) continue;
+    if (!lamps_known_ || ((want ^ lamp_shadow_) & bit)) {
+      ok &= p_.power.set_lamp(static_cast<Lamp>(i), (want & bit) != 0);
+    }
+  }
+  lamp_shadow_ = want;
+  lamps_known_ = ok;
+}
+
+PowerMode NodeRuntime::compute_mode(std::uint32_t mv) {
   if (p_.power.source() == PowerSource::kUsb) return PowerMode::kNormal;
-  const std::uint32_t mv = p_.power.battery_mv();
-  if (mv < kCriticalMv) return PowerMode::kCritical;
-  if (mv < kLowPowerMv) return PowerMode::kLowPower;
+  // Hysteresis: staying in a lower mode needs only to be under threshold + margin.
+  const std::uint32_t h = p_.board.battery_hysteresis_mv;
+  const std::uint32_t crit =
+      p_.board.battery_critical_mv + (mode_ == PowerMode::kCritical ? h : 0u);
+  const std::uint32_t low = p_.board.battery_low_mv + (mode_ != PowerMode::kNormal ? h : 0u);
+  if (mv < crit) return PowerMode::kCritical;
+  if (mv < low) return PowerMode::kLowPower;
   return PowerMode::kNormal;
+}
+
+std::uint32_t NodeRuntime::take_battery_mv() {
+  const std::uint32_t now_mv = p_.power.battery_mv();
+  if (!p_.board.primary_battery) {
+    battery_mv_ = now_mv;
+    return now_mv;
+  }
+  // Li-FeS2 rests near 1.8 V/cell until it is almost empty; only the voltage
+  // under load shows the end of life, so the lowest reading since the last
+  // heartbeat (taken right after radio sends) is the battery level.
+  battery_mv_ = std::min(loaded_mv_, now_mv);
+  loaded_mv_ = ~std::uint32_t{0};
+  return battery_mv_;
+}
+
+void NodeRuntime::sample_battery_under_load() {
+  if (p_.board.primary_battery) loaded_mv_ = std::min(loaded_mv_, p_.power.battery_mv());
+}
+
+void NodeRuntime::update_power_mode(std::uint32_t mv) {
+  const PowerMode m = compute_mode(mv);
+  if (m == mode_) return;
+  mode_ = m;
+  emit(kNoSlot, EventKind::kPowerMode, Priority::kP1State, false, static_cast<std::int32_t>(m), 0);
+  admit_power();
 }
 
 void NodeRuntime::handle(const Downlink& d) {
@@ -906,8 +1182,13 @@ void NodeRuntime::handle(const Downlink& d) {
     emit(kNoSlot, EventKind::kConfigApplied, Priority::kP1State, false,
          static_cast<std::int32_t>(config_.revision), 0);
   } else if (const auto* offer = std::get_if<OtaOffer>(&d)) {
+    // Primary cells: the worst loaded level known (last heartbeat's, any sag
+    // since, and now), never just the resting voltage, which hides an empty pair.
+    const std::uint32_t mv = p_.board.primary_battery
+                                 ? std::min({battery_mv_, loaded_mv_, p_.power.battery_mv()})
+                                 : p_.power.battery_mv();
     const bool power_ok =
-        p_.power.source() == PowerSource::kUsb || p_.power.battery_mv() >= kOtaMinMv;
+        p_.power.source() == PowerSource::kUsb || mv >= p_.board.battery_ota_min_mv;
     ota_.offer(*offer, power_ok);
     emit_ota_status(Priority::kP2Health);
   } else if (const auto* chunk = std::get_if<OtaChunk>(&d)) {
@@ -929,6 +1210,32 @@ void NodeRuntime::supervise_slots(TimeMs now) {
   for (std::uint8_t i = 0; i < kSlots; ++i) {
     if (!p_.board.slots[i].present || (quarantined_ & (1u << i))) continue;
     SlotState& st = slots_[i];
+    if (fixed(i)) {
+      // Built-in (ADR 0019): never "removed" (kCardRemoved can't happen) and never
+      // hot-inserted. A failed or quarantined one is retried with backoff.
+      if (!st.enabled) {
+        if (st.fault != ModuleFault::kNone && st.fault != ModuleFault::kDisabledForPower &&
+            now >= fixed_retry_at_[i]) {
+          // The failure that put it here was counted then: 1 h, 2 h, 4 h ... 24 h.
+          fixed_retry_at_[i] = now + fixed_backoff_ms(i);
+          fixed_quarantined_ = static_cast<std::uint8_t>(fixed_quarantined_ & ~(1u << i));
+          unpower_slot(i);  // the PIR: its rail goes off, rescan powers it again
+          rescan(i);
+        }
+        continue;
+      }
+      if (std::holds_alternative<std::monostate>(st.driver)) continue;
+      SlotIo io(p_, i);
+      std::visit(
+          [&](auto& drv) {
+            if constexpr (requires { drv.supervise(io, *this, now); }) {
+              drv.supervise(io, *this, now);
+            }
+          },
+          st.driver);
+      io.deselect();
+      continue;
+    }
     if (!st.enabled) {
       // Hot insertion (or the card put back): discover it.
       if (st.code != ModuleCode::kNone && st.fault != ModuleFault::kCardRemoved) continue;
@@ -1015,10 +1322,10 @@ void NodeRuntime::supervise_wake_lines(TimeMs now) {
   }
 }
 
-void NodeRuntime::send_due(TimeMs now) {
+int NodeRuntime::send_due(TimeMs now) {
   // Nothing leaves before the epoch is persisted: the hub would drop a reused
   // (epoch, seq) as a duplicate. Events wait in the queue meanwhile.
-  if (!epoch_persisted_) return;
+  if (!epoch_persisted_) return 0;
   if (now > last_refill_ms_) {
     const TimeMs add = (now - last_refill_ms_) / kSendRefillMs;
     if (add > 0) {
@@ -1034,7 +1341,7 @@ void NodeRuntime::send_due(TimeMs now) {
   int budget = kSendsPerStep;
   if (outage_) {
     const bool p0_probe = p0_waiting_ && now - last_probe_ms_ >= kP0ProbeMinMs;
-    if (now < next_probe_ms_ && !p0_probe) return;
+    if (now < next_probe_ms_ && !p0_probe) return 0;
     budget = 1;  // one probe: the most important event, whatever its own backoff
   }
   int sent = 0;
@@ -1058,6 +1365,7 @@ void NodeRuntime::send_due(TimeMs now) {
       probe_backoff_ms_ = std::min(probe_backoff_ms_ * 2, kProbeMaxMs);
     }
   }
+  return sent;
 }
 
 TimeMs NodeRuntime::send_gate_ms(TimeMs now) const {
@@ -1101,8 +1409,20 @@ void NodeRuntime::step() {
 
   supervise_wake_lines(now);
   service_expanders(now);
-  if (tamper_.pending() && now >= tamper_.due_ms()) sample_tamper(now);
+  if (p_.board.tamper_line != 0xFF) {
+    sample_tamper(now);  // a direct GPIO: cheap to read every step
+    tamper_poll_at_ = tamper_.state() == std::optional<bool>{true} ? now + kMaskedPollMs : kNever;
+  } else if (tamper_.pending() && now >= tamper_.due_ms()) {
+    sample_tamper(now);
+  }
+  if (p_.board.usb_present_line != 0xFF) {
+    // USB_PRESENT is a plain GPIO (no expander INT): read it every step.
+    const bool before = external_power_;
+    refresh_external_power();
+    if (external_power_ != before) update_power_mode(battery_mv_);
+  }
   poll_service_button(now);
+  poll_user_button(now);
   const std::uint32_t env_interval = static_cast<std::uint32_t>(
       std::min<TimeMs>(static_cast<TimeMs>(config_.environment_interval_ms) *
                            (mode_ == PowerMode::kNormal ? 1u : 4u),
@@ -1127,6 +1447,18 @@ void NodeRuntime::step() {
         st.driver);
     io.deselect();
   }
+  if (quarantine_pending_) {
+    for (std::uint8_t i = 0; i < kSlots; ++i) {
+      if (!(quarantine_pending_ & (1u << i))) continue;
+      // A PIR whose warm-up timed out but that was still toggling (someone kept
+      // moving, RT-08) ended its warm-up and reported the motion: it works, so it
+      // is not disabled. Only one still stuck in warm-up is quarantined.
+      const auto* pir = std::get_if<PirDriver>(&slots_[i].driver);
+      if (quarantine_why_[i] == ModuleFault::kWarmupTimeout && pir && !pir->warming()) continue;
+      quarantine_fixed(i, quarantine_why_[i], now);
+    }
+    quarantine_pending_ = 0;
+  }
 
   if (const std::uint8_t tripped = p_.power.take_sw_faults()) {
     for (std::uint8_t i = 0; i < kSlots; ++i) {
@@ -1141,16 +1473,11 @@ void NodeRuntime::step() {
     p_.power.service();
     refresh_external_power();
     sample_tamper(now);  // belt and braces: a missed INT can't hide an open lid past one heartbeat
-    const PowerMode m = compute_mode();
-    if (m != mode_) {
-      mode_ = m;
-      emit(kNoSlot, EventKind::kPowerMode, Priority::kP1State, false, static_cast<std::int32_t>(m),
-           0);
-      admit_power();
-    }
+    const std::uint32_t mv = take_battery_mv();
+    update_power_mode(mv);
     supervise_slots(now);
-    emit(kNoSlot, EventKind::kHeartbeat, Priority::kP2Health, false,
-         static_cast<std::int32_t>(p_.power.battery_mv()), static_cast<std::uint32_t>(mode_));
+    emit(kNoSlot, EventKind::kHeartbeat, Priority::kP2Health, false, static_cast<std::int32_t>(mv),
+         static_cast<std::uint32_t>(mode_));
     const std::uint32_t factor = mode_ == PowerMode::kNormal ? 1u : 4u;
     next_heartbeat_ = now + static_cast<TimeMs>(config_.heartbeat_interval_ms) * factor;
   }
@@ -1163,7 +1490,8 @@ void NodeRuntime::step() {
   });
   if (acks_dirty_ && now - acks_dirty_since_ >= kAckFlushMs) flush_acks();
 
-  send_due(now);
+  if (send_due(now) > 0) sample_battery_under_load();  // the cells right after a TX burst
+  arm_direct_wake_lines();
   update_indicators(now);
   awake_ = false;
   save_retained();
@@ -1190,6 +1518,8 @@ TimeMs NodeRuntime::next_wake_ms() const {
   }
   if (tamper_.pending() && tamper_.due_ms() < next) next = tamper_.due_ms();
   if (button_.pending() && button_.due_ms() < next) next = button_.due_ms();
+  if (user_.pending() && user_.due_ms() < next) next = user_.due_ms();
+  if (tamper_poll_at_ < next) next = tamper_poll_at_;
   if (p_.board.expander_wake_line != 0xFF && exp_wake_high_) {
     const TimeMs t = exp_wake_masked_ ? next_exp_poll_ : exp_wake_high_since_ + kWakeMaskMs;
     if (t < next) next = t;

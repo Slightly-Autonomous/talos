@@ -1,7 +1,12 @@
-// The bench console on a virtual TL-SN-001, behaving like the board on its USB port.
+// The bench console on a virtual TL-SN-001 or TL-SN-002, behaving like the board on its USB port.
 //
-//   bench_node [--slot0=TL-MOD-004] ... [--fault=branch_open2] ... [--provision=node-12:<hex key>]
+//   bench_node [--board=TL-SN-001|TL-SN-002]
+//              [--slot0=TL-MOD-004] ... [--fault=branch_open2] ... [--provision=node-12:<hex key>]
 //              [--board-id=TL-SN-001:A:SIM-0001 | --no-board-id]
+//
+// --board picks the board table (default TL-SN-001, the archived modular board).
+// TL-SN-002 (ADR 0019) has its sensors built in: --slotN is refused there. Its
+// default board identity is TL-SN-002:A:SIM-0002.
 //
 // The board identity (D-09) is programmed as on a finished board unless
 // --no-board-id leaves it blank (the state before `talos_dbg program-id --node`).
@@ -13,7 +18,8 @@
 //   sim run <ms>       advance virtual time now
 //   sim boot           reset the MCU (expanders and cards keep their state)
 //   sim deepsleep      the node sleeps, then wakes if an armed ext1 line is high now
-//                      (EXP_WAKE, slot WAKE): a deep-sleep wake with those lines.
+//                      (EXP_WAKE, slot WAKE; TL-SN-002 tamper and USER lines):
+//                      a deep-sleep wake with those lines.
 //                      Replies ok with no wake if nothing would have woken it.
 // Virtual time follows wall time in 10 ms steps, so a host bridge sees a live node.
 #include <poll.h>
@@ -94,12 +100,25 @@ int main(int argc, char** argv) {
   StdoutOut out;
   SerialDatagram net(out);
   RebuildableLink link;
-  sim::Node node(sim::tl_sn_001_board(), 64 * 1024, &link);
-  node.poll_link = true;
-  std::string board_id = "TL-SN-001:A:SIM-0001";
+  bool sn002 = false;
   for (int i = 1; i < argc; ++i) {
     const std::string arg = argv[i];
-    if (arg.rfind("--slot", 0) == 0 && arg.size() > 8 && arg[7] == '=') {
+    if (arg == "--board=TL-SN-002") {
+      sn002 = true;
+    } else if (arg.rfind("--board=", 0) == 0 && arg != "--board=TL-SN-001") {
+      std::fprintf(stderr, "bad %s (want TL-SN-001 or TL-SN-002)\n", arg.c_str());
+      return 2;
+    }
+  }
+  sim::Node node(sn002 ? sim::tl_sn_002_board() : sim::tl_sn_001_board(), 64 * 1024, &link);
+  node.poll_link = true;
+  std::string board_id = sn002 ? "TL-SN-002:A:SIM-0002" : "TL-SN-001:A:SIM-0001";
+  for (int i = 1; i < argc; ++i) {
+    const std::string arg = argv[i];
+    if (arg.rfind("--slot", 0) == 0 && sn002) {
+      std::fprintf(stderr, "%s: TL-SN-002 has built-in sensors, no slots\n", arg.c_str());
+      return 2;
+    } else if (arg.rfind("--slot", 0) == 0 && arg.size() > 8 && arg[7] == '=') {
       const int slot = arg[6] - '0';
       ModuleCode code{};
       if (slot < 0 || slot >= kSlots || !sim::parse_card(arg.substr(8), code)) {
@@ -174,6 +193,8 @@ int main(int argc, char** argv) {
           };
           for (const auto& w : node.board.slots) consider(w.wake_line);
           consider(node.board.expander_wake_line);
+          consider(node.board.tamper_line);
+          consider(node.board.user_button_line);
           if (lines != 0) {
             link.link = std::make_unique<ProvisionedLink>(net, node.store);
             node.wake_from_deep_sleep(lines);

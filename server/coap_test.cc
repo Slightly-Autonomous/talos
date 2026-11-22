@@ -195,8 +195,8 @@ TEST(CoapIngress, SignedOtaCampaignUpdatesTheNodeEndToEnd) {
   std::string image(6000, '\0');
   for (std::size_t i = 0; i < image.size(); ++i) image[i] = static_cast<char>(i * 7 + 3);
   talos::v1::FirmwareRelease m;
-  m.set_board_id("universal_controller_v1");
-  m.set_board_revision("proto-a");
+  m.set_board_id("sensor_node_v2");  // node-12 is a TL-SN-002 (ADR 0019)
+  m.set_board_revision("rev-a");
   m.set_version("2");
   ASSERT_TRUE(sign_release(m, image, kp.value().seed_hex, "owner-2026"));
 
@@ -260,8 +260,8 @@ TEST(CoapIngress, CampaignRefusedForAnotherBoardOrRevision) {
     EXPECT_TRUE(f.hub->import_firmware(PrincipalId("owner"), m, image));
   };
   import("3", "vision_node_v1", "proto-a");
-  import("4", "universal_controller_v1", "proto-b");
-  import("5", "universal_controller_v1", "proto-a");
+  import("4", "sensor_node_v2", "rev-b");
+  import("5", "sensor_node_v2", "rev-a");
   auto start = [&](const std::string& device, std::uint32_t version) {
     api::CampaignRequest c;
     c.set_device_id(device);
@@ -424,13 +424,13 @@ TEST(CoapIngress, ImportingAnotherBoardsReleaseCannotChangeAScheduledCampaign) {
   auto make = [&](const std::string& board, const std::string& version, char fill) {
     talos::v1::FirmwareRelease m;
     m.set_board_id(board);
-    m.set_board_revision("proto-a");
+    m.set_board_revision("rev-a");
     m.set_version(version);
     const std::string image(fill == 'A' ? 1000 : 2000, fill);
     EXPECT_TRUE(sign_release(m, image, kp.value().seed_hex, "owner-2026"));
     return std::pair{m, image};
   };
-  auto [a, image_a] = make("universal_controller_v1", "7", 'A');
+  auto [a, image_a] = make("sensor_node_v2", "7", 'A');
   ASSERT_TRUE(f.hub->import_firmware(PrincipalId("owner"), a, image_a));
   api::CampaignRequest c;
   c.set_device_id("node-12");
@@ -439,10 +439,10 @@ TEST(CoapIngress, ImportingAnotherBoardsReleaseCannotChangeAScheduledCampaign) {
   auto [b, image_b] = make("other_board_v9", "7", 'B');
   ASSERT_TRUE(f.hub->import_firmware(PrincipalId("owner"), b, image_b));  // its own key
   // Same board, same version again: never replaced.
-  auto [a2, image_a2] = make("universal_controller_v1", "7", 'C');
+  auto [a2, image_a2] = make("sensor_node_v2", "7", 'C');
   EXPECT_EQ(f.hub->import_firmware(PrincipalId("owner"), a2, image_a2).error().code, "conflict");
   // A wrapping version string is refused, not read as 7.
-  auto [wrap, image_w] = make("universal_controller_v1", "4294967303", 'B');
+  auto [wrap, image_w] = make("sensor_node_v2", "4294967303", 'B');
   EXPECT_EQ(f.hub->import_firmware(PrincipalId("owner"), wrap, image_w).error().code,
             "invalid_release");
 

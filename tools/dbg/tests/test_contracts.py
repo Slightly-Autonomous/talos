@@ -6,6 +6,7 @@ import re
 import unittest
 
 from talos_dbg.adapter import MANIFEST, Manifest
+from talos_dbg import node_id
 from talos_dbg.modules import CARDS, MODULES
 
 ROOT = pathlib.Path(__file__).resolve().parents[3]
@@ -148,6 +149,55 @@ class BoardManifestMatchesFirmware(unittest.TestCase):
             self.assertIn(f"{{pin: P0{n}, net: SLOT_LED{n}_N, direction: output, active_low: true}}", self.manifest)
         self.assertIn("{pin: P04, net: TAMPER_N, direction: input}", self.manifest)
         self.assertRegex(self.manifest, r"reserved_i2c_addresses: \[32, 33, 34, 106, 112\]")
+
+
+class Sn002ManifestMatchesFirmware(unittest.TestCase):
+    """contracts/manifests/boards/sensor_node_v2.yaml documents what board_tl_sn_002.h drives (ADR 0019).
+    No hardware/ files yet: the TL-SN-002 schematic is still being generated."""
+
+    def setUp(self):
+        self.header = (ROOT / "firmware/esp_idf/main/board_tl_sn_002.h").read_text()
+        self.manifest = (ROOT / "contracts/manifests/boards/sensor_node_v2.yaml").read_text()
+
+    def const(self, name):
+        return int(re.search(rf"{name}\s*=\s*(\w+);", self.header).group(1), 0)
+
+    def test_provisional_family(self):
+        self.assertRegex(self.manifest, r"(?m)^provisional: true$")
+        self.assertRegex(self.manifest, r"(?m)^board_family: TL-SN-002$")
+        self.assertIn("TL-SN-002", node_id.BOARDS)
+
+    def test_wake_lines(self):
+        lines = re.findall(r"\{net: (\w+), mcu_pin: GPIO(\d+), active_high: (\w+)", self.manifest)
+        self.assertEqual({net: int(g) for net, g, _ in lines},
+                         {"MAG_WAKE": self.const("kMagWake"), "ACC_INT": self.const("kAccInt"),
+                          "PIR_OUT": self.const("kPirOut"), "TAMPER": self.const("kTamper"),
+                          "USER_BTN": self.const("kUserButton")})
+        self.assertEqual({hi for _, _, hi in lines}, {"true"})
+        self.assertEqual(sorted(int(g) for _, g, _ in lines), [10, 11, 12, 13, 14])  # LP GPIOs
+
+    def test_built_ins_match_the_firmware_slots(self):
+        built = re.findall(r"built_in_module: (\w+)", self.manifest)
+        fixed = re.findall(r"b\.slots\[(\d)\] = fixed\([^,]+, ModuleCode::(k\w+)\)", self.header)
+        enum = {n: int(v, 16) for n, v in re.findall(r"(k\w+)\s*=\s*(0x[0-9A-Fa-f]+)",
+                                                    (ROOT / "firmware/portable/modules.h").read_text())}
+        self.assertEqual(built, [MODULES[enum[name]] for _, name in sorted(fixed)])
+
+    def test_expander_map(self):
+        self.assertRegex(self.manifest, r"reserved_i2c_addresses: \[32\]")
+        self.assertEqual(self.const("kExp"), 32)
+        lamps = ["LINK", "MAG", "VIB", "PIR", "ENV", "TAMP", "BATT", "FLT"]
+        for n, name in enumerate(lamps):
+            self.assertIn(f"{{pin: P0{n}, net: LED_{name}_N, direction: output, active_low: true}}", self.manifest)
+        self.assertIn("{pin: P10, net: PIR_PWR, direction: output}", self.manifest)
+        self.assertEqual(self.const("kPirPowerPin"), 8)
+        self.assertIn("unused_pins[0] = {kExp, 0xFE00}", self.header)
+
+    def test_battery_thresholds(self):
+        for key, field in (("low_mv", "battery_low_mv"), ("critical_mv", "battery_critical_mv")):
+            m = int(re.search(rf"{key}: (\d+)", self.manifest).group(1))
+            h = int(re.search(rf"b\.{field} = (\d+);", self.header).group(1))
+            self.assertEqual(m, h, key)
 
 
 if __name__ == "__main__":

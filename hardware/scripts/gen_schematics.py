@@ -409,6 +409,156 @@ def sensor_node() -> Board:
     return b
 
 
+# ---- TL-SN-002 ------------------------------------------------------------------------
+def sensor_node_v2() -> Board:
+    """Self-contained sensor node (ADR 0019): radio, every sensor soldered on, 2 x AA primary cells or USB-C,
+    debug lamps and three buttons on one board, assembled 100 % by JLCPCB. No slots, cards, mux or charger.
+    Pins provisional (ADR 0013 rule); GPIO roles match firmware board_tl_sn_002.h."""
+    b = Board("TL-SN-002", "TL-SN-002 Self-contained Sensor Node Rev A (generated, provisional)",
+              # VSYS is driven by the TPS2116 (a power output); PIR_VDD comes through the R17/C18 filter
+              external_power={"GND", "USB_VBUS", "BATT_RAW", "VBAT", "SYS_REG", "V3V3", "PIR_VDD"})
+    v = "V3V3"
+    mcu = {
+        "3": v, "15": v, "8": "CHIP_EN", "9": "SPARE_IO0", "10": "VBAT_SENSE", "5": "I2C_SDA", "6": "I2C_SCL",
+        "18": "USB_PRESENT", "19": "SPARE_IO5", "22": "STATUS_LED_N", "23": "BOOT_N", "20": "MAG_WAKE",
+        "21": "ACC_INT", "16": "PIR_OUT", "12": "TAMPER", "13": "USER_BTN", "24": "SPARE_IO22",
+        "25": "SPARE_IO25", "30": "U0RXD", "31": "U0TXD", "26": "MCU_USB_DN", "27": "MCU_USB_DP",
+    }
+    for n in ("4", "7", "17", "28", "29", "32", "33", "34", "35"):
+        mcu[n] = None
+    for n in ["1", "2", "11", "14"] + [str(i) for i in range(36, 54)]:
+        mcu[n] = "GND"
+    b.add(
+        Part("U1", "talos:ESP32-H2-MINI-1", "ESP32-H2-MINI-1-H4S", mcu, None,
+             "land pattern = datasheet Fig. 11; antenna keepout at board edge; JLCPCB global sourcing (HD-023)"),
+        C("C1", "10u", v, bulk=True), C("C2", "100n", v),
+        R("R1", "10k", v, "CHIP_EN", "EN RC per datasheet"), C("C3", "1u", "CHIP_EN"),
+        Part("SW1", "Switch:SW_Push", "RESET", {"1": "CHIP_EN", "2": "GND"}, "Button_Switch_SMD:SW_SPST_PTS810"),
+        R("R2", "10k", v, "BOOT_N", "GPIO9 strap pull-up (SPI boot)"),
+        Part("SW2", "Switch:SW_Push", "BOOT", {"1": "BOOT_N", "2": "GND"}, "Button_Switch_SMD:SW_SPST_PTS810",
+             "download mode at reset; service mode after boot"),
+        # USER: active high so it shares the GPIO10-14 ext1 ANY_HIGH wake mask
+        Part("SW3", "Switch:SW_Push", "USER", {"1": "USER_BTN", "2": v}, "Button_Switch_SMD:SW_SPST_PTS810",
+             "short press: test report; long press: commissioning"),
+        R("R3", "100k", "USER_BTN", "GND", "USER idles low"),
+        R("R4", "10k", v, "STATUS_LED_N", "GPIO8 strap held high"),
+        Part("D1", "Device:LED", "STATUS", {"2": v, "1": "LED_K"}, FP_LED, "STAT: firmware blink codes"),
+        R("R5", "1k", "LED_K", "STATUS_LED_N"),
+        R("R6", "4.7k", v, "I2C_SDA"), R("R7", "4.7k", v, "I2C_SCL"),
+        Part("J10", "Connector_Generic:Conn_01x06", "TC2030 PROG",
+             {"1": v, "2": "CHIP_EN", "3": "GND", "4": "U0TXD", "5": "BOOT_N", "6": "U0RXD"}, FP_TAG,
+             "recovery console/flash: 1 3V3, 2 EN, 3 GND, 4 U0TXD, 5 BOOT, 6 U0RXD (USB-C is the primary path)"),
+    )
+    # USB-C: power, flashing, console and JTAG over the H2's built-in USB Serial/JTAG
+    b.add(
+        Part("J1", "Connector:USB_C_Receptacle_USB2.0_16P", "USB-C sink",
+             {"A1": "GND", "B1": "GND", "A12": "GND", "B12": "GND", "SH": "GND",
+              "A4": "USB_VBUS", "A9": "USB_VBUS", "B4": "USB_VBUS", "B9": "USB_VBUS",
+              "A5": "USB_CC1", "B5": "USB_CC2", "A6": "USB_DP", "B6": "USB_DP",
+              "A7": "USB_DN", "B7": "USB_DN", "A8": None, "B8": None},
+             "Connector_USB:USB_C_Receptacle_GCT_USB4105-xx-A_16P_TopMnt_Horizontal"),
+        R("R10", "5.1k", "USB_CC1", "GND", "UFP Rd"), R("R11", "5.1k", "USB_CC2", "GND", "UFP Rd"),
+        Part("U2", "Power_Protection:USBLC6-2SC6", "USBLC6-2SC6",
+             {"1": "USB_DP", "6": "USB_DP", "3": "USB_DN", "4": "USB_DN", "5": "USB_VBUS", "2": "GND"}),
+        C("C5", "4.7u", "USB_VBUS", bulk=True),
+        R("R66", "0R", "MCU_USB_DP", "USB_DP"), R("R67", "0R", "MCU_USB_DN", "USB_DN"),
+        C("C25", "DNP", "MCU_USB_DP", dnp=True, note="USB D+ shunt C option (Espressif)"),
+        C("C26", "DNP", "MCU_USB_DN", dnp=True, note="USB D- shunt C option (Espressif)"),
+        *LED("D8", "R94", "PWR", "USB_VBUS", "GND", "3.3k", note="PWR: USB present (hardware, ~0.9 mA from VBUS)"),
+        # USB present: divided VBUS, zero battery current
+        R("R12", "100k", "USB_VBUS", "USB_PRESENT", "VBUS/2 to GPIO4"), R("R13", "100k", "USB_PRESENT", "GND"),
+    )
+    # Power: 2 x AA primary (never charged) or USB, TPS2116 priority mux, TPS63900 buck-boost to 3.3 V
+    b.add(
+        Part("BT1", "Device:Battery", "2xAA Li-FeS2", {"1": "BATT_RAW", "2": "GND"},
+             "Battery:BatteryHolder_Keystone_2462_2xAA",
+             "Keystone 2462, 2 x AA lithium (Energizer L91 class) or alkaline; primary cells, never charged"),
+        # reversed cells: body diode blocks, Vgs ~ 0 keeps the channel off (same pattern as TL-SN-001 Q1)
+        Part("Q1", "Transistor_FET:AO3401A", "AO3401A", {"1": "BATFET_G", "2": "VBAT", "3": "BATT_RAW"},
+             "Package_TO_SOT_SMD:SOT-23", "reverse-cell P-FET: D = cells, S = VBAT"),
+        R("R69", "100k", "BATFET_G", "GND", "Q1 gate"),
+        R("R8", "4.7M", "VBAT", "VBAT_SENSE"), R("R9", "4.7M", "VBAT_SENSE", "GND"), C("C4", "100n", "VBAT_SENSE"),
+        Part("U3", "Power_Management:TPS2116DRL", "TPS2116DRLR",
+             {"3": "USB_VBUS", "6": "VBAT", "2": "VSYS", "7": "VSYS", "1": "GND", "5": "USB_VBUS",
+              "4": "PMUX_PR1", "8": None},
+             note="priority mode (MODE = VIN1): USB above ~3.7 V wins, else the cells (SLVSFG1A 8.1); "
+                  "VIN2 standby 50 nA typ"),
+        R("R14", "27k", "USB_VBUS", "PMUX_PR1", "PR1 divider: 1.0 V VREF x 3.7 = 3.7 V switchover"),
+        R("R15", "10k", "PMUX_PR1", "GND"),
+        C("C6", "1u", "VBAT"), C("C7", "10u", "VSYS", bulk=True),
+        Part("U5", "Regulator_Switching:TPS63900", "TPS63900DSKR",
+             {"10": "SYS_REG", "1": "SYS_REG", "2": "GND", "3": "REG_CFG1", "4": "REG_CFG2",
+              "5": "REG_CFG3", "6": "V3V3_REG", "9": "REG_LX1", "7": "REG_LX2", "8": "GND", "11": "GND"},
+             "Package_SON:WSON-10-1EP_2.5x2.5mm_P0.5mm_EP1.2x2mm", "1.8-5.5 V in: AA pair to end of life, or VBUS"),
+        R("R18", "36.5k 1%", "REG_CFG1", "GND", "SEL-high 3.3 V, unlimited ILIM (Table 7-2)"),
+        R("R19", "0R", "REG_CFG2", "GND", "SEL-high 3.3 V, unlimited ILIM (Table 7-2)"),
+        R("R20", "16.2k 1%", "REG_CFG3", "GND", "SEL-low 3.3 V (Table 7-3)"),
+        Part("L1", "Device:L", "2.2u DFE252012F-2R2M", {"1": "REG_LX1", "2": "REG_LX2"},
+             "Inductor_SMD:L_1008_2520Metric"),
+        C("C11", "10u", "SYS_REG", bulk=True), C("C12", "22u", "V3V3_REG", bulk=True),
+        *SPLIT("R70", "JP1", "VSYS", "SYS_REG", "source to regulator"),
+        *SPLIT("R71", "JP2", "V3V3_REG", v, "regulator to 3.3 V loads"),
+    )
+    # Sensors, every board (ADR 0019): 3-axis Hall at an edge, accelerometer by a mounting hole,
+    # temperature/humidity on a slotted thermal tongue, PIR (lens in the housing)
+    b.add(
+        Part("U6", "Sensor_Magnetic:TMAG5273x2QDBV", "TMAG5273A2QDBVT",
+             {"1": "I2C_SCL", "2": "GND", "3": "GND", "4": v, "5": "MAG_INT_N", "6": "I2C_SDA"},
+             note="3-axis Hall, A2 range; I2C address per datasheet (A = 0x35, VERIFY); volatile config"),
+        C("C13", "100n", v), R("R16", "100k", v, "MAG_INT_N", "INT open-drain pull-up"),
+        Part("U7", "74xGxx:74AUP1G04", "SN74AUP1G04DBVR",
+             {"1": None, "2": "MAG_INT_N", "3": "GND", "4": "MAG_WAKE", "5": v}, "Package_TO_SOT_SMD:SOT-23-5",
+             "INT_N to active-high MAG_WAKE (GPIO10, ext1 ANY_HIGH)"),
+        C("C14", "100n", v),
+        Part("U8", "talos:LIS2DW12", "LIS2DW12TR",
+             {"9": v, "10": v, "1": "I2C_SCL", "4": "I2C_SDA", "2": v, "3": v, "12": "ACC_INT", "11": None,
+              "5": "GND", "7": "GND", "6": "GND", "8": "GND"},
+             note="CS high = I2C; SA0 high = 0x19; INT1 push-pull active high to GPIO11"),
+        C("C15", "100n", v), C("C16", "1u", v),
+        Part("U9", "Sensor_Humidity:SHT4x", "SHT40-AD1B", {"1": "I2C_SDA", "2": "I2C_SCL", "3": v, "4": "GND"},
+             "talos:Sensirion_DFN-4_1.5x1.5mm_P0.8mm_SHT4x_CentralKeepout",
+             "on the slotted thermal tongue; no copper under the die"),
+        C("C17", "100n", v),
+        Part("U10", "talos:EKMB", "PIR223D-S0", {"1": "PIR_VDD", "2": "PIR_OUT", "3": "GND"}, None,
+             "NEWOPTO digital PIR, TO-5; pin order VERIFY against the PIR223D drawing; lens in the housing"),
+        # 330 R keeps the expander pin under ~10 mA while C18 charges (spice B12; 100 R peaked at 30 mA)
+        R("R17", "330", "PIR_PWR", "PIR_VDD", "PIR supply filter (expander pin, held in deep sleep)"),
+        C("C18", "4.7u", "PIR_VDD", bulk=True, note="PIR supply filter"),
+        R("R21", "1M", "PIR_OUT", "GND", "PIR output idles low when unpowered"),
+    )
+    # Lamps and the PIR rail on one TCA9535 (0x20); unused pins driven low by firmware
+    exp = {"21": "GND", "2": "GND", "3": "GND", "22": "I2C_SCL", "23": "I2C_SDA", "24": v, "12": "GND", "1": None}
+    p0 = ["4", "5", "6", "7", "8", "9", "10", "11"]
+    p1 = ["13", "14", "15", "16", "17", "18", "19", "20"]
+    roles = ["LINK", "MAG", "VIB", "PIR", "ENV", "TAMP", "BATT", "FLT"]
+    for pin, role in zip(p0, roles):
+        exp[pin] = f"LED_{role}_N"
+    exp[p1[0]] = "PIR_PWR"
+    for pin in p1[1:]:
+        exp[pin] = None
+    b.add(Part("U14", "Interface_Expansion:TCA9535PWR", "TCA9535PWR", exp,
+               note="0x20: P00-P07 lamps (active low), P10 PIR_PWR, P11-P17 unused (driven low)"),
+          C("C21", "100n", v))
+    for i, role in enumerate(roles):
+        colour = "LED_RED" if role in ("BATT", "FLT") else "LED_GREEN"
+        b.add(*LED(f"D{9 + i}", f"R{95 + i}", role, v, f"LED_{role}_N", "2.2k", colour=colour,
+                   note=f"{role}: firmware lamp, dark on battery unless service mode"))
+    b.add(
+        Part("J9", "Connector_Generic:Conn_01x02", "TAMPER loop", {"1": "TAMPER", "2": "GND"},
+             "Connector_JST:JST_PH_S2B-PH-SM4-TB_1x02-1MP_P2.00mm_Horizontal",
+             "lid and wall switches in series, closed = loop shut (HD-032)"),
+        R("R30", "1M", v, "TAMPER", "tamper pull-up: 3.3 uA while shut; high = open or cut"),
+        C("C38", "10n", "TAMPER", note="tamper RC: tau 10 ms (spice B7)"),
+    )
+    for i, net in enumerate([v, "GND", "GND", "GND", "VSYS", "VBAT", "BATT_RAW", "USB_VBUS", "SYS_REG", "V3V3_REG",
+                             "I2C_SDA", "I2C_SCL", "MAG_WAKE", "MAG_INT_N", "ACC_INT", "PIR_OUT", "PIR_VDD",
+                             "TAMPER", "USER_BTN", "CHIP_EN", "BOOT_N", "U0TXD", "U0RXD", "USB_PRESENT",
+                             "VBAT_SENSE", "USB_DP", "USB_DN", "SPARE_IO0", "SPARE_IO5", "SPARE_IO22",
+                             "SPARE_IO25"]):
+        b.add(TP(f"TP{i + 1}", net))
+    return b
+
+
 # ---- TL-DBG-001 -----------------------------------------------------------------------
 def debug_adapter() -> Board:
     """One-slot USB debug adapter: a card plugs in beside it (coplanar) exactly as it does on the main
@@ -544,7 +694,7 @@ def card(name: str, title: str, used: set[str], parts: list[Part], pads: tuple[s
 
 def boards() -> list[Board]:
     i2c = {"AON", "SDA", "SCL"}
-    out = [sensor_node()]
+    out = [sensor_node(), sensor_node_v2()]
     # 3-axis Hall so the card works in any orientation (HD-020). TMAG5273 INT is open-drain active-low
     # and latched until the host addresses the device; the inverter turns it into the slot standard's
     # push-pull, idle-low WAKE (SLYS045C Table 4-1, §6.3.3; SCES571K pin table).
@@ -718,6 +868,13 @@ def write_board(board: Board, libs: SymbolLibraries) -> dict:
     root = uid(board.name, "root")
     syms = {p.lib_id: libs.get(p.lib_id) for p in board.parts}
 
+    # One part per reference: a duplicate silently drops a part from intended-netlist.json (and the PCB).
+    seen_refs: set[str] = set()
+    for p in board.parts:
+        if p.ref in seen_refs:
+            raise SystemExit(f"{board.name}: duplicate reference {p.ref}")
+        seen_refs.add(p.ref)
+
     # Pin coverage: every symbol pin must be assigned (net or explicit None).
     for p in board.parts:
         numbers = {pin.number for pin in syms[p.lib_id].pins}
@@ -791,9 +948,9 @@ def write_board(board: Board, libs: SymbolLibraries) -> dict:
     (out_dir / "sym-lib-table").write_text(dump(sym_table) + "\n", encoding="utf-8")
     fp_libs = sorted({(p.footprint if p.footprint is not None else syms[p.lib_id].prop("Footprint")).split(":")[0]
                       for p in board.parts} - {""})
-    if board.name == "TL-SN-001":  # board-only fiducials (gen_pcbs.py) come from the stock Fiducial library
+    if board.name in ("TL-SN-001", "TL-SN-002"):  # board-only fiducials (gen_pcbs.py) from the stock library
         fp_libs = sorted(set(fp_libs) | {"Fiducial"})
-    if board.name in ("TL-SN-001", "TL-DBG-001"):  # board-only mounting holes (gen_pcbs.py)
+    if board.name in ("TL-SN-001", "TL-SN-002", "TL-DBG-001"):  # board-only mounting holes (gen_pcbs.py)
         fp_libs = sorted(set(fp_libs) | {"MountingHole"})
     fp_table = ["fp_lib_table", ["version", "7"]]
     for lib in fp_libs:

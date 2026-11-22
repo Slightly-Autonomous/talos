@@ -7,8 +7,9 @@
 
 Inputs:
 - hardware/sourcing/jlc-parts.csv: (value, footprint) -> LCSC part, one row per distinct part.
-  `assembly` is `jlc` (JLCPCB places it), `board_feature` (test pad, gold fingers: not a part) or
-  `not_placed` (JLCPCB does not stock it). Every `not_placed` row must name a risk ID in
+  `assembly` is `jlc` (JLCPCB places it), `jlc_global` (JLCPCB buys it through Global Sourcing, then
+  places it: an owner-approved exception that names a risk ID), `board_feature` (test pad, gold fingers:
+  not a part) or `not_placed` (JLCPCB does not stock it). Every `not_placed` row must name a risk ID in
   design-risks.md; the check reports it but does not fail, so open decisions stay visible.
 - hardware/sourcing/jlc-stock.json: snapshot written by `refresh` (stock, Basic/Extended, MPN).
 
@@ -107,7 +108,7 @@ def refresh() -> int:
 def check() -> int:
     rows = load_rows()
     snap = json.load(open(STOCK))
-    errors, warnings, waived = [], [], []
+    errors, warnings, waived, global_ = [], [], [], []
     need: dict[str, int] = {}
     for board in BOARDS:
         resolved, errs = resolve(board, rows)
@@ -120,6 +121,10 @@ def check() -> int:
                 if not r["risk"]:
                     errors.append(f"{board} {ref}: not_placed without a risk ID")
                 waived.append(f"{board} {ref} {values[ref]}: {r['note']} ({r['risk']})")
+            elif r["assembly"] == "jlc_global":
+                if not r["risk"]:
+                    errors.append(f"{board} {ref}: jlc_global without a risk ID")
+                global_.append(f"{board} {ref} {values[ref]}: {r['note']} ({r['risk']})")
             elif r["assembly"] != "board_feature":
                 errors.append(f"{board} {ref}: unknown assembly '{r['assembly']}'")
     by_code = {r["lcsc"]: r for r in rows if r["assembly"] == "jlc"}
@@ -141,6 +146,8 @@ def check() -> int:
     extended = sorted({by_code[c]["mpn"] for c in need if snap["parts"].get(c, {}).get("library") == "extended"})
     print(f"JLCPCB sourcing: {len(need)} distinct assembled parts, snapshot {snap['checked']}, "
           f"{len(extended)} Extended (setup fee each)")
+    for w in global_:
+        print(f"  GLOBAL SOURCING (JLCPCB buys, then places): {w}")
     for w in waived:
         print(f"  NOT PLACED BY JLCPCB: {w}")
     for w in warnings:
@@ -161,7 +168,7 @@ def export(boards: list[str]) -> int:
         skipped = []
         for ref, r in resolved.items():
             value, fp = board_parts(board)[ref]
-            if r["assembly"] == "jlc":
+            if r["assembly"] in ("jlc", "jlc_global"):  # global-sourced parts sit in the same BOM
                 groups.setdefault((value, fp, r["lcsc"]), []).append(ref)
             elif r["assembly"] == "not_placed":
                 skipped.append([ref, value, r["mpn"], r["risk"], r["note"]])

@@ -68,6 +68,7 @@ inline constexpr std::uint8_t kCharger = 0x6A;
 
 inline BoardSupport tl_sn_001() {
   BoardSupport b;
+  b.name = "TL-SN-001";
   for (std::uint8_t i = 0; i < kSlots; ++i) {
     b.slots[i] = SlotWiring{true, kSlotWake[i], i, kRail5vEnable[i] >= 0};
     auto& io = b.slot_io[i];

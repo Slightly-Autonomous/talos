@@ -32,6 +32,9 @@ LABELS = {
     "TL-DBG-001": {"J1": "USB", "J2": "CARD", "JP1": "AON mA", "JP2": "SW mA", "D1": "IN",
                    "D3": "PWR", "D4": "AON", "D5": "SW", "D6": "FLT", "TP20": "GND", "TP21": "GND"},
     "TL-TEST-001": {"D1": "SW"},
+    "TL-SN-002": {"J1": "USB", "BT1": "2xAA", "J9": "TAMPER", "SW1": "RST", "SW2": "BOOT", "SW3": "USER",
+                  "J10": "PROG", "D8": "PWR", "D1": "STAT", "D9": "LINK", "D10": "MAG", "D11": "VIB", "D12": "PIR",
+                  "D13": "ENV", "D14": "TAMP", "D15": "BATT", "D16": "FLT", "U9": "T/RH"},
 }
 # Parts whose orientation matters at assembly: after this pass each must still carry some silk outline
 # (pin-1 dot, polarity bar or body outline), or the check below reports it (S-02).
@@ -85,10 +88,10 @@ def courtyard(fp):
     return box or _box(fp.GetBoundingBox(False))
 
 
-def _spots(x0, y0, x1, y1, gap, on_body):
+def _spots(x0, y0, x1, y1, gap, on_body, rings=3):
     cx, cy = (x0 + x1) // 2, (y0 + y1) // 2
     spots = [(cx, cy, 0)] if on_body else []
-    for k in (1, 2, 3):  # rings further out, both orientations on every side
+    for k in range(1, rings + 1):  # rings further out, both orientations on every side
         g = gap * k
         spots += [(cx, y0 - g, 0), (cx, y1 + g, 0), (x0 - g, cy, 90), (x1 + g, cy, 90),
                   (x0 - g, cy, 0), (x1 + g, cy, 0), (cx, y0 - g, 90), (cx, y1 + g, 90),
@@ -158,7 +161,7 @@ def finish(path: str) -> dict:
             pb = b if pb is None else (min(pb[0], b[0]), min(pb[1], b[1]), max(pb[2], b[2]), max(pb[3], b[3]))
         if pb and (x1 - x0) * (y1 - y0) > 2 * (pb[2] - pb[0]) * (pb[3] - pb[1]):
             x0, y0, x1, y1 = pb
-        for x, y, ang in _spots(x0, y0, x1, y1, mm(0.25) + s // 2, False):
+        for x, y, ang in _spots(x0, y0, x1, y1, mm(0.25) + s // 2, False, rings=6):  # labels may sit further out
             t.SetTextAngle(pcbnew.EDA_ANGLE(ang, pcbnew.DEGREES_T))
             t.SetPosition(pcbnew.VECTOR2I(int(x), int(y)))
             b = _box(t.GetBoundingBox())
@@ -194,7 +197,8 @@ def finish(path: str) -> dict:
             ref.SetTextThickness(max(mm(MIN_THICK_MM), int(s * 0.15)))
             gap = mm(0.25) + s // 2
             spots = []
-            if x1 - x0 > mm(6) and y1 - y0 > mm(6):  # modules, ICs: the reference sits on the body
+            has_label = fp.GetReference() in LABELS.get(name, {})
+            if x1 - x0 > mm(6) and y1 - y0 > mm(6) and not has_label:  # modules, ICs: the reference sits on the body
                 spots += [(cx, cy, 0)]
             for k in (1, 2, 3):  # rings further out, both orientations on every side
                 g = gap * k

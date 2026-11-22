@@ -30,6 +30,8 @@ MAGNETS = [  # (label, shape, dimensions in mm, grade)
     ("disc 10 x 3 mm", "cyl", (10, 3), "N52"),
     ("block 20 x 5 x 3 mm (typical door contact)", "cuboid", (20, 5, 3), "N35"),
 ]
+SN2_DIE_TO_EDGE_MM = 2.4  # TL-SN-002 U6 centre to the right board edge (gen_pcbs.sn2_spec)
+SN2_WALL_MM = 1.5  # housing wall over the Hall sensor (deployment-and-enclosure.md, TL-MOD-001 row)
 OFFSETS_MM = (0.0, 5.0)  # lateral misalignment of magnet and sensor (door sag, mounting)
 
 
@@ -80,6 +82,27 @@ def build() -> str:
     lines += ["", "Reading: a door gap below *closes within* reads closed; above *opens beyond* reads open; between "
               "the two the last state holds (hysteresis). Saturation above 40 mT is harmless for a contact (the "
               "reading clips at full scale) but hides the offset check of bench C1-06.", ""]
+    # TL-SN-002 (ADR 0019): the TMAG5273A2 (+/-133 mT range) sits on the board's right edge; the magnet faces
+    # the housing wall there. Sensor die to board edge ~2.4 mm (gen_pcbs sn2_spec U6) + housing wall 1.5 mm
+    # (deployment-and-enclosure.md): the magnet face can never be closer to the die than EDGE_MM.
+    edge_mm, range_a2 = SN2_DIE_TO_EDGE_MM + SN2_WALL_MM, 133.0
+    lines += ["## TL-SN-002: Hall sensor on the board edge (TMAG5273A2, ±133 mT)", "",
+              f"Die to the housing's outer face: {SN2_DIE_TO_EDGE_MM} mm board edge + {SN2_WALL_MM} mm wall = "
+              f"{edge_mm} mm. *Door gap* is magnet face to housing face. Same thresholds ({CLOSE_MT} / {OPEN_MT} mT).",
+              "", "| Magnet | Grade | Offset (mm) | Closes with door gap ≤ (mm) | Opens beyond (mm) | "
+              "Field touching the housing (mT) | Clips at ±133 mT |", "|---|---|---:|---:|---:|---:|---|"]
+    for label, shape, dims, grade in MAGNETS:
+        src = magnet(shape, dims, BR[grade])
+        for off in OFFSETS_MM:
+            close = max(crossing(src, off, CLOSE_MT) - edge_mm, 0.0)
+            opn = max(crossing(src, off, OPEN_MT) - edge_mm, 0.0)
+            b0 = strongest_axis_mt(src, edge_mm, off)
+            lines.append(f"| {label} | {grade} | {off:.0f} | {close:.1f} | {opn:.1f} | {b0:.1f} | "
+                         f"{'yes' if b0 > range_a2 else 'no'} |")
+    lines += ["", "Reading: with the A2's ±133 mT range only a 10 × 3 mm N52 pressed against the housing clips; the "
+              "N35 parts keep headroom, so the firmware can see an attacker's stronger magnet as an out-of-pattern "
+              "field (magnet-defeat logic, not yet implemented: open-decisions.md). Recommended: a 10 × 3 mm N35 "
+              "disc or a 20 × 5 × 3 mm N35 block, closing with up to about 6 mm of door gap.", ""]
     return "\n".join(lines)
 
 

@@ -137,4 +137,61 @@ bool TamperDebouncer::sample(std::optional<bool> raw_open, TimeMs now) {
   return true;
 }
 
+// --- USER button ------------------------------------------------------------------------
+
+UserButton::Press UserButton::sample(bool pressed, TimeMs now) {
+  const bool was_known = level_.state().has_value();
+  if (!level_.sample(pressed, now)) {
+    // Long press: reported while the button is still down.
+    if (held_ && armed_ && !long_sent_ && now >= pressed_at_ + kLongPressMs) {
+      long_sent_ = true;
+      return Press::kLong;
+    }
+    return Press::kNone;
+  }
+  const bool down = *level_.state();
+  if (down) {
+    held_ = true;
+    long_sent_ = false;
+    pressed_at_ = now - kDebounceMs;  // the press began when the level first changed
+    if (!was_known) armed_ = false;   // held through a cold boot: ignore this press
+    return Press::kNone;
+  }
+  const bool counted = held_ && armed_ && !long_sent_;
+  held_ = false;
+  armed_ = true;
+  return counted ? Press::kShort : Press::kNone;
+}
+
+void UserButton::begin_held(TimeMs now) {
+  level_.restore(true);
+  held_ = true;
+  armed_ = true;
+  long_sent_ = false;
+  pressed_at_ = now;
+}
+
+TimeMs UserButton::due_ms() const {
+  if (level_.pending()) return level_.due_ms();
+  if (held_ && armed_ && !long_sent_) return pressed_at_ + kLongPressMs;
+  return kNone;
+}
+
+// --- Board lamps ------------------------------------------------------------------------
+
+std::uint8_t lamp_levels(const LampInputs& in, TimeMs now) {
+  if (!in.lit_allowed) return 0;
+  std::uint8_t out = 0;
+  auto set = [&](Lamp l, bool on) {
+    if (on) out = static_cast<std::uint8_t>(out | (1u << static_cast<unsigned>(l)));
+  };
+  // Joining or failing: the slot LEDs' slow blink (1 s on, 1 s off).
+  set(Lamp::kLink,
+      in.joined || now % SlotLedPolicy::kSlowBlinkPeriodMs < SlotLedPolicy::kSlowBlinkOnMs);
+  set(Lamp::kTamper, in.tamper_open.value_or(false));
+  set(Lamp::kBattery, in.battery_low);
+  set(Lamp::kFault, in.fault);
+  return out;
+}
+
 }  // namespace talos::fw

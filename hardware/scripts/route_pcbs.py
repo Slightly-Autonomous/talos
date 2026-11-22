@@ -368,6 +368,46 @@ def drop_plane_pins(dsn: str, connected: dict[str, set[str]]) -> int:
     return dropped
 
 
+def thermal_pad_vias(board, via_d: float = 0.65, drill: float = 0.3, clear_mm: float = 0.2) -> int:
+    """Thermal vias in every GND exposed pad that has none (a 2-layer board has no plane, so plane_fanout
+    never ran): a grid at the 0.5 mm hole-to-hole pitch, each via clear of other-net copper (HD-041)."""
+    F = pcbnew.FromMM
+    gnd = board.GetNetcodeFromNetname("/GND")
+    others = [i for i in list(board.GetPads()) + list(board.GetTracks()) if i.GetNetCode() != gnd]
+    vias = [t.GetPosition() for t in board.GetTracks() if t.GetClass() == "PCB_VIA"]
+    added = 0
+    for pad in board.GetPads():
+        if pad.GetNetCode() != gnd or pad.GetAttribute() != pcbnew.PAD_ATTRIB_SMD or not _is_thermal_pad(pad):
+            continue
+        if any(pad.HitTest(v) for v in vias):
+            continue
+        bb = pad.GetBoundingBox()
+        w, h = pcbnew.ToMM(bb.GetWidth()), pcbnew.ToMM(bb.GetHeight())
+        if min(w, h) < via_d + 0.1:
+            continue
+        pitch = via_d + clear_mm
+        nx, ny = (max(1, int((d - via_d) / pitch + 1e-6) + 1) for d in (w, h))
+        c = pad.GetPosition()
+        for i in range(nx):
+            for j in range(ny):
+                pos = pcbnew.VECTOR2I(c.x + F((i - (nx - 1) / 2) * pitch), c.y + F((j - (ny - 1) / 2) * pitch))
+                shape = pcbnew.SHAPE_CIRCLE(pos, F(via_d / 2))
+                if not pad.HitTest(pos) or any(o.IsOnLayer(L) and o.GetEffectiveShape(L).Collide(shape, F(clear_mm))
+                                                for o in others for L in (pcbnew.F_Cu, pcbnew.B_Cu)):
+                    continue
+                if any((pos - v).EuclideanNorm() < F(drill + 0.52) for v in vias):  # 0.5 mm hole-to-hole
+                    continue
+                v = pcbnew.PCB_VIA(board)
+                v.SetPosition(pos)
+                v.SetWidth(F(via_d))
+                v.SetDrill(F(drill))
+                v.SetNetCode(gnd)
+                board.Add(v)
+                vias.append(pos)
+                added += 1
+    return added
+
+
 def stitch_vias(board, pitch_mm: float = 3.0, via_d: float = 0.65, drill: float = 0.3) -> int:
     """Ground stitching: a GND via on a grid wherever the outer GND pours are filled on both sides with
     room for the via (every sample on its rim inside both fills, away from keep-outs and other vias).
@@ -839,6 +879,9 @@ def main() -> int:
         keep = pcb.with_suffix(".routed.kicad_pcb")
         shutil.copy(pcb, keep)  # every finishing step below must leave the board no worse than this
         board = pcbnew.LoadBoard(str(pcb))
+        tv = thermal_pad_vias(board)
+        if tv:
+            print(f"{name}: {tv} thermal vias added in exposed pads", flush=True)
         n = stitch_vias(board)
         board.Save(str(pcb))
         errors = drc_errors(pcb)

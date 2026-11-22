@@ -15,9 +15,10 @@ import pathlib
 import re
 import sys
 
-# Boards and revisions this tool may write. Keep in step with tools/bench (BOARD) and the
-# board manifest (contracts/manifests/boards/sensor_node_proto_a.yaml, board_family).
-BOARDS = {"TL-SN-001": ("A",)}
+# Boards and revisions this tool may write. Keep in step with tools/bench (BOARD, BOARD_SN002)
+# and the board manifests' board_family (sensor_node_proto_a.yaml, sensor_node_v2.yaml).
+# TL-SN-002 (ADR 0019) is the current node; tools/flash defaults to it.
+BOARDS = {"TL-SN-001": ("A",), "TL-SN-002": ("A",)}
 DEFAULT_BOARD, DEFAULT_REVISION = "TL-SN-001", "A"
 _FIELD = re.compile(r"^[A-Za-z0-9._-]+$")
 _MAX = {"board": 15, "revision": 3, "serial": 23}  # firmware/portable/hal.h BoardInfo

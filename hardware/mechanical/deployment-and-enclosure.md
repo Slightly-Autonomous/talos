@@ -11,6 +11,15 @@ to be nearest the door magnet. **Nothing here is applied yet.** Each item is mar
 Every dimension is from the current generator output, rounded. Each one must be checked against a
 printed test fit.
 
+
+> **2026-11-21, ADR 0019:** new nodes are **TL-SN-002**, one self-contained 96 × 66 mm board with no cards:
+> - **Physical layout:** 2 × AA holder on the board (bottom right), ESP32-H2 antenna at the top edge, PIR under
+>   a lid lens window (top right), SHT40 on a slotted tongue at the right edge, Hall sensor on the right edge,
+>   lamp strip on the left edge, USB-C on the bottom edge, four M2.5 corner holes.
+> - **What carries over and what doesn't:** everything below about card placement now applies to where the
+>   board itself sits. The card guides (H-02) and board changes B-01/B-03 are no longer needed. The housing,
+>   material, tamper, venting and outdoor points all still apply.
+
 ## 1. What the boards look like physically
 
 - **TL-SN-001 main board:**

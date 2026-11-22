@@ -57,6 +57,10 @@ class FirmwareDevice final : public IDeviceBackend {
   struct Contact {
     std::uint8_t line;
     std::string portal;
+    bool hall = false;  // TL-SN-002: a built-in TMAG5273A2 sees the magnet instead
+    std::uint8_t slot = 0;
+    bool known = false;
+    bool open = false;
   };
   struct Impact {
     std::uint8_t slot;
@@ -68,6 +72,8 @@ class FirmwareDevice final : public IDeviceBackend {
   };
 
   void apply_inputs(const World& world);
+  bool lid();
+  void set_lid(bool open);
   void power_on(Timestamp now, const World& world);
   void drain(std::vector<Uplink>& out);
 
@@ -81,7 +87,7 @@ class FirmwareDevice final : public IDeviceBackend {
   std::vector<Contact> contacts_;
   std::vector<Impact> impacts_;
   std::vector<Environment> environments_;
-  bool enclosure_ = false;  // runs on the TL-SN-001 board model (EXP_C TAMPER_N)
+  bool enclosure_ = false;  // TL-SN-001: EXP_C TAMPER_N; TL-SN-002: the GPIO13 loop
   fw::ConfigUpdate config_;
   Timestamp start_{0};  // hub time at node clock 0
   std::int64_t last_t_ms_ = 0;

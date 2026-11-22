@@ -30,6 +30,7 @@ web/playwright-report/
 
 # ESP-IDF
 firmware/esp_idf/build/
+firmware/esp_idf/build_tl_sn_001/
 firmware/esp_idf/sdkconfig
 firmware/esp_idf/sdkconfig.old
 firmware/esp_idf/managed_components/

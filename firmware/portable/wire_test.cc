@@ -75,7 +75,17 @@ TEST(Wire, TamperKindRoundTripsAndUnknownKindsAreRefused) {
             DecodeError::kNone);
   ASSERT_EQ(got.size(), 1u);
   EXPECT_EQ(got[0], e);
-  e.kind = static_cast<EventKind>(11);
+  // TL-SN-002's USER button (ADR 0019): appended after kTamper.
+  e.kind = EventKind::kUserButton;
+  e.a = static_cast<std::int32_t>(UserButtonAction::kCommissionRequest);
+  EXPECT_EQ(static_cast<int>(EventKind::kUserButton), 11);
+  n = encode_uplink(&e, 1, kKey, buf, sizeof buf);
+  got.clear();
+  ASSERT_EQ(decode_uplink(buf, n, kKey, nullptr, [&](const DeviceEvent& d) { got.push_back(d); }),
+            DecodeError::kNone);
+  ASSERT_EQ(got.size(), 1u);
+  EXPECT_EQ(got[0], e);
+  e.kind = static_cast<EventKind>(12);
   n = encode_uplink(&e, 1, kKey, buf, sizeof buf);
   EXPECT_NE(decode_uplink(buf, n, kKey, nullptr, [](const DeviceEvent&) {}), DecodeError::kNone);
 }

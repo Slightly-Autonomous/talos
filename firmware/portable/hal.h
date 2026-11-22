@@ -74,6 +74,8 @@ class IPower {
   virtual std::optional<bool> tamper_open() { return std::nullopt; }
   // Green slot LED S0..S3. False if the board has none or the write failed.
   virtual bool set_slot_led(std::uint8_t /*slot*/, bool /*on*/) { return false; }
+  // Board lamp (LINK, TAMP, BATT, FLT). False if the board has none or the write failed.
+  virtual bool set_lamp(Lamp /*lamp*/, bool /*on*/) { return false; }
   // The wired-OR expander interrupt is asserted (EXP_WAKE high): read every
   // expander's input ports so each one releases INT. The runtime calls it
   // whenever the line is high; a line that stays high afterwards is masked as
@@ -193,6 +195,10 @@ struct WakeInfo {
 // Sleep and wake control (ESP32-H2: esp_sleep ext1 + LP RAM).
 class ISleep {
  public:
+  // Every platform's retained() block holds at least this many bytes (the
+  // ESP32-H2 build reserves exactly this much RTC memory); the runtime's LP RAM
+  // layout must fit, or every deep-sleep wake would silently become a cold boot.
+  static constexpr std::size_t kMinRetainedBytes = 128;
   virtual ~ISleep() = default;
   virtual WakeInfo wake_info() = 0;
   // Arms or masks one GPIO as a deep-sleep wake source. A line stuck high is
@@ -219,6 +225,12 @@ struct SlotWiring {
   std::uint8_t wake_line = 0xFF;   // GPIO index, 0xFF = none
   std::uint8_t i2c_branch = 0xFF;  // mux branch, 0xFF = none
   bool has_5v = false;
+  // Built-in module (ADR 0019, TL-SN-002): the ModuleCode of the sensor soldered
+  // onto the board for this "slot". 0 = a card slot (ID EEPROM discovery). A
+  // built-in module is present from boot: no ID EEPROM, no presence probe, no
+  // card removal, no per-slot rail (unless slot_io[i].aon_enable is wired, as
+  // the PIR's power switch is on TL-SN-002).
+  std::uint16_t fixed_module = 0;
 };
 
 // One pin on a TCA9535-style expander: 16 pins, port 0 = pins 0-7, port 1 = 8-15.
@@ -247,8 +259,14 @@ struct UnusedExpanderPins {
 };
 
 struct BoardSupport {
+  // Board family this table is for ("TL-SN-002"), nullptr = unnamed (test boards).
+  // The write-once board-id must name it, so a label for one board can never be
+  // burned into a node running another board's table (red team).
+  const char* name = nullptr;
   std::array<SlotWiring, kSlots> slots{};
-  std::uint8_t mux_address = 0x70;  // TCA9546A-style mux (provisional)
+  // TCA9546A-style mux (provisional). 0 = no mux: every device sits on the
+  // root bus and slot I2C needs no branch select (TL-SN-002).
+  std::uint8_t mux_address = 0x70;
   std::uint8_t id_eeprom_address = 0x50;
   // GPIO driving the mux's RESET_N (active low), 0xFF = none: frees a root bus
   // that a card holds stuck through a selected branch.
@@ -277,6 +295,28 @@ struct BoardSupport {
   std::uint32_t battery_sustained_mw = 15;  // provisional budgets per source
   std::uint32_t usb_sustained_mw = 2500;
   std::uint32_t solar_sustained_mw = 300;
+  // --- TL-SN-002 (ADR 0019): direct lines instead of expander plumbing. -------------------
+  // Enclosure loop on a GPIO, high = open or cut (1M pull-up, 10 nF). 0xFF = none
+  // (TL-SN-001 reads TAMPER_N on EXP_C instead). A deep-sleep wake source while closed.
+  std::uint8_t tamper_line = 0xFF;
+  // USER button to 3V3 with a pull-down: ACTIVE HIGH. A deep-sleep wake source. 0xFF = none.
+  std::uint8_t user_button_line = 0xFF;
+  // VBUS divider: high = USB powers the node (power mux on IN1). 0xFF = none.
+  std::uint8_t usb_present_line = 0xFF;
+  // Board lamps (Lamp), expander pins, active low.
+  std::array<ExpanderPin, kLampCount> lamp_n{};
+  // Battery thresholds (mV at the cells). The defaults are TL-SN-001's 1S Li-ion.
+  std::uint32_t battery_low_mv = 3550;
+  std::uint32_t battery_critical_mv = 3300;
+  std::uint32_t battery_ota_min_mv = 3700;  // or external power
+  // Leaving low power / critical needs the reading this far above the threshold,
+  // so a level near it can't flap the mode (and the optional loads) every
+  // heartbeat. 0 = none (TL-SN-001 behaviour).
+  std::uint32_t battery_hysteresis_mv = 0;
+  // Primary cells (never charged, e.g. 2 x AA Li-FeS2): the level is the voltage
+  // under load, the lowest reading since the last heartbeat (taken after radio
+  // sends), not the resting voltage, which hides an empty lithium cell.
+  bool primary_battery = false;
 };
 
 struct Platform {

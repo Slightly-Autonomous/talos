@@ -226,6 +226,19 @@ void VirtualDevice::sample(std::int64_t t_ms, Timestamp now, World& world,
     }
   }
 
+  if (const auto mv = world.battery_mv(id_)) battery_mv_ = *mv;
+  // USER button (TL-SN-002): a short press is a test report, i.e. a heartbeat now
+  // (firmware: on release, after the debounce). A long press is a commissioning
+  // request, which only the observability plane sees.
+  for (const std::uint32_t hold_ms : world.take_user_presses(id_)) {
+    if (hold_ms < kUserLongPressMs) {
+      if (last_user_report_ms_ && t_ms - *last_user_report_ms_ < kUserCooldownMs) continue;
+      last_user_report_ms_ = t_ms;
+      emit(out, envelope(now, std::nullopt, "device.health", "device.heartbeat",
+                         Heartbeat{battery_mv_}));
+    }
+  }
+
   if (heartbeat_interval_ms_ > 0 && t_ms >= next_heartbeat_) {
     next_heartbeat_ = t_ms + heartbeat_interval_ms_;
     emit(out,

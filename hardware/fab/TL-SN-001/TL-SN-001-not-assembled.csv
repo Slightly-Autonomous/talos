@@ -3,7 +3,6 @@ J4,sensor_edge_v1 slot 0,HSEC8-110-01-S-D-EM2,HD-002,JLCPCB lists it with 0 stoc
 J5,sensor_edge_v1 slot 1,HSEC8-110-01-S-D-EM2,HD-002,JLCPCB lists it with 0 stock: buy from Samtec/distributor and hand-solder (owner decision 2026-11-17)
 J6,sensor_edge_v1 slot 2,HSEC8-110-01-S-D-EM2,HD-002,JLCPCB lists it with 0 stock: buy from Samtec/distributor and hand-solder (owner decision 2026-11-17)
 J7,sensor_edge_v1 slot 3,HSEC8-110-01-S-D-EM2,HD-002,JLCPCB lists it with 0 stock: buy from Samtec/distributor and hand-solder (owner decision 2026-11-17)
-U1,ESP32-H2-MINI-1-H4S,ESP32-H2-MINI-1-H4S,HD-023,JLCPCB stock 2 (2026-11-20): consign or buy from a distributor; only the -1U (U.FL antenna) has stock
 C25,DNP,,,"DNP: bench option, footprint only"
 C26,DNP,,,"DNP: bench option, footprint only"
 JP1,DNP meter,,,"DNP: bench option, footprint only"

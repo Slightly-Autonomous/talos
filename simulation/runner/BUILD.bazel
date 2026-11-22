@@ -35,6 +35,7 @@ cc_test(
     deps = [
         ":runner",
         "//codec:yaml_loader",
+        "//simulation/twin",
         "@googletest//:gtest_main",
     ],
 )
@@ -48,6 +49,7 @@ cc_test(
     deps = [
         ":runner",
         "//codec:yaml_loader",
+        "//simulation/twin",
         "@googletest//:gtest_main",
     ],
 )

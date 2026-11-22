@@ -25,6 +25,7 @@ cc_library(
         "wire.cc",
     ],
     hdrs = [
+        "battery.h",
         "board_io.h",
         "coap_link.h",
         "diag.h",

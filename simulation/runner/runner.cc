@@ -385,6 +385,12 @@ class Run {
           world_.set_enclosure(t, s.enclosure_set().device_id(), s.enclosure_set().open());
         }
         break;
+      case v1::Stimulus::kUserButton:
+        world_.press_user_button(t, s.user_button().device_id(), s.user_button().hold_ms());
+        break;
+      case v1::Stimulus::kBatterySet:
+        world_.set_battery(t, s.battery_set().device_id(), s.battery_set().mv());
+        break;
       case v1::Stimulus::kTemperatureSet:
         world_.set_temperature(t, s.temperature_set().zone_id(), s.temperature_set().milli_c());
         break;

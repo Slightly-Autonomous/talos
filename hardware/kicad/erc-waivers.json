@@ -16,5 +16,14 @@
       "VOUT"
     ],
     "justification": "TPS22917 QOD tied to VOUT on purpose (HD-028): SLVSDW8B 8.3.3 uses QOD to VOUT for the on-chip quick discharge. QOD is the drain of the discharge FET, only on while the switch is off, so it never fights the VOUT driver."
+  },
+  {
+    "board": "TL-SN-002",
+    "type": "pin_to_pin",
+    "match": [
+      "SDO/SA0",
+      "#FLG"
+    ],
+    "justification": "LIS2DW12 SDO/SA0 strapped to V3V3 for I2C address 0x19; an address input in I2C mode (DS11811 6), as on TL-MOD-003."
   }
 ]

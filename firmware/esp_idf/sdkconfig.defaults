@@ -22,3 +22,5 @@ CONFIG_ESP_TASK_WDT_PANIC=y
 CONFIG_ESP_TASK_WDT_TIMEOUT_S=5
 # Datagram frames over the console are ~1.5 KB on the stack (serial_link.h).
 CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
+# Board table: TL-SN-002 (ADR 0019) by default; sdkconfig.tl_sn_001 selects the archived board.
+CONFIG_TALOS_BOARD_TL_SN_002=y

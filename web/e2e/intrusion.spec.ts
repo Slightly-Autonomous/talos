@@ -197,3 +197,17 @@ test("maintenance suppresses the tamper alarm, and ending it with the lid open a
   await page.getByRole("tab", { name: "Live" }).click();
   await expect(page.getByTestId("tamper-node-12")).toHaveAttribute("data-tamper", "closed");
 });
+
+test("a TL-SN-002 node lists its built-in sensors, a modular one its slots", async ({ page }) => {
+  await page.goto("/");
+  await page.getByTestId("hub-token").fill("dev-owner-token");
+  await page.getByTestId("connect").click();
+  await expect(page.getByTestId("connection")).toContainText("Live");
+  // node-12 is a self-contained TL-SN-002 (ADR 0019): sensors built in, no slots.
+  const sn2 = page.getByTestId("sensors-node-12");
+  await expect(sn2).toHaveAttribute("data-sensors", "built-in");
+  await expect(sn2).toContainText("door contact (magnetic)");
+  await expect(sn2).not.toContainText("slot");
+  // node-07 is still a modular board.
+  await expect(page.getByTestId("sensors-node-07")).toHaveAttribute("data-sensors", "slots");
+});

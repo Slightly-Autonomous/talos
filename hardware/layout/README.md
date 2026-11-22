@@ -132,3 +132,26 @@ Autorouted is not reviewed. A layout engineer still has to review the power sect
   fully JLCPCB-assembled board (`hardware/sourcing/cost-study.md`,
   `hardware/sourcing/zero-touch-assembly-plan.md`). The modular boards stay in the repo as this
   checkpoint and are not being hand-finished.
+
+## TL-SN-002, the self-contained node (2026-11-21, ADR 0019)
+
+- **Board:** 96 × 66 mm, 2 layers, 117 parts, single-sided SMT plus two JLCPCB through-hole parts
+  (2 × AA holder, PIR).
+- **Same pipeline as before:** generated schematic, block-aware placer with the TPS63900 rigid template,
+  Freerouting with a completion pass, keep-best finishing, stitching, power-trace widening, silk pass.
+- **New generator features:**
+  - cut-outs and reserved label columns act as placer obstacles;
+  - a no-track zone on the bottom layer under the regulator's thermal pad, so its vias always fit;
+  - thermal vias for boards without inner planes;
+  - a duplicate-reference guard in `gen_schematics.py`. It caught two parts both named R99, which had
+    silently dropped the ENV lamp resistor.
+- **Layout rules (`layout_rules.py`):**
+  - TPS63900 template distances;
+  - at least 2 thermal-pad vias;
+  - lamp strip on the left edge;
+  - SHT40 on the slotted thermal tongue;
+  - Hall sensor on the right edge;
+  - every label printed.
+- **Size history:** 92 × 62 placed at about 84 % courtyard use, with no room for the lamp labels, so it
+  grew to 96 × 66. A single CR123A would shrink it to about 70 × 50; the owner kept 2 × AA for the longer
+  battery life.

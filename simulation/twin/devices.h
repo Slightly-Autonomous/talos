@@ -124,6 +124,11 @@ class VirtualDevice final : public IDeviceBackend {
   std::int64_t boot_ms_ = 0;
   std::uint32_t heartbeat_interval_ms_ = 0;
   std::uint32_t battery_mv_ = 0;
+  // fw::UserButton::kLongPressMs, kept in step by firmware_device's parity runs.
+  static constexpr std::uint32_t kUserLongPressMs = 3'000;
+  // fw::NodeRuntime::kUserCooldownMs: one test report per this long at most.
+  static constexpr std::int64_t kUserCooldownMs = 10'000;
+  std::optional<std::int64_t> last_user_report_ms_;
   std::int64_t next_heartbeat_ = 0;
   std::vector<Pir> pirs_;
   std::vector<Contact> contacts_;

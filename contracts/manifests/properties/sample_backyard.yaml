@@ -45,11 +45,13 @@ devices:
     coverage:
       - {slot: 0, capability_id: motion.detect, heading_deg: -90, half_angle_deg: 45, range_m: 12}
       - {slot: 2, capability_id: camera.detection, heading_deg: -90, half_angle_deg: 40, range_m: 15}
+  # TL-SN-002 self-contained node (ADR 0019): sensors built in, listed in slot order
+  # (MAG, VIB, PIR, ENV). It declares only what this door needs.
   - id: node-12
     property_id: house-01
-    board_id: universal_controller_v1
-    board_revision: proto-a
-    slot_modules: [reed_contact_v1]
+    board_id: sensor_node_v2
+    board_revision: rev-a
+    slot_modules: [tmag5273a2_magnetic, vibration_lis2dw12_v1, pir223d_motion, environment_sht40_v1]
     # tamper.enclosure: the node's lid loop (HD-032), device-level (no slot).
     capabilities: [contact.open_state, tamper.enclosure]
     zone_id: hallway

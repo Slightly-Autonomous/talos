@@ -36,6 +36,24 @@ message SlotSpec {
   bool uart = 5;
   bool analog = 6;
   repeated string rails = 7;
+  // Built-in module (ADR 0019, TL-SN-002): the module id (a ModuleManifest)
+  // soldered on the board for this slot. Empty = a card slot. A built-in slot is
+  // always populated with exactly this module; connector, per-slot rail and mux
+  // branch checks do not apply to it, its I2C devices sit on the root bus.
+  string built_in_module = 8;
+}
+
+// The board's battery (ADR 0019). Thresholds are cell-pack voltages, under
+// load for primary cells. PROVISIONAL like every manifest number.
+message BatterySpec {
+  string chemistry = 1;  // e.g. "li-fes2" (AA lithium primary), "li-ion"
+  string form = 2;       // e.g. "AA", "18650"
+  uint32 cells_in_series = 3;
+  // false = primary: the board must never charge it.
+  bool rechargeable = 4;
+  uint32 fresh_mv = 5;
+  uint32 low_mv = 6;
+  uint32 critical_mv = 7;
 }
 
 // One pin of an on-board I/O expander (PROVISIONAL until the board is built).
@@ -111,6 +129,8 @@ message BoardManifest {
   // "tamper.enclosure" for the lid loop). Devices may declare them.
   repeated string board_capabilities = 16;
   repeated ModuleSlotLimit module_slot_limits = 17;
+  // The battery, if the board has one (ADR 0019). Unset = not declared.
+  optional BatterySpec battery = 18;
 }
 
 message RailLoad {

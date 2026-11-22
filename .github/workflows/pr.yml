@@ -158,6 +158,8 @@ jobs:
         run: python3 -m unittest discover -s hardware/scripts/tests -t hardware/scripts -v
       - name: Power budget model
         run: python3 hardware/scripts/power_budget.py --out /tmp/power-budget.md
+      - name: Power budget model (TL-SN-002)
+        run: python3 hardware/scripts/power_budget_sn2.py --out /tmp/power-budget-sn2.md
       - name: Circuit simulation (ngspice from the KiCad image; verdicts match hardware/results/spice.md)
         run: python3 hardware/scripts/spice_sim.py --check
       - name: JLCPCB sourcing (every assembled part stocked, offline snapshot)
@@ -180,6 +182,14 @@ jobs:
           idf.py set-target esp32h2
           idf.py build
           ls -l build/*.bin
+      - name: Build the archived TL-SN-001 target (ADR 0019 keeps it buildable)
+        shell: bash
+        run: |
+          . "$IDF_PATH/export.sh"
+          cd firmware/esp_idf
+          idf.py -B build_tl_sn_001 -D SDKCONFIG=build_tl_sn_001/sdkconfig \
+            -D SDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.tl_sn_001" set-target esp32h2 build
+          ls -l build_tl_sn_001/*.bin
 
   deploy:
     name: Deploy artifacts

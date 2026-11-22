@@ -120,3 +120,30 @@ openEMS) run on demand and commit their report.
 Section 4 stands. In addition: the behavioural models are only as good as the datasheet numbers in them (a wrong
 EST changes a verdict), kisi's θ values are package defaults, and none of this replaces measuring S-1 and S-2 on
 the bench (bench plan stage 4).
+
+## 6. TL-SN-002 sweep (2026-11-21, ADR 0019)
+
+Every tool from sections 2–5 was re-run on the self-contained node after its final route (96 × 66 mm, 2-layer,
+117 parts). Results are models until the bench replaces them.
+
+| Class | Tool and result on TL-SN-002 | Output |
+|---|---|---|
+| C1 firmware logic | `//firmware/sim:sn002_test`: 27 tests, plus 7 red-team regression tests (deep-sleep battery memory, quarantine retry across wakes, PIR warm-up, tamper polling, USER cooldown). The twin runs TL-SN-002 on L2 for the garage and driveway sites, and L1/L2 parity holds | bazel test logs |
+| C2 schematic | ERC 0 errors (1 waived: LIS2DW12 SA0 strap); netlist round trip equal. The new duplicate-reference guard caught R99 twice | `results/kicad-check.md` |
+| C3 pin mapping | `test_firmware_pin_table_matches_the_netlist`: every GPIO in `board_tl_sn_002.h` names the same net as the generated netlist. PIR223D pin order and TMAG5273A2 address still need a datasheet (HD-044, HD-045) | generator unit tests |
+| C4 analog | ngspice/arithmetic: B10 USB priority 3.36–4.06 V (1 % resistors), always below a 4.4 V drooping USB. B11 USB unplug during an 18 dBm burst: VSYS dips ≤ 0.12 V and never below the cells. B12 PIR rail from an expander pin: 8.6–10.3 mA peak, at 2.7 V in 2.3–3.8 ms. B6 lamps 0.43–1.95 mA. B7 tamper alarm about 62 ms | `results/spice.md` |
+| C5 static energy | `power_budget_sn2.py`: 31.0 µA asleep (HWR-009 < 40 µA). About 8 years deep-sleep design and about 2.5 years Thread light sleep on 2 × L91. Low-battery threshold 2.2 V from the −40 °C pulse case | `results/power-budget-sn2.md` |
+| C6 dynamic power | B11 above; TPS63900 template reused (HD-036) | `results/spice.md` |
+| C7 layout | DRC 0 errors, schematic parity. Warnings within budget: module antenna silk on the edge, the template pin-1 mark, holder '+' text. `layout_rules.py`: template distances, ≥ 2 thermal-pad vias, lamp strip on the left edge, SHT40 on the tongue, Hall on the right edge, all 18 labels | `results/kicad-check.md` |
+| C8 IR drop | kisi, cells at 2.2 V with TX: VSYS 55 mV, VBAT 24 mV, cells to the P-FET 24 mV (about 110 mV cells to regulator input, inside the 2.2 V margin). USB with all lamps lit: all rails ≤ 25 mV | `results/pi-tl-sn-002.md` |
+| C10 thermal | kisi steady state (radio modelled as continuous 0.5 W, an overstatement): board max 44 °C at 25 °C ambient. **SHT40 on the tongue: +2.3 K (battery case), +2.1 K (USB case)**; real bursts give far less (HD-047 bench) | `results/pi-tl-sn-002.md` |
+| C13 sensor physics | magpylib: TMAG5273A2 on the board edge behind a 1.5 mm wall. A 10 × 3 mm N35 disc or a 20 × 5 × 3 mm N35 block closes the door at up to about 6 mm gap with no clipping at ±133 mT; only a 10 × 3 N52 touching the housing clips | `results/magnet.md` |
+| C14 silicon | ESP32-H2 build (TL-SN-002 default and TL-SN-001) in CI only. Deep-sleep entry is not wired yet | CI |
+| C17 manufacturability | `jlc_sourcing.py`: every TL-SN-002 part is JLCPCB-assembled (SMT plus JLCPCB through-hole for the AA holder and PIR). The module is the owner-approved global-sourcing exception (HD-023). `not-assembled.csv` lists only the four DNP bench footprints | `fab/TL-SN-002/` |
+
+**Not run on TL-SN-002, and why:**
+- **KiPI:** GUI-only.
+- **KiCad Thermal Sim:** its runner injects a fixed 2 W at one part, so kisi's per-part model answers the SHT40
+  question instead.
+- **openEMS:** not installed on macOS.
+- **Bench-only, still open:** antenna and enclosure detuning (C12), ESD/surge and temperature extremes (C18).

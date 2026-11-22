@@ -15,23 +15,32 @@ walls:
 portals:
   - {id: side_door, type: portal.door, zone_id: garage, a: {x: 10, y: 10}, b: {x: 10, y: 11.5}}
 devices:
+  # TL-SN-002 self-contained nodes (ADR 0019): built-in sensors, slot = built-in index
+  # (0 MAG TMAG5273A2, 1 VIB LIS2DW12, 2 PIR PIR223D-S0, 3 ENV SHT40). 2 x AA lithium.
   - id: node_garage
     position: {x: 0.3, y: 15.7}
-    board_id: universal_controller_v1
+    board_id: sensor_node_v2
     heartbeat_interval_ms: 60000
-    battery_mv: 3700
+    battery_mv: 3000
     enclosure: {open_at_start: true}
     sensors:
-      - {slot: 0, module_id: pir_ekmb_v1, pir: {heading_deg: -35, half_angle_deg: 45, range_m: 13, hold_ms: 5000}}
-      - {slot: 1, module_id: reed_contact_v1, contact: {portal_id: side_door}}
+      - {slot: 2, module_id: pir223d_motion, pir: {heading_deg: -35, half_angle_deg: 45, range_m: 13, hold_ms: 5000}}
+      - {slot: 0, module_id: tmag5273a2_magnetic, contact: {portal_id: side_door}}
   - id: node_driveway
     position: {x: 7, y: 7.8}
-    board_id: universal_controller_v1
+    board_id: sensor_node_v2
     heartbeat_interval_ms: 60000
-    battery_mv: 3950
+    battery_mv: 3100
     sensors:
-      - {slot: 0, module_id: pir_ekmb_v1, pir: {heading_deg: -90, half_angle_deg: 60, range_m: 9, hold_ms: 5000, false_triggers_per_hour: 0}}
-      - {slot: 2, module_id: smart_camera_s3_v1, camera: {heading_deg: -90, half_angle_deg: 50, range_m: 12, min_interval_ms: 3000, confidence_permille: 800}}
+      - {slot: 2, module_id: pir223d_motion, pir: {heading_deg: -90, half_angle_deg: 60, range_m: 9, hold_ms: 5000, false_triggers_per_hour: 0}}
+  # The driveway camera is its own device now (TL-SN-002 has no camera; the vision node
+  # family is TL-VN-001). It stays on L1: the firmware has no camera.
+  - id: cam_driveway
+    position: {x: 7, y: 7.8}
+    board_id: vision_node_v1
+    heartbeat_interval_ms: 60000
+    sensors:
+      - {slot: 0, module_id: smart_camera_s3_v1, camera: {heading_deg: -90, half_angle_deg: 50, range_m: 12, min_interval_ms: 3000, confidence_permille: 800}}
   - id: notifier
     position: {x: 5, y: 12}
     notifier: {latency_ms: 200}

@@ -1,0 +1,16 @@
+# PROVISIONAL. TL-SN-002 built-in PIR (ADR 0019): PIR223D-S0 digital-output pyroelectric sensor
+# (JLCPCB through-hole), fitted on every board (owner decision 2026-11-21). Output active high, 1M
+# pull-down, on GPIO12. Powered from PIR_PWR (TCA9535 P10 through an RC filter), so warm-up starts when
+# firmware switches it on; the expander holds the rail through deep sleep. Warm-up and block timing in
+# firmware (PirDriver::kPir223d: 30 s minimum, fault at 60 s) are placeholders until the datasheet
+# timing and a bench run (bench-test-plan TL-SN-002 N-07) confirm them. Current is a placeholder too.
+id: pir223d_motion
+revision: a
+provisional: true
+needs_wake: true
+loads: [{rail: v3v3_pir, active_ma: 1}]
+average_uw: 50             # ~15 uA x 3.3 V, EST (no datasheet figure in hand)
+peak_mw: 1
+capabilities: [motion.detect]
+notes:
+  - "Lens in the housing; detection pattern and range unmeasured."

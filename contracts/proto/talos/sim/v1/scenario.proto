@@ -118,6 +118,20 @@ message ActuatorFaultSet {
   ActuatorFault fault = 2;
 }
 
+// The node's USER button (TL-SN-002, ADR 0019) is pressed for hold_ms. Under
+// UserButton::kLongPressMs (3 s) it is a short press: the node sends a test
+// report (a heartbeat now). Longer: a commissioning request (diagnostics only).
+message UserButtonPress {
+  string device_id = 1;
+  uint32 hold_ms = 2;
+}
+
+// The device's battery now reads this (under load, for primary cells).
+message BatterySet {
+  string device_id = 1;
+  uint32 mv = 2;
+}
+
 message Stimulus {
   uint32 at_ms = 1;
   oneof kind {
@@ -135,6 +149,8 @@ message Stimulus {
     HubRestart hub_restart = 13;
     ActuatorFaultSet actuator_fault = 14;
     EnclosureSet enclosure_set = 15;
+    UserButtonPress user_button = 16;
+    BatterySet battery_set = 17;
   }
 }
 

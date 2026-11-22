@@ -1,5 +1,7 @@
 # HW-0007: HSEC8-EM2 slot socket, and a one-slot USB debug adapter (TL-DBG-001)
 
+> **Superseded for new nodes by [ADR 0019](../../../docs/decisions/0019-self-contained-sensor-node.md) (2026-11-21).** This decision still describes the slot socket, cards and debug adapter of the archived TL-SN-001 checkpoint, which stays in the repo and in CI; new nodes (TL-SN-002) have no slots.
+
 - Status: accepted (provisional, needs bench verification)
 - Date: 2026-11-17
 - Amends: the socket candidate in [HW-0002](0002-sensor-module-interface.md); closes the socket choice in HD-002

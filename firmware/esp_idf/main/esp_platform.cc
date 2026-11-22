@@ -1,6 +1,6 @@
 #include "esp_platform.h"
 
-#include "board_tl_sn_001.h"
+#include "board_select.h"
 #include "driver/gpio.h"
 #include "esp_attr.h"
 #include "esp_log.h"
@@ -51,7 +51,8 @@ const char* key_name(StoreKey k) {
 #if defined(SOC_RTC_MEM_SUPPORTED) && SOC_RTC_MEM_SUPPORTED
 // LP RAM: survives deep sleep, not power loss. Not zeroed at boot; the runtime
 // validates it (magic + CRC) and only trusts it after a deep-sleep wake.
-constexpr std::size_t kRetainedBytes = 128;
+constexpr std::size_t kRetainedBytes = ISleep::kMinRetainedBytes;
+static_assert(kRetainedBytes >= ISleep::kMinRetainedBytes);
 RTC_NOINIT_ATTR std::uint8_t g_retained[kRetainedBytes];
 #endif
 }  // namespace
@@ -80,6 +81,18 @@ Gpio::Gpio(const BoardSupport& b) {
     io.pin_bit_mask = 1ULL << b.service_button_line;
     io.mode = GPIO_MODE_INPUT;
     io.pull_up_en = GPIO_PULLUP_ENABLE;
+    io.pull_down_en = GPIO_PULLDOWN_DISABLE;
+    gpio_config(&io);
+  }
+  // TL-SN-002 direct inputs (ADR 0019), all with board pull resistors, so no
+  // internal pulls: tamper loop (1M pull-up), USER (100k pull-down), USB_PRESENT
+  // (VBUS 100k/100k divider). Inputs only.
+  for (const std::uint8_t line : {b.tamper_line, b.user_button_line, b.usb_present_line}) {
+    if (line == 0xFF) continue;
+    gpio_config_t io{};
+    io.pin_bit_mask = 1ULL << line;
+    io.mode = GPIO_MODE_INPUT;
+    io.pull_up_en = GPIO_PULLUP_DISABLE;
     io.pull_down_en = GPIO_PULLDOWN_DISABLE;
     gpio_config(&io);
   }
@@ -184,7 +197,8 @@ BatteryAdc::BatteryAdc() {
   adc_oneshot_chan_cfg_t chan{};
   chan.atten = ADC_ATTEN_DB_12;  // ~0-3.1 V at the pin: VBAT/2 tops out at 2.1 V
   chan.bitwidth = ADC_BITWIDTH_DEFAULT;
-  const auto channel = static_cast<adc_channel_t>(board::kBatterySenseAdc - 1);  // GPIO1 = CH0
+  const auto channel =
+      static_cast<adc_channel_t>(selected_board::kBatterySenseAdc - 1);  // GPIO1 = CH0
   if (adc_oneshot_config_channel(unit_, channel, &chan) != ESP_OK) return;
   adc_cali_curve_fitting_config_t cal{};
   cal.unit_id = ADC_UNIT_1;
@@ -196,7 +210,7 @@ BatteryAdc::BatteryAdc() {
 
 std::optional<std::uint32_t> BatteryAdc::battery_mv() {
   if (!unit_ || !cali_) return std::nullopt;  // unknown, never a made-up 3.9 V
-  const auto channel = static_cast<adc_channel_t>(board::kBatterySenseAdc - 1);
+  const auto channel = static_cast<adc_channel_t>(selected_board::kBatterySenseAdc - 1);
   std::int64_t sum = 0;
   constexpr int kSamples = 16;
   for (int i = 0; i < kSamples; ++i) {

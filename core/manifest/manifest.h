@@ -44,6 +44,21 @@ struct SlotSpec {
   bool uart = false;
   bool analog = false;
   std::vector<std::string> rails;  // rails routed to this slot
+  // Built-in module (ADR 0019): soldered on, always populated with exactly this
+  // module. Connector, bus, per-slot rail and slot-limit checks do not apply;
+  // its I2C devices sit on the root bus.
+  std::optional<ModuleId> built_in_module;
+};
+
+// The board's battery (ADR 0019); thresholds under load for primary cells.
+struct BatterySpec {
+  std::string chemistry;  // "li-fes2", "li-ion"
+  std::string form;       // "AA", "18650"
+  std::uint32_t cells_in_series = 0;
+  bool rechargeable = false;  // false = primary: never charged
+  std::uint32_t fresh_mv = 0;
+  std::uint32_t low_mv = 0;
+  std::uint32_t critical_mv = 0;
 };
 
 // On-board wiring that firmware drives (documentation, PROVISIONAL).
@@ -101,6 +116,7 @@ struct BoardManifest {
   std::vector<IndicatorSpec> indicators;
   std::vector<CapabilityId> board_capabilities;  // provided by the board, not a slot
   std::vector<ModuleSlotLimit> module_slot_limits;
+  std::optional<BatterySpec> battery;
 };
 
 struct RailLoad {
@@ -149,7 +165,8 @@ enum class ManifestIssueCode : std::uint8_t {
   kConnectorMismatch,
   kI2cRootConflict,
   kUartOversubscribed,
-  kSlotNotAllowed,  // the board limits this module to other slots (ModuleSlotLimit)
+  kSlotNotAllowed,   // the board limits this module to other slots (ModuleSlotLimit)
+  kBuiltInMismatch,  // a built-in slot assigned a different module than the one soldered on
 };
 
 std::string_view to_string(ManifestIssueCode c);
@@ -168,6 +185,8 @@ struct ValidationResult {
 
 // Checks that `assignments` can run on `board` when powered by `active_source`.
 // Pure; reports every problem found rather than stopping at the first.
+// Built-in slots (ADR 0019) are always populated: an assignment may name them
+// (it must name the built-in module) or leave them out; either way they count.
 ValidationResult validate_configuration(const BoardManifest& board, const ModuleCatalog& catalog,
                                         const std::vector<SlotAssignment>& assignments,
                                         PowerSource active_source);

@@ -26,6 +26,9 @@ enum class ModuleCode : std::uint16_t {
   kReedContact = 0x0102,
   kTmag5273Contact = 0x0103,  // TL-MOD-001: 3-axis Hall, orientation-independent
   kTlMod002Pir = 0x0104,      // TL-MOD-002: EKMB PIR card
+  // TL-SN-002 built-ins (ADR 0019): soldered on, never read from an ID EEPROM.
+  kTmag5273A2 = 0x0105,  // TMAG5273A2 (+/-133 mT range class): magnet-defeat headroom
+  kPir223d = 0x0106,     // PIR223D-S0 digital PIR on a switched rail (PIR_PWR)
   kLis2dw12 = 0x0201,
   kTlMod003Imu = 0x0202,  // TL-MOD-003: LIS2DW12 card
   kSht40 = 0x0301,
@@ -112,6 +115,15 @@ inline constexpr TimeMs kNever = ~TimeMs{0};
 // after power-up, then high while it sees motion (held ~2.6 s), then masked
 // ~1.3 s. Nothing is reported until warm-up ends: the state is unknown, never
 // "clear". A rise must last kGlitchMs, so an ESD or RF spike is not motion.
+// Warm-up and glitch timing of one PIR part.
+struct PirTiming {
+  TimeMs warm_min_ms;       // nothing is valid before this after power-up
+  TimeMs quiet_ms;          // ...and the output must also rest low this long
+  TimeMs warm_max_ms;       // past this a still-busy output is a fault (or continuous motion)
+  TimeMs glitch_ms;         // a rise shorter than this is not motion
+  TimeMs toggle_window_ms;  // "still toggling" window at warm_max_ms
+};
+
 class PirDriver {
  public:
   static constexpr TimeMs kWarmMinMs = 30'000;   // datasheet Twu 25 s typ, plus margin
@@ -123,6 +135,15 @@ class PirDriver {
   // continuous motion is what kept it from settling, so warm-up ends and the
   // motion is reported. An output that never goes low stays a fault.
   static constexpr TimeMs kToggleWindowMs = 10'000;
+  static constexpr PirTiming kEkmb{kWarmMinMs, kQuietMs, kWarmMaxMs, kGlitchMs, kToggleWindowMs};
+  // PIR223D-S0 (TL-SN-002). PROVISIONAL: no datasheet timing in hand yet. Digital
+  // PIRs of this class settle in ~10-30 s and block ~2 s after each detection, so
+  // the EKMB minimum (30 s) and glitch filter are kept, quiet 2 s, and a fault is
+  // called at 60 s instead of 210 s. Verify against the datasheet and on the bench.
+  static constexpr PirTiming kPir223d{30'000, 2'000, 60'000, 30, 10'000};
+  // Selects the part's timing; call before init()/resume().
+  void set_timing(const PirTiming& t) { timing_ = t; }
+  const PirTiming& timing() const { return timing_; }
   bool init(SlotIo& io, IEventSink& sink, TimeMs now);
   // state: 1 = warm-up was already over before the deep sleep (AON stayed on).
   bool resume(SlotIo& io, IEventSink& sink, TimeMs now, std::uint8_t state);
@@ -134,6 +155,7 @@ class PirDriver {
 
  private:
   static constexpr TimeMs kWarmCheckMs = 250;
+  PirTiming timing_ = kEkmb;
   TimeMs powered_at_ = 0;
   TimeMs next_check_ = 0;  // absolute: due_ms() must not move with the clock
   TimeMs low_since_ = 0;
@@ -187,7 +209,19 @@ class Tmag5273ContactDriver {
   // 3 / 1.5 mT read closed up to ~24 mm. Provisional until bench C1-06 measures the real door.
   static constexpr std::int32_t kOpenUt = 10'000;
   static constexpr std::int32_t kCloseUt = 20'000;
-  static constexpr std::int32_t kLsbPerMt = 820;  // +/-40 mT range
+  static constexpr std::int32_t kLsbPerMt = 820;  // +/-40 mT range (A1)
+  // TMAG5273A2 (TL-SN-002): the x2 range variant, +/-133 mT (or +/-266 mT with
+  // X_Y_RANGE/Z_RANGE set); the A in the name is the factory address (0x35, as
+  // A1). 32768 / 133 = 246 LSB/mT; a threshold code is 133 mT / 128. PROVISIONAL:
+  // check both against the TMAG5273 datasheet (SLYS045) device-comparison table.
+  static constexpr std::int32_t kA2RangeMt = 133;
+  static constexpr std::int32_t kA2LsbPerMt = 246;
+  // Range variant; call before init()/resume(). Defaults to the A1 (+/-40 mT).
+  void set_range(std::int32_t range_mt, std::int32_t lsb_per_mt) {
+    range_mt_ = range_mt;
+    lsb_per_mt_ = lsb_per_mt;
+  }
+  std::int32_t range_mt() const { return range_mt_; }
   // A failed convert/re-arm (an I2C glitch) is retried: kRetryMs apart up to
   // kMaxRetries, then the sensor is parked in sleep (5 nA, not 0.45 mA standby),
   // reported (kBusError, b = kFaultDetailUnarmed) and retried every kSlowRetryMs.
@@ -203,8 +237,8 @@ class Tmag5273ContactDriver {
   // latched an event the MCU never saw (WAKE stuck low or open): report it.
   void supervise(SlotIo& io, IEventSink& sink, TimeMs now);
   TimeMs due_ms(TimeMs) const { return retry_at_; }
-  // 8-bit threshold code for +/-40 mT range: 40 mT / 128 per code, rounded up.
-  static std::uint8_t threshold_code(std::int32_t ut);
+  // 8-bit threshold code: range / 128 per code (40 mT for the A1), rounded up.
+  static std::uint8_t threshold_code(std::int32_t ut, std::int32_t range_mt = 40);
   bool open() const { return open_; }
 
  private:
@@ -215,6 +249,8 @@ class Tmag5273ContactDriver {
   void service(SlotIo& io, IEventSink& sink, TimeMs now);
   void failed(SlotIo& io, IEventSink& sink, TimeMs now);
   bool open_ = true;
+  std::int32_t range_mt_ = 40;
+  std::int32_t lsb_per_mt_ = kLsbPerMt;
   TimeMs retry_at_ = kNever;
   int failures_ = 0;
   bool unarmed_reported_ = false;

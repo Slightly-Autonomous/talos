@@ -34,7 +34,7 @@ requirements:
     test: EE review + bench leakage test (interface-test-matrix IT-07)
   - id: HWR-007
     statement: Every output that controls power, reset or chip select has a resistor-defined safe default at power-up
-    board: TL-SN-001
+    board: TL-SN-001, TL-SN-002
     status: verified_tool
     test: hardware/scripts/check_kicad.py (safe-default check) -> hardware/results/kicad-check.md
   - id: HWR-008
@@ -49,7 +49,7 @@ requirements:
     test: hardware/scripts/power_budget.py (asserts) -> hardware/results/power-budget.md
   - id: HWR-010
     statement: No charger path is ever connected to a primary (non-rechargeable) cell
-    board: TL-SN-001
+    board: TL-SN-001, TL-SN-002
     status: designed
     test: keyed 3-pin protected-pack connector; EE review
   - id: HWR-011
@@ -59,7 +59,7 @@ requirements:
     test: schematic net BAT_NTC
   - id: HWR-012
     statement: Factory flashing and test need only pads and USB-C (no populated headers, no hand soldering)
-    board: TL-SN-001
+    board: TL-SN-001, TL-SN-002
     status: designed
     test: schematic test-point list
   - id: HWR-013
@@ -74,17 +74,17 @@ requirements:
     test: //core/manifest:manifest_test (HW_MF_009)
   - id: HWR-015
     statement: Board manifests carry no pin numbers; pins are compiled into the signed firmware BoardSupport table only
-    board: all
+    board: all, TL-SN-002
     status: verified_tool
     test: contracts/proto/talos/v1/manifest.proto (no pin fields); firmware/esp_idf/main/board_tl_sn_001.h
   - id: HWR-016
     statement: Every schematic opens in KiCad 10 and passes ERC with zero errors; the exported netlist matches the generator's intended netlist
-    board: TL-SN-001, TL-MOD-001..004, TL-TEST-001, TL-DBG-001
+    board: TL-SN-001, TL-SN-002, TL-MOD-001..004, TL-TEST-001, TL-DBG-001
     status: verified_tool
     test: hardware/scripts/check_kicad.py -> hardware/results/
   - id: HWR-017
     statement: Every routed PCB passes kicad-cli DRC with schematic parity at zero errors under the project fab rules
-    board: TL-SN-001, TL-MOD-001..004, TL-TEST-001, TL-DBG-001
+    board: TL-SN-001, TL-SN-002, TL-MOD-001..004, TL-TEST-001, TL-DBG-001
     status: verified_tool
     test: hardware/scripts/check_kicad.py -> hardware/results/kicad-check.md (PCB DRC columns)
   - id: HWR-018
@@ -97,3 +97,39 @@ requirements:
     board: TL-DBG-001
     status: designed
     test: hardware/scripts/check_kicad.py cross-board check (HOSTS); tools/dbg tests (configure, rail sequencing, card ID, against a simulated MCP2221A); bench bring-up not done
+  - id: HWR-019
+    statement: TL-SN-002 is one self-contained board with every sensor soldered on (3-axis Hall, accelerometer, temperature/humidity, PIR); no slots or cards (ADR 0019)
+    board: TL-SN-002
+    status: designed
+    verification: generator netlist (gen_schematics.py sensor_node_v2) and layout_rules.py
+  - id: HWR-020
+    statement: TL-SN-002 is assembled 100 % by JLCPCB (SMT + JLCPCB through-hole); the radio module is the one owner-approved global-sourcing exception (HD-023)
+    board: TL-SN-002
+    status: verified_tool
+    verification: jlc_sourcing.py check (no not_placed parts on TL-SN-002)
+  - id: HWR-021
+    statement: TL-SN-002 runs from 2 x AA primary cells or USB-C; USB has priority; the cells are never charged and never back-fed (TPS2116 priority mux, reverse-cell P-FET)
+    board: TL-SN-002
+    status: designed
+    verification: spice_sim.py B10/B11; bench
+  - id: HWR-022
+    statement: TL-SN-002 battery-only deep-sleep current is under 40 uA at the cells, with every sensor on and lamps dark (estimate until measured)
+    board: TL-SN-002
+    status: verified_tool
+    verification: power_budget_sn2.py (CI)
+  - id: HWR-023
+    statement: TL-SN-002 flashes, logs and debugs over its USB-C (ESP32-H2 USB Serial/JTAG); Tag-Connect UART0 pads are the recovery path
+    board: TL-SN-002
+    status: designed
+    verification: bench
+  - id: HWR-024
+    statement: TL-SN-002 has debug lamps (PWR, STAT, LINK, MAG, VIB, PIR, ENV, TAMP, BATT, FLT) on one edge and RST/BOOT/USER buttons; firmware lamps stay dark on battery unless service mode
+    board: TL-SN-002
+    status: designed
+    verification: layout_rules.py (lamp strip), firmware indicator tests
+  - id: HWR-025
+    statement: TL-SN-002's SHT40 sits on a slotted thermal tongue and its Hall sensor on the board edge facing the magnet
+    board: TL-SN-002
+    status: verified_tool
+    verification: layout_rules.py
+

@@ -51,6 +51,8 @@ std::string_view to_string(ManifestIssueCode c) {
       return "uart_oversubscribed";
     case ManifestIssueCode::kSlotNotAllowed:
       return "slot_not_allowed";
+    case ManifestIssueCode::kBuiltInMismatch:
+      return "built_in_mismatch";
   }
   return "invalid";
 }
@@ -97,7 +99,16 @@ ValidationResult validate_configuration(const BoardManifest& board, const Module
   std::vector<Placed> placed;
   std::set<SlotIndex> used;
 
-  for (const auto& a : assignments) {
+  // Built-in slots are populated whether or not the assignment names them.
+  std::vector<SlotAssignment> all = assignments;
+  for (const auto& s : board.slots) {
+    if (!s.built_in_module) continue;
+    const bool named = std::any_of(assignments.begin(), assignments.end(),
+                                   [&](const SlotAssignment& a) { return a.slot == s.index; });
+    if (!named) all.push_back({s.index, *s.built_in_module});
+  }
+
+  for (const auto& a : all) {
     const SlotSpec* slot = find_slot(board, a.slot);
     if (!slot) {
       issue(ManifestIssueCode::kUnknownSlot, a.slot, slot_str(a.slot) + " does not exist");
@@ -113,6 +124,23 @@ ValidationResult validate_configuration(const BoardManifest& board, const Module
       continue;
     }
     const ModuleManifest& m = mit->second;
+    if (slot->built_in_module) {
+      // Soldered on (ADR 0019): the slot can only hold that module, and the
+      // board's wiring is the resource; no connector, bus, rail or limit checks.
+      if (a.module != *slot->built_in_module) {
+        issue(ManifestIssueCode::kBuiltInMismatch, a.slot,
+              slot_str(a.slot) + " is built in (" + slot->built_in_module->str() + "), not " +
+                  a.module.str());
+        continue;
+      }
+      // The board's wake wiring still has to suit it (a manifest slip, not a card).
+      if (m.needs_wake && !slot->wake) {
+        issue(ManifestIssueCode::kMissingWake, a.slot,
+              m.id.str() + " is built in on " + slot_str(a.slot) + ", which has no wake line");
+      }
+      placed.push_back({slot, &m});
+      continue;
+    }
     // A card built for another connector revision is never activated (HW-MF-007).
     if (!board.connector_standard.empty() && m.connector_standard != board.connector_standard) {
       issue(ManifestIssueCode::kConnectorMismatch, a.slot,
@@ -167,22 +195,26 @@ ValidationResult validate_configuration(const BoardManifest& board, const Module
     }
   }
 
-  // Shared I2C branches: identical addresses collide.
+  // Shared I2C branches: identical addresses collide. Built-in modules share the
+  // root bus (key 0xFF), so two built-ins at one address collide too.
+  constexpr std::uint8_t kRootBus = 0xFF;
   std::map<std::pair<std::uint8_t, std::uint8_t>, SlotIndex> address_owner;
   for (const auto& p : placed) {
-    if (!p.slot->i2c_branch) continue;
+    if (!p.slot->i2c_branch && !p.slot->built_in_module) continue;
+    const std::uint8_t bus = p.slot->built_in_module ? kRootBus : *p.slot->i2c_branch;
     for (auto addr : p.module->i2c_addresses) {
-      auto [it, inserted] =
-          address_owner.emplace(std::pair{*p.slot->i2c_branch, addr}, p.slot->index);
+      auto [it, inserted] = address_owner.emplace(std::pair{bus, addr}, p.slot->index);
       if (!inserted) {
         issue(ManifestIssueCode::kI2cAddressConflict, p.slot->index,
               "i2c address " + std::to_string(addr) + " already used by " + slot_str(it->second) +
-                  " on the same branch");
+                  (bus == kRootBus ? " on the root bus" : " on the same branch"));
       }
     }
   }
 
-  // Enabled mux branches join the root bus: root addresses are off limits.
+  // Enabled mux branches join the root bus: root addresses are off limits, and
+  // built-in modules sit on the root bus, so a card on a branch can't share
+  // theirs either.
   for (const auto& p : placed) {
     for (auto addr : p.module->i2c_addresses) {
       for (auto reserved : board.reserved_i2c_addresses) {
@@ -190,6 +222,17 @@ ValidationResult validate_configuration(const BoardManifest& board, const Module
           issue(ManifestIssueCode::kI2cRootConflict, p.slot->index,
                 p.module->id.str() + " uses i2c address " + std::to_string(addr) +
                     ", reserved on the board's root bus");
+        }
+      }
+      if (p.slot->built_in_module) continue;
+      for (const auto& q : placed) {
+        if (!q.slot->built_in_module) continue;
+        for (auto root : q.module->i2c_addresses) {
+          if (addr == root) {
+            issue(ManifestIssueCode::kI2cRootConflict, p.slot->index,
+                  p.module->id.str() + " uses i2c address " + std::to_string(addr) +
+                      ", taken on the root bus by built-in " + slot_str(q.slot->index));
+          }
         }
       }
     }
@@ -209,10 +252,11 @@ ValidationResult validate_configuration(const BoardManifest& board, const Module
     }
   }
 
-  // Rail totals.
+  // Rail totals (slot rails; built-in modules draw from the board's own supply).
   for (const auto& rail : board.rails) {
     std::uint64_t total = 0;
     for (const auto& p : placed) {
+      if (p.slot->built_in_module) continue;
       for (const auto& load : p.module->loads) {
         if (load.rail == rail.name) total += load.active_ma;
       }

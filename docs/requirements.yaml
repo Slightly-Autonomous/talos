@@ -1,5 +1,8 @@
 # Requirements traceability (spec §56). Status values:
 # requested | implemented | verified_sim | verified_hil | released
+# `tl_sn_002`: how a requirement written for the four-slot TL-SN-001 applies to the
+# self-contained TL-SN-002 (ADR 0019). "retired" requirements stay in force for the archived
+# TL-SN-001 (still built and tested in CI) and are never deleted.
 requirements:
   - id: REQ-001
     statement: Local intrusion processing does not require cloud connectivity
@@ -13,6 +16,7 @@ requirements:
     test: //core/manifest:manifest_test, //codec:yaml_loader_test, //firmware/sim:node_test (Discovery.*)
     severity: critical
     status: implemented
+    tl_sn_002: "retired (ADR 0019): no module ports; its four built-in sensors are always populated, validated by REQ-044"
   - id: REQ-003
     statement: No duplicate physical action from one retried command or redelivered event
     subsystem: core.execution
@@ -25,6 +29,7 @@ requirements:
     test: //firmware/sim:node_test (Ota.*, incl. power cut at every store write); tests/hil (boot/epoch) pending hardware
     severity: critical
     status: verified_sim
+    tl_sn_002: "applies: factory flash over the node's USB-C (USB Serial/JTAG) through one command, REQ-047"
   - id: REQ-005
     statement: Replay from the journal reproduces state exactly; snapshot plus tail equals full replay
     subsystem: core.state
@@ -163,12 +168,14 @@ requirements:
     test: //codec:yaml_loader_test (SensorNodeRevA.HW_MF_001..009, RootAddressConflictRejected)
     severity: high
     status: verified_sim
+    tl_sn_002: "retired (ADR 0019): no cards, connectors or card UARTs; root-bus address and power-source checks carry over in REQ-044"
   - id: REQ-028
     statement: Sensor Node and card schematics open in KiCad, pass ERC with zero errors, and their exported netlists match the generator's intended connectivity
     subsystem: hardware.kicad
     test: hardware/scripts/check_kicad.py -> hardware/results/
     severity: high
     status: implemented
+    tl_sn_002: "applies when the TL-SN-002 schematic exists (hardware generators, owned by the hardware workstream)"
   - id: REQ-029
     statement: Every twin scenario that a firmware-capable device appears in passes with that device running the real portable firmware (L2), and the device reports the same transitions as its behavioural model (L1)
     subsystem: simulation, firmware.portable
@@ -235,18 +242,21 @@ requirements:
     test: //firmware/portable:indicators_test (StatusLed.*, SlotLeds.*), //firmware/sim:indicators_tamper_test (SlotLeds.*, StatusLed.*), //firmware/sim:diag_test (LedServiceModeLightsSlotLedsOnBattery)
     severity: high
     status: verified_sim
+    tl_sn_002: "applies: the per-sensor lamps reuse the slot-LED policy; TL-SN-002's board lamps follow REQ-045"
   - id: REQ-040
     statement: Each sensor node carries its board name, revision and serial in the permanent partition, written once at program time and checked on the bench
     subsystem: firmware.diag, tools.dbg, tools.bench
     test: //firmware/sim:diag_test (BoardIdIsWrittenOnceAndSurvivesAWorkingPartitionErase), tools/dbg/tests/test_node_id.py, tools/bench/tests/test_runner.py (S-M16)
     severity: medium
     status: verified_sim
+    tl_sn_002: "applies: board TL-SN-002 rev A (talos_dbg program-id --node --board TL-SN-002, talos_bench.flash)"
   - id: REQ-041
     statement: Board manifests can restrict a module to some slots (provisional data); on TL-SN-001 the temperature/humidity card is only valid in slots 0 and 2, away from the charger (B-03), and other slots get a slot_not_allowed diagnostic
     subsystem: core.manifest
     test: //codec:yaml_loader_test (B_03_EnvironmentCardOnlyInTheTopSlots)
     severity: medium
     status: implemented
+    tl_sn_002: "retired (ADR 0019): TL-SN-002 has no slot limits (the SHT40 placement is a layout rule)"
   - id: REQ-042
     statement: An owner can put one node into a bounded maintenance window (default 30 min, at most 4 h; humans only) during which its tamper alarm is suppressed and the suppression journaled; it ends on the hub clock or on cancel, and a lid still open then alarms; back-to-back windows are capped at 4 h from the first start; other nodes and the node's other alarms and health findings are unaffected
     subsystem: core.execution, core.engine, server.health, simulation.twin, web
@@ -258,4 +268,35 @@ requirements:
     subsystem: firmware.runtime
     test: //firmware/portable:indicators_test (ServiceButton.*), //firmware/sim:indicators_tamper_test (ServiceButton.*)
     severity: low
+    status: verified_sim
+    tl_sn_002: "applies unchanged (BOOT is GPIO9 on both boards)"
+  - id: REQ-044
+    statement: Boards may declare built-in modules; a built-in slot is always populated with exactly its module, skips connector, mux-branch, per-slot rail and slot-limit checks, shares the root bus (address conflicts and reserved board addresses still checked) and counts against the active source's power budget; TL-SN-001 validation is unchanged
+    subsystem: core.manifest, codec, contracts
+    test: //codec:yaml_loader_test (SensorNodeV2.*), //core/manifest:manifest_test, tools/dbg/tests/test_contracts.py (Sn002ManifestMatchesFirmware)
+    severity: high
+    status: verified_sim
+  - id: REQ-045
+    statement: TL-SN-002 firmware runs its built-in sensors without ID EEPROMs, a mux or presence lines (card removal never fires); wakes from deep sleep on five active-high lines (MAG, ACC, PIR, tamper, USER); drives eight lamps through the existing policy (dark on battery unless service mode, lit on USB); a faulting built-in sensor is disabled and reported (P0 when critical) and retried with backoff, the PIR by a power cycle of its rail
+    subsystem: firmware.portable, firmware.sim
+    test: //firmware/sim:sn002_test, //firmware/portable:wire_test (kUserButton)
+    severity: high
+    status: verified_sim
+  - id: REQ-046
+    statement: A short USER press sends a test report (a heartbeat now) and blinks every lamp for 10 s; a long press (>= 3 s) sends one commissioning request; both are P1 kUserButton diagnostics that the hub records and never acts on. Primary AA cells are judged by their voltage under load (2.2 V pair = low battery), and the hub asks for new cells, never a charge
+    subsystem: firmware.runtime, server.health, simulation.twin
+    test: //firmware/sim:sn002_test (Sn002User.*, Sn002Power.*), //server:server_test (Sn002UserButtonAaLowBatteryAndBuiltInFaults), //simulation/runner:scenario_test + backend_parity_test (garage_user_test_report, garage_aa_low_battery)
+    severity: medium
+    status: verified_sim
+  - id: REQ-047
+    statement: A TL-SN-002 is flashed, given its board identity and self-tested over its USB-C port by one command; a missing flasher is reported as skipped, never faked
+    subsystem: tools.bench, tools.dbg
+    test: tools/bench/tests/test_flash.py, tools/bench/tests/test_sn002.py
+    severity: medium
+    status: verified_sim
+  - id: REQ-048
+    statement: The twin's garage and driveway nodes are TL-SN-002 and run on its L2 board model; every scenario and L1/L2 parity still pass
+    subsystem: simulation
+    test: //simulation/runner:backend_parity_test (Binding.GarageNodesRunOnTheTlSn002Model, Corpus/*)
+    severity: high
     status: verified_sim

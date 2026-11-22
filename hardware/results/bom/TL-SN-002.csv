@@ -1,0 +1,75 @@
+qty,refs,value,symbol,footprint
+1,BT1,2xAA Li-FeS2,Device:Battery,Battery:BatteryHolder_Keystone_2462_2xAA
+3,C1 C7 C11,10u,Device:C,Capacitor_SMD:C_0805_2012Metric
+1,C12,22u,Device:C,Capacitor_SMD:C_0805_2012Metric
+7,C2 C4 C13 C14 C15 C17 C21,100n,Device:C,Capacitor_SMD:C_0402_1005Metric
+3,C3 C6 C16,1u,Device:C,Capacitor_SMD:C_0402_1005Metric
+2,C5 C18,4.7u,Device:C,Capacitor_SMD:C_0805_2012Metric
+2,C25 C26,DNP,Device:C,Capacitor_SMD:C_0402_1005Metric
+1,C38,10n,Device:C,Capacitor_SMD:C_0402_1005Metric
+1,D1,STATUS,Device:LED,LED_SMD:LED_0603_1608Metric
+7,D8 D9 D10 D11 D12 D13 D14,LED_GREEN,Device:LED,LED_SMD:LED_0603_1608Metric
+2,D15 D16,LED_RED,Device:LED,LED_SMD:LED_0603_1608Metric
+1,J1,USB-C sink,Connector:USB_C_Receptacle_USB2.0_16P,Connector_USB:USB_C_Receptacle_GCT_USB4105-xx-A_16P_TopMnt_Horizontal
+1,J10,TC2030 PROG,Connector_Generic:Conn_01x06,Connector:Tag-Connect_TC2030-IDC-NL_2x03_P1.27mm_Vertical
+1,J9,TAMPER loop,Connector_Generic:Conn_01x02,Connector_JST:JST_PH_S2B-PH-SM4-TB_1x02-1MP_P2.00mm_Horizontal
+2,JP1 JP2,DNP meter,Connector_Generic:Conn_01x02,Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical
+1,L1,2.2u DFE252012F-2R2M,Device:L,Inductor_SMD:L_1008_2520Metric
+1,Q1,AO3401A,Transistor_FET:AO3401A,Package_TO_SOT_SMD:SOT-23
+4,R1 R2 R4 R15,10k,Device:R,Resistor_SMD:R_0402_1005Metric
+2,R10 R11,5.1k,Device:R,Resistor_SMD:R_0402_1005Metric
+8,R95 R96 R97 R98 R99 R100 R101 R102,2.2k,Device:R,Resistor_SMD:R_0402_1005Metric
+5,R3 R12 R13 R16 R69,100k,Device:R,Resistor_SMD:R_0402_1005Metric
+1,R14,27k,Device:R,Resistor_SMD:R_0402_1005Metric
+1,R17,330,Device:R,Resistor_SMD:R_0402_1005Metric
+1,R18,36.5k 1%,Device:R,Resistor_SMD:R_0402_1005Metric
+3,R19 R66 R67,0R,Device:R,Resistor_SMD:R_0402_1005Metric
+1,R20,16.2k 1%,Device:R,Resistor_SMD:R_0402_1005Metric
+2,R21 R30,1M,Device:R,Resistor_SMD:R_0402_1005Metric
+1,R5,1k,Device:R,Resistor_SMD:R_0402_1005Metric
+2,R6 R7,4.7k,Device:R,Resistor_SMD:R_0402_1005Metric
+2,R70 R71,0R,Device:R,Resistor_SMD:R_0805_2012Metric
+2,R8 R9,4.7M,Device:R,Resistor_SMD:R_0402_1005Metric
+1,R94,3.3k,Device:R,Resistor_SMD:R_0402_1005Metric
+1,SW1,RESET,Switch:SW_Push,Button_Switch_SMD:SW_SPST_PTS810
+1,SW2,BOOT,Switch:SW_Push,Button_Switch_SMD:SW_SPST_PTS810
+1,SW3,USER,Switch:SW_Push,Button_Switch_SMD:SW_SPST_PTS810
+1,TP1,V3V3,Connector:TestPoint,TestPoint:TestPoint_Pad_D1.0mm
+1,TP10,V3V3_REG,Connector:TestPoint,TestPoint:TestPoint_Pad_D1.0mm
+1,TP11,I2C_SDA,Connector:TestPoint,TestPoint:TestPoint_Pad_D1.0mm
+1,TP12,I2C_SCL,Connector:TestPoint,TestPoint:TestPoint_Pad_D1.0mm
+1,TP13,MAG_WAKE,Connector:TestPoint,TestPoint:TestPoint_Pad_D1.0mm
+1,TP14,MAG_INT_N,Connector:TestPoint,TestPoint:TestPoint_Pad_D1.0mm
+1,TP15,ACC_INT,Connector:TestPoint,TestPoint:TestPoint_Pad_D1.0mm
+1,TP16,PIR_OUT,Connector:TestPoint,TestPoint:TestPoint_Pad_D1.0mm
+1,TP17,PIR_VDD,Connector:TestPoint,TestPoint:TestPoint_Pad_D1.0mm
+1,TP18,TAMPER,Connector:TestPoint,TestPoint:TestPoint_Pad_D1.0mm
+1,TP19,USER_BTN,Connector:TestPoint,TestPoint:TestPoint_Pad_D1.0mm
+3,TP2 TP3 TP4,GND,Connector:TestPoint,TestPoint:TestPoint_Pad_D1.0mm
+1,TP20,CHIP_EN,Connector:TestPoint,TestPoint:TestPoint_Pad_D1.0mm
+1,TP21,BOOT_N,Connector:TestPoint,TestPoint:TestPoint_Pad_D1.0mm
+1,TP22,U0TXD,Connector:TestPoint,TestPoint:TestPoint_Pad_D1.0mm
+1,TP23,U0RXD,Connector:TestPoint,TestPoint:TestPoint_Pad_D1.0mm
+1,TP24,USB_PRESENT,Connector:TestPoint,TestPoint:TestPoint_Pad_D1.0mm
+1,TP25,VBAT_SENSE,Connector:TestPoint,TestPoint:TestPoint_Pad_D1.0mm
+1,TP26,USB_DP,Connector:TestPoint,TestPoint:TestPoint_Pad_D1.0mm
+1,TP27,USB_DN,Connector:TestPoint,TestPoint:TestPoint_Pad_D1.0mm
+1,TP28,SPARE_IO0,Connector:TestPoint,TestPoint:TestPoint_Pad_D1.0mm
+1,TP29,SPARE_IO5,Connector:TestPoint,TestPoint:TestPoint_Pad_D1.0mm
+1,TP30,SPARE_IO22,Connector:TestPoint,TestPoint:TestPoint_Pad_D1.0mm
+1,TP31,SPARE_IO25,Connector:TestPoint,TestPoint:TestPoint_Pad_D1.0mm
+1,TP5,VSYS,Connector:TestPoint,TestPoint:TestPoint_Pad_D1.0mm
+1,TP6,VBAT,Connector:TestPoint,TestPoint:TestPoint_Pad_D1.0mm
+1,TP7,BATT_RAW,Connector:TestPoint,TestPoint:TestPoint_Pad_D1.0mm
+1,TP8,USB_VBUS,Connector:TestPoint,TestPoint:TestPoint_Pad_D1.0mm
+1,TP9,SYS_REG,Connector:TestPoint,TestPoint:TestPoint_Pad_D1.0mm
+1,U1,ESP32-H2-MINI-1-H4S,talos:ESP32-H2-MINI-1,talos:ESP32-H2-MINI-1
+1,U10,PIR223D-S0,talos:EKMB,talos:PIR_Panasonic_EKMB_TO-5
+1,U14,TCA9535PWR,Interface_Expansion:TCA9535PWR,Package_SO:TSSOP-24_4.4x7.8mm_P0.65mm
+1,U2,USBLC6-2SC6,Power_Protection:USBLC6-2SC6,Package_TO_SOT_SMD:SOT-23-6
+1,U3,TPS2116DRLR,Power_Management:TPS2116DRL,Package_TO_SOT_SMD:SOT-583-8
+1,U5,TPS63900DSKR,Regulator_Switching:TPS63900,Package_SON:WSON-10-1EP_2.5x2.5mm_P0.5mm_EP1.2x2mm
+1,U6,TMAG5273A2QDBVT,Sensor_Magnetic:TMAG5273x2QDBV,Package_TO_SOT_SMD:SOT-23-6
+1,U7,SN74AUP1G04DBVR,74xGxx:74AUP1G04,Package_TO_SOT_SMD:SOT-23-5
+1,U8,LIS2DW12TR,talos:LIS2DW12,Package_LGA:LGA-12_2x2mm_P0.5mm
+1,U9,SHT40-AD1B,Sensor_Humidity:SHT4x,talos:Sensirion_DFN-4_1.5x1.5mm_P0.8mm_SHT4x_CentralKeepout

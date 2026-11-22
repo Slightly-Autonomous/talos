@@ -564,6 +564,7 @@ Result<BoardManifest> from_proto(const v1::BoardManifest& p) {
     slot.uart = s.uart();
     slot.analog = s.analog();
     slot.rails.assign(s.rails().begin(), s.rails().end());
+    if (!s.built_in_module().empty()) slot.built_in_module = ModuleId(s.built_in_module());
     b.slots.push_back(std::move(slot));
   }
   for (const auto& r : p.rails()) {
@@ -614,6 +615,16 @@ Result<BoardManifest> from_proto(const v1::BoardManifest& p) {
   }
   for (const auto& i : p.indicators()) {
     b.indicators.push_back({i.name(), i.net(), i.driver(), i.active_low(), i.color()});
+  }
+  if (p.has_battery()) {
+    const auto& bat = p.battery();
+    if (bat.cells_in_series() == 0) return Error{"invalid_manifest", "battery: no cells"};
+    if (bat.critical_mv() > bat.low_mv() || bat.low_mv() > bat.fresh_mv()) {
+      return Error{"invalid_manifest", "battery: want critical_mv <= low_mv <= fresh_mv"};
+    }
+    b.battery =
+        BatterySpec{bat.chemistry(), bat.form(),   bat.cells_in_series(), bat.rechargeable(),
+                    bat.fresh_mv(),  bat.low_mv(), bat.critical_mv()};
   }
   return b;
 }

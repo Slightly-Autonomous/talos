@@ -29,3 +29,20 @@ Firmware thresholds: closed above 20.0 mT, open below 10.0 mT, strongest axis; s
 | block 20 x 5 x 3 mm (typical door contact) N35 | 35 / 20 | 7.5 | 10.3 |
 
 Reading: a door gap below *closes within* reads closed; above *opens beyond* reads open; between the two the last state holds (hysteresis). Saturation above 40 mT is harmless for a contact (the reading clips at full scale) but hides the offset check of bench C1-06.
+
+## TL-SN-002: Hall sensor on the board edge (TMAG5273A2, ±133 mT)
+
+Die to the housing's outer face: 2.4 mm board edge + 1.5 mm wall = 3.9 mm. *Door gap* is magnet face to housing face. Same thresholds (20.0 / 10.0 mT).
+
+| Magnet | Grade | Offset (mm) | Closes with door gap ≤ (mm) | Opens beyond (mm) | Field touching the housing (mT) | Clips at ±133 mT |
+|---|---|---:|---:|---:|---:|---|
+| disc 6 x 3 mm | N35 | 0 | 3.4 | 5.9 | 72.8 | no |
+| disc 6 x 3 mm | N35 | 5 | 0.9 | 3.1 | 27.9 | no |
+| disc 10 x 3 mm | N35 | 0 | 6.6 | 10.2 | 113.9 | no |
+| disc 10 x 3 mm | N35 | 5 | 4.6 | 8.6 | 58.6 | no |
+| disc 10 x 3 mm | N52 | 0 | 7.6 | 11.4 | 138.2 | yes |
+| disc 10 x 3 mm | N52 | 5 | 5.7 | 9.9 | 71.2 | no |
+| block 20 x 5 x 3 mm (typical door contact) | N35 | 0 | 6.4 | 10.4 | 90.4 | no |
+| block 20 x 5 x 3 mm (typical door contact) | N35 | 5 | 5.7 | 9.7 | 88.1 | no |
+
+Reading: with the A2's ±133 mT range only a 10 × 3 mm N52 pressed against the housing clips; the N35 parts keep headroom, so the firmware can see an attacker's stronger magnet as an out-of-pattern field (magnet-defeat logic, not yet implemented: open-decisions.md). Recommended: a 10 × 3 mm N35 disc or a 20 × 5 × 3 mm N35 block, closing with up to about 6 mm of door gap.

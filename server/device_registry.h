@@ -28,6 +28,7 @@ struct SlotTelemetry {
 struct DeviceTelemetry {
   std::optional<Timestamp> last_seen;
   std::uint32_t battery_mv = 0;
+  bool heartbeat_seen = false;  // battery_mv is a report, not the default
   fw::PowerMode power_mode = fw::PowerMode::kNormal;
   std::map<std::uint8_t, SlotTelemetry> slots;
   std::optional<std::uint8_t> ota_state;  // fw::OtaState
@@ -38,7 +39,12 @@ struct DeviceTelemetry {
   // cut, nullopt = never reported (nodes without a tamper input).
   std::optional<bool> tamper_open;
   std::optional<std::pair<std::uint32_t, std::uint32_t>> tamper_pos;  // (boot_epoch, seq) of it
-  std::deque<talos::v1::Diagnostic> recent;                           // newest last, bounded
+  // USER button (TL-SN-002, fw::EventKind::kUserButton): when the owner last
+  // asked for a test report / for commissioning. Diagnostics only: the hub
+  // never pairs or changes anything on its own because of it.
+  std::optional<Timestamp> last_test_report;
+  std::optional<Timestamp> commission_requested;
+  std::deque<talos::v1::Diagnostic> recent;  // newest last, bounded
   // Recent (boot_epoch, seq) of applied non-journaled events, bounded; the
   // journal's dedup covers the other kinds.
   std::set<std::pair<std::uint32_t, std::uint32_t>> unjournaled_seen;
@@ -90,6 +96,14 @@ talos::v1::Health project_health(const DeviceId& device, const DeviceTelemetry* 
                                  std::optional<Timestamp> health_last_seen, Timestamp now,
                                  Millis offline_after, const SourceAnomaly* anomaly = nullptr,
                                  bool tamper_open = false,
-                                 std::optional<Timestamp> maintenance_until = std::nullopt);
+                                 std::optional<Timestamp> maintenance_until = std::nullopt,
+                                 bool primary_cells = false, bool built_in_sensors = false);
+
+// Boards whose battery is primary cells (never charged): low battery means
+// "replace the cells", not "charge". TL-SN-002 (ADR 0019): 2 x AA Li-FeS2.
+bool board_has_primary_cells(const std::optional<BoardId>& board);
+// Boards whose sensors are soldered on (ADR 0019): a sensor fault can't be fixed
+// by reseating a card, and a slot index names a built-in sensor.
+bool board_has_built_in_sensors(const std::optional<BoardId>& board);
 
 }  // namespace talos::server

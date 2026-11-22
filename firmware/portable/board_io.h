@@ -1,6 +1,9 @@
 // Board plumbing behind the I/O expanders (TL-SN-001): slot rails, card
 // presence, the power source and the BQ25186 charger. Implements IPower so the
 // runtime keeps one interface; boards without expanders use a direct model.
+// TL-SN-002 (ADR 0019) uses it too, with one expander: eight lamps (slot LEDs
+// for the built-in sensors plus Lamp roles), PIR_PWR as slot 2's power enable
+// (aon_enable), the rest outputs driven low; the source comes from USB_PRESENT.
 //
 // Safety rules enforced here (sensor_edge_v1 S-2/S-3, bench-test-plan.md §1):
 // - Expander outputs are written before their pins are made outputs, so no
@@ -114,7 +117,9 @@ class BoardIo final : public IPower {
   // datasheet gives no max. ~2.6x typ. PROVISIONAL: scope it on the bench (L-13/L-14).
   static constexpr std::uint32_t kAonSettleMs = 10;
 
-  BoardIo(II2c& i2c, IClock& clock, IBatteryAdc& adc, const BoardSupport& board);
+  // `gpio` reads the direct lines some boards have (TL-SN-002 USB_PRESENT); may be null.
+  BoardIo(II2c& i2c, IClock& clock, IBatteryAdc& adc, const BoardSupport& board,
+          IGpio* gpio = nullptr);
 
   // IPower
   bool begin() override;
@@ -127,6 +132,7 @@ class BoardIo final : public IPower {
   std::uint8_t take_sw_faults() override;
   std::optional<bool> tamper_open() override;
   bool set_slot_led(std::uint8_t slot, bool on) override;
+  bool set_lamp(Lamp lamp, bool on) override;
   void service_interrupt() override;
 
   bool rail_on(std::uint8_t slot, Rail rail) const;
@@ -165,10 +171,11 @@ class BoardIo final : public IPower {
   IClock& clock_;
   IBatteryAdc& adc_;
   const BoardSupport& board_;
+  IGpio* gpio_ = nullptr;
   std::array<std::optional<Tca9535>, kMaxExpanders> expanders_;
   std::array<Plan, kMaxExpanders> safe_{};  // per expander, same order as expanders_
-  // Slot LED pins per expander: their level is not part of the safe state, so
-  // a lit LED never makes resume() distrust the board.
+  // Slot LED and lamp pins per expander: their level is not part of the safe
+  // state, so a lit LED never makes resume() distrust the board.
   std::array<std::uint16_t, kMaxExpanders> led_mask_{};
   bool expanders_ready_ = false;
   std::optional<Bq25186> charger_;

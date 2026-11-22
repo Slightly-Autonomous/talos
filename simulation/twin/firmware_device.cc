@@ -16,9 +16,26 @@ const std::map<std::string, fw::ModuleCode>& firmware_modules() {
       {"reed_contact_v1", fw::ModuleCode::kReedContact},
       {"vibration_lis2dw12_v1", fw::ModuleCode::kLis2dw12},
       {"environment_sht40_v1", fw::ModuleCode::kSht40},
+      // TL-SN-002 built-ins (ADR 0019).
+      {"tmag5273a2_magnetic", fw::ModuleCode::kTmag5273A2},
+      {"pir223d_motion", fw::ModuleCode::kPir223d},
   };
   return *m;
 }
+
+constexpr const char* kSn002Board = "sensor_node_v2";
+
+bool is_sn002(const v1::SiteDevice& spec) { return spec.board_id() == kSn002Board; }
+
+fw::BoardSupport board_for(const v1::SiteDevice& spec) {
+  if (is_sn002(spec)) return fw::sim::tl_sn_002_board();
+  return spec.has_enclosure() ? fw::sim::tl_sn_001_board() : fw::sim::default_board();
+}
+
+// TMAG5273A2 field at the sensor for a closed / open door (reference magnet,
+// well inside the 20 mT / 10 mT hysteresis).
+constexpr std::int32_t kDoorClosedUt = 30'000;
+constexpr std::int32_t kDoorOpenUt = 200;
 
 }  // namespace
 
@@ -27,11 +44,20 @@ std::string FirmwareDevice::unsupported_reason(const v1::SiteDevice& spec) {
     return "the firmware has no actuators";
   }
   std::optional<std::uint32_t> threshold;
+  const fw::BoardSupport board = board_for(spec);
   for (const auto& s : spec.sensors()) {
     if (s.has_camera()) return "the firmware has no camera module";
     if (s.slot() >= fw::kSlots) return "slot " + std::to_string(s.slot()) + " does not exist";
     if (!firmware_modules().contains(s.module_id())) {
       return "module " + s.module_id() + " is not in the firmware registry";
+    }
+    const std::uint16_t fixed = board.slots[s.slot()].fixed_module;
+    const auto code = static_cast<std::uint16_t>(firmware_modules().at(s.module_id()));
+    if (is_sn002(spec) && fixed != code) {
+      return "TL-SN-002 slot " + std::to_string(s.slot()) + " is built in, not " + s.module_id();
+    }
+    if (!is_sn002(spec) && board.slots[s.slot()].fixed_module != 0) {
+      return "slot " + std::to_string(s.slot()) + " is built in";
     }
     if (s.has_impact()) {
       // One LIS2DW12 wake-up threshold per node (RuntimeConfig).
@@ -50,13 +76,15 @@ FirmwareDevice::FirmwareDevice(const v1::SiteDevice& spec, PropertyId property, 
       property_(std::move(property)),
       position_(to_vec(spec.position())),
       rng_(Rng::stream(seed, spec.id())),
-      node_(std::make_unique<fw::sim::Node>(spec.has_enclosure() ? fw::sim::tl_sn_001_board()
-                                                                 : fw::sim::default_board())),
+      node_(std::make_unique<fw::sim::Node>(board_for(spec))),
       enclosure_(spec.has_enclosure()) {
   if (spec.battery_mv() > 0) {
     node_->power.battery_mv_ = spec.battery_mv();
     node_->power.source_ = fw::PowerSource::kBatteryOnly;
-    if (node_->has_board_io()) {
+    if (node_->is_sn002()) {
+      node_->adc.mv = spec.battery_mv();
+      node_->sn002().usb = false;  // on its AA cells
+    } else if (node_->has_board_io()) {
       node_->adc.mv = spec.battery_mv();
       node_->rev_a().charger.vin_good = false;
       node_->rev_a().source = fw::sim::RevABoard::Source::kBatteryOnly;
@@ -66,10 +94,14 @@ FirmwareDevice::FirmwareDevice(const v1::SiteDevice& spec, PropertyId property, 
   config_.heartbeat_interval_ms = spec.heartbeat_interval_ms();
   for (const auto& s : spec.sensors()) {
     const auto slot = static_cast<std::uint8_t>(s.slot());
-    node_->insert(slot, firmware_modules().at(s.module_id()));
+    if (!node_->is_sn002()) node_->insert(slot, firmware_modules().at(s.module_id()));
     const std::uint8_t line = node_->board.slots[slot].wake_line;
     if (s.has_pir()) pirs_.push_back({line, PirOptics(position_, s.pir())});
-    if (s.has_contact()) contacts_.push_back({line, s.contact().portal_id()});
+    if (s.has_contact()) {
+      // TL-SN-002: the door's magnet moves at the built-in TMAG5273A2, not a reed line.
+      const bool hall = node_->is_sn002();
+      contacts_.push_back({line, s.contact().portal_id(), hall, slot});
+    }
     if (s.has_impact()) {
       impacts_.push_back({slot, s.impact()});
       config_.impact_threshold_mg = s.impact().threshold_mg();
@@ -82,10 +114,22 @@ FirmwareDevice::FirmwareDevice(const v1::SiteDevice& spec, PropertyId property, 
 }
 
 void FirmwareDevice::apply_inputs(const World& world) {
-  for (const auto& c : contacts_) {
-    if (const Portal* p = world.portal(c.portal)) node_->gpio.set(c.line, p->open);
+  for (auto& c : contacts_) {
+    const Portal* p = world.portal(c.portal);
+    if (!p) continue;
+    if (!c.hall) {
+      node_->gpio.set(c.line, p->open);
+    } else if (!c.known || c.open != p->open) {
+      node_->hall(c.slot).set_field(p->open ? kDoorOpenUt : kDoorClosedUt, 0, 0);
+    }
+    c.known = true;
+    c.open = p->open;
   }
-  if (enclosure_) node_->rev_a().lid_open = world.enclosure_open(id_);
+  if (enclosure_) set_lid(world.enclosure_open(id_));
+  if (const auto mv = world.battery_mv(id_)) {
+    node_->adc.mv = *mv;
+    node_->power.battery_mv_ = *mv;
+  }
   const auto zone = world.zone_at(position_).value_or("");
   for (const auto& e : environments_) {
     node_->sht(e.slot).temperature_c = (world.temperature(zone) + e.spec.bias_milli_c()) / 1000.0;
@@ -96,8 +140,9 @@ void FirmwareDevice::power_on(Timestamp now, const World& world) {
   start_ = now - Millis{static_cast<std::int64_t>(node_->clock.now_ms())};
   for (auto& p : pirs_) {
     p.optics.reset();
-    node_->gpio.set(p.line, false);
+    node_->set_line(p.line, false);
   }
+  for (auto& c : contacts_) c.known = false;
   apply_inputs(world);
   node_->boot();
   // The hub's per-device config (the API pushes the same ConfigUpdate on the wire). The
@@ -143,7 +188,7 @@ void FirmwareDevice::sample(std::int64_t t_ms, Timestamp, World& world,
                             const std::vector<std::pair<std::string, std::uint32_t>>& impacts,
                             std::vector<Uplink>& out) {
   apply_inputs(world);
-  for (auto& p : pirs_) node_->gpio.set(p.line, p.optics.step(t_ms, world, rng_));
+  for (auto& p : pirs_) node_->set_line(p.line, p.optics.step(t_ms, world, rng_));
   for (const auto& imp : impacts_) {
     for (const auto& [portal, mg] : impacts) {
       if (portal != imp.spec.portal_id()) continue;
@@ -154,16 +199,37 @@ void FirmwareDevice::sample(std::int64_t t_ms, Timestamp, World& world,
   if (enclosure_) {
     // A bounce: the loop opens for its duration inside this tick, the firmware debounces it.
     for (const std::uint32_t ms : world.take_enclosure_bounces(id_)) {
-      const bool steady = node_->rev_a().lid_open;
-      node_->rev_a().lid_open = true;
+      const bool steady = lid();
+      set_lid(true);
       node_->run_for(ms);
-      node_->rev_a().lid_open = steady;
+      set_lid(steady);
+      left = left > ms ? left - ms : 0;
+    }
+  }
+  if (node_->is_sn002()) {
+    // USER presses: held for their duration inside this tick, the firmware debounces them.
+    for (const std::uint32_t ms : world.take_user_presses(id_)) {
+      node_->sn002().user_pressed = true;
+      node_->run_for(ms);
+      node_->sn002().user_pressed = false;
       left = left > ms ? left - ms : 0;
     }
   }
   if (left > 0) node_->run_for(left);
   last_t_ms_ = t_ms;
   drain(out);
+}
+
+bool FirmwareDevice::lid() {
+  return node_->is_sn002() ? node_->sn002().lid_open : node_->rev_a().lid_open;
+}
+
+void FirmwareDevice::set_lid(bool open) {
+  if (node_->is_sn002()) {
+    node_->sn002().lid_open = open;
+  } else {
+    node_->rev_a().lid_open = open;
+  }
 }
 
 void FirmwareDevice::drain(std::vector<Uplink>& out) {

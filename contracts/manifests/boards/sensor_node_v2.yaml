@@ -1,0 +1,79 @@
+# PROVISIONAL. TL-SN-002 Rev A, the self-contained sensor node (ADR 0019, accepted 2026-11-21 with the
+# PIR fitted on every board, 2 x AA lithium primary cells and the TMAG INT inverter kept). Every sensor
+# is soldered on: the four "slots" below are built-in modules, always populated, with no connector, mux
+# branch, ID EEPROM, presence line or per-slot rail (the PIR's PIR_PWR excepted). The firmware table is
+# firmware/esp_idf/main/board_tl_sn_002.h; tools/dbg/tests/test_contracts.py holds the two together.
+# Nothing here is datasheet- or bench-verified; the schematic does not exist yet.
+id: sensor_node_v2
+revision: rev-a
+provisional: true
+board_family: TL-SN-002
+transport: thread
+reserved_i2c_addresses: [32]   # 0x20 TCA9535 (lamps, PIR_PWR)
+notes:
+  - "ESP32-H2-MINI-1-H4S, global-sourced by JLCPCB (HD-023 exception)."
+  - "Power: TPS2116 power mux (IN1 = USB VBUS, priority; IN2 = battery) into a TPS63900 3.3 V buck-boost. No charger, no PV: the AA cells are primary and must never be charged."
+  - "Low battery = 2.2 V pair voltage UNDER LOAD (1.10 V/cell), keeping the TPS63900 input >= 1.8 V in an 18 dBm TX burst at -40 C (hardware/results/power-budget-sn2.md). Below it: low battery reported, BATT lamp; TX power cap waits for the radio driver."
+  - "USB-C: power, flashing, console and JTAG over the H2's USB Serial/JTAG (GPIO26/27). UART0 (GPIO23/24) on Tag-Connect pads for recovery."
+  - "Tamper (HD-032): lid and wall switches in series to GND on GPIO13, 1M pull-up + 10 nF; high = open or cut. A short to GND defeats it (single-ended loop)."
+  - "Lamps dark on battery; lit on USB or for 10 min of service mode (BOOT button); a short USER press blinks all of them for 10 s (lamp test) even on battery."
+  - "USER button (GPIO14, to 3V3): short press = test report, long press (>= 3 s) = commissioning request (EventKind kUserButton)."
+slots:
+  - {index: 0, wake: true, built_in_module: tmag5273a2_magnetic}
+  - {index: 1, wake: true, built_in_module: vibration_lis2dw12_v1}
+  - {index: 2, wake: true, built_in_module: pir223d_motion, rails: [v3v3_pir]}
+  - {index: 3, wake: false, built_in_module: environment_sht40_v1}
+rails:
+  - {name: v3v3, voltage_mv: 3300, max_ma: 400}        # TPS63900, >400 mA at 3.3 V (est)
+  - {name: v3v3_pir, voltage_mv: 3300, max_ma: 10}     # PIR_PWR through an RC filter
+power_sources:
+  - {source: POWER_SOURCE_BATTERY_ONLY, sustained_mw: 3, peak_mw: 800}   # built-ins incl. dev-kit allowances
+  - {source: POWER_SOURCE_USB, sustained_mw: 800, peak_mw: 800}          # firmware usb_sustained_mw
+battery:
+  chemistry: li-fes2
+  form: AA
+  cells_in_series: 2
+  rechargeable: false
+  fresh_mv: 3600
+  low_mv: 2200        # firmware battery_low_mv (under load)
+  critical_mv: 2000   # firmware battery_critical_mv (under load)
+board_capabilities: [tamper.enclosure]
+expanders:
+  - name: EXP
+    part: TCA9535
+    i2c_address: 32   # A0-A2 = GND
+    interrupt_net: ""  # INT not connected: every pin is an output
+    pins:
+      - {pin: P00, net: LED_LINK_N, direction: output, active_low: true}
+      - {pin: P01, net: LED_MAG_N, direction: output, active_low: true}
+      - {pin: P02, net: LED_VIB_N, direction: output, active_low: true}
+      - {pin: P03, net: LED_PIR_N, direction: output, active_low: true}
+      - {pin: P04, net: LED_ENV_N, direction: output, active_low: true}
+      - {pin: P05, net: LED_TAMP_N, direction: output, active_low: true}
+      - {pin: P06, net: LED_BATT_N, direction: output, active_low: true}
+      - {pin: P07, net: LED_FLT_N, direction: output, active_low: true}
+      - {pin: P10, net: PIR_PWR, direction: output}
+      - {pin: P11, direction: unused}
+      - {pin: P12, direction: unused}
+      - {pin: P13, direction: unused}
+      - {pin: P14, direction: unused}
+      - {pin: P15, direction: unused}
+      - {pin: P16, direction: unused}
+      - {pin: P17, direction: unused}
+wake_lines:
+  - {net: MAG_WAKE, mcu_pin: GPIO10, active_high: true, note: "TMAG5273A2 INT_N through SN74AUP1G04"}
+  - {net: ACC_INT, mcu_pin: GPIO11, active_high: true, note: "LIS2DW12 INT1, push-pull"}
+  - {net: PIR_OUT, mcu_pin: GPIO12, active_high: true, note: "PIR223D-S0, 1M pull-down"}
+  - {net: TAMPER, mcu_pin: GPIO13, active_high: true, note: "lid + wall loop, high = open"}
+  - {net: USER_BTN, mcu_pin: GPIO14, active_high: true, note: "button to 3V3, 100k pull-down"}
+indicators:
+  - {name: PWR, net: USB_VBUS, driver: hardware, color: green}
+  - {name: STAT, net: STATUS_LED_N, driver: GPIO8, active_low: true, color: red}
+  - {name: LINK, net: LED_LINK_N, driver: EXP P00, active_low: true, color: blue}
+  - {name: MAG, net: LED_MAG_N, driver: EXP P01, active_low: true, color: green}
+  - {name: VIB, net: LED_VIB_N, driver: EXP P02, active_low: true, color: green}
+  - {name: PIR, net: LED_PIR_N, driver: EXP P03, active_low: true, color: green}
+  - {name: ENV, net: LED_ENV_N, driver: EXP P04, active_low: true, color: green}
+  - {name: TAMP, net: LED_TAMP_N, driver: EXP P05, active_low: true, color: red}
+  - {name: BATT, net: LED_BATT_N, driver: EXP P06, active_low: true, color: yellow}
+  - {name: FLT, net: LED_FLT_N, driver: EXP P07, active_low: true, color: red}

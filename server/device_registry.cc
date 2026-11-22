@@ -28,6 +28,8 @@ std::string kind_name(fw::EventKind k) {
       return "power.mode";
     case fw::EventKind::kTamper:
       return "tamper";
+    case fw::EventKind::kUserButton:
+      return "user.button";
   }
   return "unknown";
 }
@@ -78,6 +80,7 @@ void DeviceRegistry::observe(const DeviceId& device, const fw::DeviceEvent& e, T
   switch (e.kind) {
     case fw::EventKind::kHeartbeat:
       t.battery_mv = static_cast<std::uint32_t>(e.a);
+      t.heartbeat_seen = true;
       t.power_mode = static_cast<fw::PowerMode>(e.b);
       break;
     case fw::EventKind::kPowerMode:
@@ -103,6 +106,13 @@ void DeviceRegistry::observe(const DeviceId& device, const fw::DeviceEvent& e, T
     case fw::EventKind::kTamper:
       // Journaled tamper lives in the engine's state (ordered by source
       // position); only the unjournaled path below keeps a copy here.
+      break;
+    case fw::EventKind::kUserButton:
+      if (e.a == static_cast<std::int32_t>(fw::UserButtonAction::kCommissionRequest)) {
+        t.commission_requested = at;
+      } else {
+        t.last_test_report = at;
+      }
       break;
     default:
       break;
@@ -180,7 +190,15 @@ namespace {
 
 // What the device's own telemetry says, past the reporting checks: OTA, power,
 // slot faults. Tamper and maintenance are handled by the caller.
-talos::v1::Health telemetry_findings(talos::v1::Health h, const DeviceTelemetry* t) {
+// TL-SN-002 built-in sensor names, by slot (firmware/esp_idf/main/board_tl_sn_002.h).
+const char* built_in_name(std::uint8_t slot) {
+  static const char* const kNames[] = {"magnetic contact", "vibration sensor", "motion sensor",
+                                       "temperature/humidity sensor"};
+  return slot < 4 ? kNames[slot] : "sensor";
+}
+
+talos::v1::Health telemetry_findings(talos::v1::Health h, const DeviceTelemetry* t,
+                                     bool primary_cells, bool built_in) {
   auto status = [&](talos::v1::HealthStatus s, std::string evidence, std::string action) {
     h.set_status(s);
     h.add_evidence(std::move(evidence));
@@ -193,6 +211,12 @@ talos::v1::Health telemetry_findings(talos::v1::Health h, const DeviceTelemetry*
                   "Leave the device powered until the update finishes");
   }
   if (t->power_mode != fw::PowerMode::kNormal) {
+    if (primary_cells) {
+      // AA lithium (TL-SN-002): the reading is under load, and the cells are never charged.
+      return status(talos::v1::HEALTH_STATUS_LOW_POWER,
+                    "AA cells " + std::to_string(t->battery_mv) + " mV under load",
+                    "Replace both AA lithium cells (never recharge them), or power it from USB");
+    }
     return status(talos::v1::HEALTH_STATUS_LOW_POWER,
                   "battery " + std::to_string(t->battery_mv) + " mV",
                   "Charge or replace the battery, or add solar/USB power");
@@ -205,13 +229,29 @@ talos::v1::Health telemetry_findings(talos::v1::Health h, const DeviceTelemetry*
       h.add_evidence("slot " + std::to_string(slot) + ": " + fault_name(s.fault));
       continue;
     }
+    if (built_in) {
+      return status(talos::v1::HEALTH_STATUS_FAULTED,
+                    std::string("built-in ") + built_in_name(slot) + ": " + fault_name(s.fault),
+                    "The node retries it on its own; if it stays faulted, replace the node");
+    }
     return status(talos::v1::HEALTH_STATUS_FAULTED,
                   "slot " + std::to_string(slot) + ": " + fault_name(s.fault),
                   "Reseat or replace the module in slot " + std::to_string(slot));
   }
+  if (primary_cells && t->heartbeat_seen && t->battery_mv == 0) {
+    // On USB the power mode stays normal whatever the cells read (red team): a
+    // node with no (or unreadable) cells is fine only until the cable comes out.
+    return status(talos::v1::HEALTH_STATUS_DEGRADED,
+                  "AA cells missing or unreadable (0 mV): running on USB only",
+                  "Fit two fresh AA lithium cells; the node stops if USB is unplugged");
+  }
   if (t->ota_state && *t->ota_state == 5) {
     h.add_evidence("last firmware update rolled back");
     degraded = true;
+  }
+  if (t->commission_requested) {
+    // Informational: the hub does not pair on its own; the owner finishes it.
+    h.add_evidence("commissioning requested from the USER button");
   }
   if (degraded) {
     h.set_status(talos::v1::HEALTH_STATUS_DEGRADED);
@@ -227,7 +267,8 @@ talos::v1::Health project_health(const DeviceId& device, const DeviceTelemetry* 
                                  Freshness health_freshness,
                                  std::optional<Timestamp> health_last_seen, Timestamp now,
                                  Millis offline_after, const SourceAnomaly* anomaly,
-                                 bool tamper_open, std::optional<Timestamp> maintenance_until) {
+                                 bool tamper_open, std::optional<Timestamp> maintenance_until,
+                                 bool primary_cells, bool built_in_sensors) {
   talos::v1::Health h;
   h.set_device_id(device.str());
   std::optional<Timestamp> seen = t && t->last_seen ? t->last_seen : health_last_seen;
@@ -269,7 +310,7 @@ talos::v1::Health project_health(const DeviceId& device, const DeviceTelemetry* 
     const std::string note = "maintenance for " +
                              std::to_string((*maintenance_until - now).count / 60'000) +
                              " more min: tamper alarm suppressed";
-    talos::v1::Health rest = telemetry_findings(h, t);
+    talos::v1::Health rest = telemetry_findings(h, t, primary_cells, built_in_sensors);
     if (rest.status() != talos::v1::HEALTH_STATUS_HEALTHY) {
       rest.add_evidence(note);
       if (lid_open) rest.add_evidence("enclosure open");
@@ -285,7 +326,15 @@ talos::v1::Health project_health(const DeviceId& device, const DeviceTelemetry* 
     return status(talos::v1::HEALTH_STATUS_FAULTED, "enclosure tamper: lid open or loop cut",
                   "Check the enclosure lid and its tamper switch wiring (J9)");
   }
-  return telemetry_findings(h, t);
+  return telemetry_findings(h, t, primary_cells, built_in_sensors);
+}
+
+bool board_has_primary_cells(const std::optional<BoardId>& board) {
+  return board && *board == BoardId("sensor_node_v2");
+}
+
+bool board_has_built_in_sensors(const std::optional<BoardId>& board) {
+  return board && *board == BoardId("sensor_node_v2");
 }
 
 }  // namespace talos::server

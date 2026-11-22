@@ -14,7 +14,7 @@ import {
 } from "@talos/contracts/talos/api/v1/api_pb";
 import { HealthStatus } from "@talos/contracts/talos/v1/health_pb";
 import type { JournalEntry } from "@talos/contracts/talos/v1/journal_pb";
-import type { Property, Point } from "@talos/contracts/talos/v1/property_pb";
+import type { Device, Property, Point } from "@talos/contracts/talos/v1/property_pb";
 import { ArmMode } from "@talos/contracts/talos/v1/rule_pb";
 
 export const ACTIVE_WINDOW_MS = 30_000;
@@ -478,4 +478,68 @@ export function capabilityLabel(c: CapabilityView): string {
     default:
       return "—";
   }
+}
+
+// --- Device sensors: built-in (TL-SN-002) vs slots ---------------------------------------
+//
+// TL-SN-002 (ADR 0019) has its sensors soldered on, so its page lists built-in
+// sensors, never slots or cards. The table mirrors
+// contracts/manifests/boards/sensor_node_v2.yaml (a vitest holds the two together).
+// Configuration only: it says what is fitted, never that a sensor is working.
+export const BUILT_IN_BOARDS: Record<string, readonly string[]> = {
+  sensor_node_v2: [
+    "tmag5273a2_magnetic",
+    "vibration_lis2dw12_v1",
+    "pir223d_motion",
+    "environment_sht40_v1",
+  ],
+};
+
+const MODULE_LABELS: Record<string, string> = {
+  tmag5273a2_magnetic: "door contact (magnetic)",
+  vibration_lis2dw12_v1: "vibration",
+  pir223d_motion: "motion (PIR)",
+  environment_sht40_v1: "temperature / humidity",
+  pir_ekmb_v1: "motion (PIR)",
+  reed_contact_v1: "door contact (reed)",
+  smart_camera_s3_v1: "camera",
+  tl_mod_001_magnetic: "door contact (TL-MOD-001)",
+  tl_mod_002_pir: "motion (TL-MOD-002)",
+  tl_mod_003_imu: "vibration (TL-MOD-003)",
+  tl_mod_004_environment: "temperature / humidity (TL-MOD-004)",
+};
+
+export interface SensorItem {
+  index: number;
+  module: string;
+  label: string;
+}
+export interface DeviceSensors {
+  kind: "built-in" | "slots";
+  items: SensorItem[];
+}
+
+export function moduleLabel(module: string): string {
+  return MODULE_LABELS[module] ?? module;
+}
+
+export function deviceSensors(
+  device: Pick<Device, "boardId" | "slotModules">,
+): DeviceSensors | undefined {
+  const builtIn = device.boardId ? BUILT_IN_BOARDS[device.boardId] : undefined;
+  if (builtIn) {
+    return {
+      kind: "built-in",
+      items: builtIn.map((module, index) => ({ index, module, label: moduleLabel(module) })),
+    };
+  }
+  const items = device.slotModules
+    .map((module, index) => ({ index, module, label: moduleLabel(module) }))
+    .filter((i) => i.module !== "");
+  return items.length ? { kind: "slots", items } : undefined;
+}
+
+export function sensorsLabel(s: DeviceSensors): string {
+  if (s.kind === "built-in") return `built-in: ${s.items.map((i) => i.label).join(", ")}`;
+  return `slots: ${s.items.map((i) => `${i.index} ${i.label}`).join(", ")}`;
 }

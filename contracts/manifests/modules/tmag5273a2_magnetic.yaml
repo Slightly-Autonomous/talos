@@ -1,0 +1,16 @@
+# PROVISIONAL. TL-SN-002 built-in door contact (ADR 0019): TI TMAG5273A2 3-axis Hall + SN74AUP1G04 INT
+# inverter (owner decision 2026-11-21: keep it, active-high MAG_WAKE on GPIO10). The x2 range variant
+# (+/-133 mT, or +/-266 mT with X_Y_RANGE/Z_RANGE) leaves headroom to see a defeat magnet that would clip
+# the A1 at 40 mT; the "A" is the factory address variant, 0x35 like the A1. Check range, sensitivity
+# (246 LSB/mT at +/-133 mT) and the default address against the datasheet (SLYS045) before the schematic.
+# Firmware: closed > 20 mT, open < 10 mT, as TL-MOD-001; threshold codes are 133 mT / 128.
+# Built in, so no ID EEPROM and no connector_standard.
+id: tmag5273a2_magnetic
+revision: a
+provisional: true
+needs_wake: true
+i2c_addresses: [53]        # 0x35 TMAG5273A2 (default address, verify)
+loads: [{rail: v3v3, active_ma: 3}]
+average_uw: 12             # (2.9 TMAG W&S + 0.5 inverter) uA x 3.3 V; TMAG figure EST
+peak_mw: 8                 # TMAG5273 active 2.3 mA x 3.3 V
+capabilities: [contact.open_state]

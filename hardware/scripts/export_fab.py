@@ -49,6 +49,12 @@ def fab_notes(board: str) -> str:
         lines.append("- Slot sockets and USB-C overhang three edges: no V-score on those edges; panel with "
                      "tabs (HD-040).")
         lines.append("- Mounting holes H1-H4: unplated 2.7 mm (M2.5).")
+    if board == "TL-SN-002":
+        lines.append("- Mounting holes H1-H4: unplated 2.7 mm (M2.5). Two slots cut in from the right edge form the "
+                     "SHT40 thermal tongue: route them as plated-free slots, 1.2 mm wide.")
+        lines.append("- Through-hole parts placed by JLCPCB: BT1 (Keystone 2462 2xAA holder) and U10 (PIR223D-S0). "
+                     "Every other part is single-sided SMT; U1 (ESP32-H2-MINI-1-H4S) comes from JLCPCB Global "
+                     "Sourcing (HD-023).")
     if board == "TL-DBG-001":
         lines.append("- Mounting holes H1-H4: unplated 3.2 mm (M3). TP20/TP21 Keystone 5001 loops are "
                      "hand-fitted after assembly (HD-042).")

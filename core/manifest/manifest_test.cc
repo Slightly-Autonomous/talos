@@ -176,4 +176,25 @@ TEST(ModuleSlotLimits, ModuleOnlyInAllowedSlotsOthersUnaffected) {
 }
 
 }  // namespace
+// Red team (ADR 0019): built-in modules keep the wake check, and a card on a mux
+// branch can't reuse a built-in's root-bus address (enabled branches join root).
+TEST(Validation, BuiltInWakeAndRootAddressAgainstCards) {
+  BoardManifest b = board();
+  b.slots[0].built_in_module = ModuleId("vibration_lis2dw12_v1");  // 0x19, needs wake
+  b.slots[0].i2c_branch.reset();
+  EXPECT_TRUE(validate_configuration(b, catalog(), {}, PowerSource::kUsb).ok());
+  b.slots[0].wake = false;
+  EXPECT_TRUE(validate_configuration(b, catalog(), {}, PowerSource::kUsb)
+                  .has(ManifestIssueCode::kMissingWake));
+  b.slots[0].wake = true;
+  // A second LIS2DW12 on a card behind the mux: 0x19 on a branch collides with root.
+  const auto r = validate_configuration(b, catalog(), {{1, ModuleId("vibration_lis2dw12_v1")}},
+                                        PowerSource::kUsb);
+  EXPECT_TRUE(r.has(ManifestIssueCode::kI2cRootConflict));
+  // A card with another address is fine.
+  EXPECT_FALSE(validate_configuration(b, catalog(), {{1, ModuleId("environment_sht40_v1")}},
+                                      PowerSource::kUsb)
+                   .has(ManifestIssueCode::kI2cRootConflict));
+}
+
 }  // namespace talos

@@ -4,6 +4,12 @@ Status at H3 (2026-11-16). Owner for every row is "EE reviewer" unless it says "
 
 ## Open decisions (handoff §42 plus new items)
 
+**2026-11-21, ADR 0019:** new nodes are TL-SN-002 (self-contained). These items now apply only to the archived
+TL-SN-001 checkpoint and its cards: HD-002, HD-005, HD-007, HD-020 (card), HD-021, HD-024, HD-025 to HD-029,
+HD-031, HD-037, HD-040, HD-041 (BQ25186 part), HD-042. These still apply to TL-SN-002: HD-001, HD-004,
+HD-016 to HD-019, HD-022 (closed by PIR223D-S0), HD-023, HD-030 (TMAG ramp), HD-032 to HD-036, HD-038 and HD-039.
+HD-043 to HD-048 are new for TL-SN-002.
+
 | ID | Decision | State / evidence | Next action | Blocking H4? |
 |---|---|---|---|---|
 | HD-001 | MCU variant | **Proposed:** ESP32-H2-MINI-1-H4S (4 MB). Pad ledger complete from datasheet v1.6 | EE review; confirm 4 MB fits A/B OTA (ADR 0013) | yes |
@@ -44,6 +50,12 @@ Status at H3 (2026-11-16). Owner for every row is "EE reviewer" unless it says "
 | HD-040 | Panelisation and card fingers | **Applied 2026-11-20:** finger copper now stops 0.65 mm from the card edge (was 0.15). FAB-NOTES.txt carries hard gold, the 30° bevel and the panel rules (no V-score on TL-SN-001's overhung edges, finger edge free on cards). Small boards still rely on panel-rail fiducials | Confirm the pull-back with Samtec/JLCPCB at quote | no |
 | HD-041 | Charger heat on solar input | **Applied 2026-11-20:** thermal pads now get as many vias as fit at the 0.5 mm hole pitch (U4 gets 2), and `pi_config.py --case pv` models 0.72 W in U4 for kisi. Firmware already caps ICHG on PV | Run the PV thermal case after each re-route (layout README); bench U4 temperature on a 6 V supply | no |
 | HD-042 | Hand-fitted ground hooks on TL-DBG-001 | TP20/TP21 are Keystone 5001 THT loops (D-07); not placed by JLCPCB | Fit by hand after assembly | no |
+| HD-043 | TL-SN-002 AA cells under pulse and cold | The TPS63900 needs ≥ 1.8 V at its input during an 18 dBm TX burst. Pair resistance is an estimate (0.3–1.0 Ω, 25 to −40 °C), so the low-battery threshold is provisional (2.2 V under load, power-budget-sn2.md). Alkaline cells sag far more than Li-FeS2 | Bench: pair voltage under a 0.3 A, 2 ms pulse at 25/−20/−40 °C with L91 and alkaline; set the threshold | yes |
+| HD-044 | PIR223D-S0 pinout and timing | The TO-5 pin order uses the EKMB footprint's Vdd/OUT/GND assignment; NEWOPTO's drawing wasn't readable here. Warm-up and block times are provisional in the firmware | Datasheet check of pin order (mandatory before ordering), then bench warm-up, block time and false-trigger rate | yes |
+| HD-045 | TMAG5273A2 I²C address and range | A2 = the ±133/±266 mT range; the default address is assumed to be 0x35 (A variant). The door-closed baseline and magnet-defeat logic were sized for the A1 range | Datasheet check of the A2 address; bench C1-06 with the A2 range | yes |
+| HD-046 | Keystone 2462 holder | 163 in stock at JLCPCB (enough for about 160 boards); rated temperature not confirmed for −40 °C outdoor use; through-hole JLCPCB assembly | Re-check stock before each order; confirm the holder's temperature range or pick a −40 °C part | no |
+| HD-047 | SHT40 thermal tongue | Two 1.2 mm slots leave a 6.8 mm tongue. Its isolation from the TPS63900 and radio heat is unmeasured | Bench: SHT40 offset vs a reference sensor with the radio busy and on USB power | no |
+| HD-048 | TL-SN-002 lamps on battery | Lamps stay dark on battery unless service mode (security and current); lit on USB. The USER button's long press starts commissioning | Owner UX check on the bench | no |
 
 ## Risks found while drawing the schematic (need a reviewer)
 

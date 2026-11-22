@@ -152,4 +152,23 @@ describe("DevSim", () => {
     ).toEqual(["tamper.state", "tamper.opened", "tamper.closed"]);
     await expect(s.tamper("node-07", true)).rejects.toThrow("no tamper loop");
   });
+  test("node-12 is a TL-SN-002: built-in contact in slot 0, AA heartbeat, USER test report", async () => {
+    const { s, calls } = sim();
+    await s.boot();
+    const state = observations(calls).find(
+      (c) => c.body!.eventType === "contact.state" && c.token === "dev-node-12-token",
+    );
+    expect(state?.body).toMatchObject({
+      source: { deviceId: "node-12", slot: 0, capabilityId: "contact.open_state" },
+    });
+    const beat = observations(calls).find(
+      (c) => c.body!.eventType === "device.heartbeat" && c.token === "dev-node-12-token",
+    );
+    expect(beat?.body).toMatchObject({ payload: { heartbeat: { batteryMv: 3000 } } });
+    const before = observations(calls).length;
+    await s.userButton("node-12");
+    const after = observations(calls).slice(before);
+    expect(after.map((c) => c.body!.eventType)).toEqual(["device.heartbeat"]);
+    await expect(s.userButton("node-07")).rejects.toThrow("no USER button");
+  });
 });

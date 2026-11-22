@@ -42,5 +42,24 @@
     "why": "The slot socket straddles the top edge by design"
    }
   }
+ },
+ "TL-SN-002": {
+  "routing": "complete",
+  "note": "Self-contained node (ADR 0019), autorouted 2-layer; necks kept only at fine-pitch pins (HD-038).",
+  "narrow_power_mm_max": 3.0,
+  "warnings_allowed": {
+   "silk_edge_clearance": {
+    "max": 2,
+    "why": "the ESP32-H2 module's antenna end sits on the top edge by design; its footprint silk crosses Edge.Cuts"
+   },
+   "silk_over_copper": {
+    "max": 2,
+    "why": "U5 pin-1 mark touches R18 in the TPS63900 template (HD-036); the Keystone 2462 '+' footprint text may land on a test pad"
+   },
+   "silk_overlap": {
+    "max": 1,
+    "why": "the Keystone 2462 '+' footprint text against a nearby test pad circle"
+   }
+  }
  }
 }

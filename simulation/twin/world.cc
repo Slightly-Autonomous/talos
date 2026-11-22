@@ -39,6 +39,30 @@ void World::enclosure_bounce(std::int64_t t_ms, const std::string& device, std::
   record(t_ms, "enclosure.bounce", device, std::to_string(ms) + " ms");
 }
 
+void World::press_user_button(std::int64_t t_ms, const std::string& device, std::uint32_t hold_ms) {
+  user_presses_[device].push_back(hold_ms);
+  record(t_ms, "user_button.pressed", device, std::to_string(hold_ms) + " ms");
+}
+
+std::vector<std::uint32_t> World::take_user_presses(const std::string& device) {
+  auto it = user_presses_.find(device);
+  if (it == user_presses_.end()) return {};
+  auto out = std::move(it->second);
+  user_presses_.erase(it);
+  return out;
+}
+
+void World::set_battery(std::int64_t t_ms, const std::string& device, std::uint32_t mv) {
+  batteries_[device] = mv;
+  record(t_ms, "battery.set", device, std::to_string(mv) + " mV");
+}
+
+std::optional<std::uint32_t> World::battery_mv(const std::string& device) const {
+  auto it = batteries_.find(device);
+  if (it == batteries_.end()) return std::nullopt;
+  return it->second;
+}
+
 bool World::enclosure_open(const std::string& device) const {
   auto it = enclosures_.find(device);
   return it != enclosures_.end() && it->second;

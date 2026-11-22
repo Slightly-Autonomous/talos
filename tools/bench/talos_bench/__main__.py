@@ -26,6 +26,8 @@ def main(argv: list[str] | None = None) -> int:
     src.add_argument("--port", help="the node's USB serial port")
     src.add_argument("--console", help="host:port of a running serial_bridge console")
     src.add_argument("--exec", nargs=argparse.REMAINDER, help="a virtual node: bench_node ...")
+    p.add_argument("--board", choices=["TL-SN-001", "TL-SN-002"], default="TL-SN-001",
+                   help="board on the bench (TL-SN-002: built-in sensors, no --expect)")
     p.add_argument("--expect", nargs="*", default=[], metavar="SLOT=CARD",
                    help=f"cards seated per slot, from {sorted(CARD_CODES)}")
     p.add_argument("--flipped", nargs="*", default=[], metavar="SLOT=CARD",
@@ -34,6 +36,8 @@ def main(argv: list[str] | None = None) -> int:
                    help="operator measurements, e.g. T-11=11.0 (mA)")
     p.add_argument("--out", help="results file (JSON lines)")
     args = p.parse_args(argv)
+    if args.board == "TL-SN-002" and (args.expect or args.flipped):
+        p.error("TL-SN-002 has built-in sensors: --expect/--flipped do not apply")
     expect = {}
     for item in args.expect:
         slot, _, card = item.partition("=")
@@ -70,7 +74,11 @@ def main(argv: list[str] | None = None) -> int:
             print(f"{mark:8} {r.test:24} {r.diagnosis}", flush=True)
 
         bench = Bench(Console(transport), expect, sink, flipped=flipped, measure=measure)
-        results = bench.run(plan(expect, flipped))
+        if args.board == "TL-SN-002":
+            from . import sn002
+            results = bench.run(sn002.plan())
+        else:
+            results = bench.run(plan(expect, flipped))
         import json
         s = summary(results)
         f.write(json.dumps({"summary": s}) + "\n")

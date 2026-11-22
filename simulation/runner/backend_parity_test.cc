@@ -7,12 +7,14 @@
 
 #include <algorithm>
 #include <filesystem>
+#include <map>
 #include <set>
 #include <string>
 #include <vector>
 
 #include "codec/yaml_loader.h"
 #include "simulation/runner/runner.h"
+#include "simulation/twin/firmware_device.h"
 
 namespace talos::sim {
 namespace {
@@ -181,6 +183,39 @@ TEST(Binding, RebootedFirmwareNodeIsBlindDuringPirWarmup) {
   const auto r = run_scenario(sc, site, {Backend::kFirmware});
   EXPECT_FALSE(r.passed);
   EXPECT_EQ(r.observations.count("node_garage motion.detected"), 0u);
+}
+
+}  // namespace
+}  // namespace talos::sim
+
+namespace talos::sim {
+namespace {
+
+// ADR 0019: the garage and driveway nodes are TL-SN-002 and run on its L2 board model
+// (built-in sensors), while the split-off driveway camera stays L1.
+TEST(Binding, GarageNodesRunOnTheTlSn002Model) {
+  auto r = run_scenario_file(kRoot + "/scenarios/garage_side_door_intrusion.yaml", kRoot,
+                             {Backend::kFirmware});
+  ASSERT_TRUE(r.ok());
+  ASSERT_TRUE(r.value().passed);
+  std::map<std::string, std::string> level(r.value().bindings.begin(), r.value().bindings.end());
+  EXPECT_EQ(level["node_garage"], "L2");
+  EXPECT_EQ(level["node_driveway"], "L2");
+  EXPECT_EQ(level["cam_driveway"], "L1");
+}
+
+// A TL-SN-002 slot only takes its own built-in module.
+TEST(Binding, Sn002RefusesAModuleThatIsNotBuiltIn) {
+  v1::SiteDevice d;
+  d.set_id("n");
+  d.set_board_id("sensor_node_v2");
+  auto* s = d.add_sensors();
+  s->set_slot(0);
+  s->set_module_id("reed_contact_v1");
+  s->mutable_contact()->set_portal_id("p");
+  EXPECT_NE(FirmwareDevice::unsupported_reason(d), "");
+  s->set_module_id("tmag5273a2_magnetic");
+  EXPECT_EQ(FirmwareDevice::unsupported_reason(d), "");
 }
 
 }  // namespace

@@ -728,10 +728,10 @@ api::HealthListResponse HubService::device_health() const {
     if (auto m = engine_->state().maintenance.find(d.id); m != engine_->state().maintenance.end()) {
       maintenance_until = m->second.until;
     }
-    *out.add_devices() =
-        project_health(d.id, registry_.find(d.id), engine_->freshness_of(health_ref), seen, now,
-                       engine_->config().freshness_max_age, registry_.anomaly(d.id), tamper_open,
-                       maintenance_until);
+    *out.add_devices() = project_health(
+        d.id, registry_.find(d.id), engine_->freshness_of(health_ref), seen, now,
+        engine_->config().freshness_max_age, registry_.anomaly(d.id), tamper_open,
+        maintenance_until, board_has_primary_cells(d.board), board_has_built_in_sensors(d.board));
   }
   return out;
 }

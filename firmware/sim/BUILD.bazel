@@ -12,6 +12,7 @@ cc_library(
     visibility = ["//visibility:public"],
     deps = [
         "//firmware/esp_idf/main:board_tl_sn_001",
+        "//firmware/esp_idf/main:board_tl_sn_002",
         "//firmware/portable",
     ],
 )
@@ -114,6 +115,19 @@ cc_test(
     copts = TALOS_COPTS,
     deps = [
         ":sim",
+        "@googletest//:gtest_main",
+    ],
+)
+
+# TL-SN-002 (ADR 0019): built-in sensors, lamps, USER button, AA cells.
+cc_test(
+    name = "sn002_test",
+    size = "medium",  # hours of virtual time at 1 ms steps (retry backoff, deep-sleep wakes)
+    srcs = ["sn002_test.cc"],
+    copts = TALOS_COPTS,
+    deps = [
+        ":sim",
+        "//firmware/esp_idf/main:board_tl_sn_002",
         "@googletest//:gtest_main",
     ],
 )

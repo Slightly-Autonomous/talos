@@ -12,4 +12,4 @@ stimuli:
   - {at_ms: 1000, actor_move: {actor: visitor, path: [{x: 7, y: 6}]}}
 expect:
   - name: person detected
-    observation: {event_type: camera.object_detected, device_id: node_driveway}
+    observation: {event_type: camera.object_detected, device_id: cam_driveway}

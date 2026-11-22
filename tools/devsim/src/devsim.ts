@@ -4,7 +4,9 @@
 // ACKs. Nothing bypasses hub ingress, rules or policy.
 
 export type Fault = "none" | "silent_ack" | "no_response" | "jam";
-export type Kind = "pir" | "contact" | "speaker" | "lock";
+// "sn002": a TL-SN-002 self-contained node (ADR 0019) reporting its built-in door
+// contact (slot 0) and enclosure loop on 2 x AA lithium cells, with a USER button.
+export type Kind = "pir" | "contact" | "speaker" | "lock" | "sn002";
 
 export interface DeviceDef {
   id: string;
@@ -50,7 +52,13 @@ const CAPABILITY: Record<Kind, string> = {
   contact: "contact.open_state",
   speaker: "audio.speak",
   lock: "access.lock",
+  sn002: "contact.open_state",
 };
+
+// Battery a heartbeat reports: TL-SN-002's AA pair under load (fresh ~3.0 V), else 1S Li-ion.
+const HEARTBEAT_MV: Partial<Record<Kind, number>> = { sn002: 3000 };
+
+const isContact = (k: Kind) => k === "contact" || k === "sn002";
 
 export class DevSim {
   private readonly devices = new Map<string, Device>();
@@ -118,17 +126,27 @@ export class DevSim {
   }
 
   async heartbeat(id: string) {
+    const d = this.dev(id);
     await this.observe(
-      this.dev(id),
+      d,
       "device.heartbeat",
-      { heartbeat: { batteryMv: 3900 } },
+      { heartbeat: { batteryMv: HEARTBEAT_MV[d.kind] ?? 3900 } },
       "device.health",
     );
   }
 
+  // TL-SN-002 USER button, short press: the test report is a heartbeat now (the
+  // firmware's kUserButton diagnostic itself only travels over CoAP).
+  async userButton(id: string) {
+    const d = this.dev(id);
+    if (d.kind !== "sn002") throw new Error(`${id} has no USER button`);
+    this.log.push(`${id} USER pressed`);
+    await this.heartbeat(id);
+  }
+
   async boot() {
     for (const d of this.devices.values()) {
-      if (d.kind === "contact") {
+      if (isContact(d.kind)) {
         // Boot state report, not a transition: rules must not fire on it.
         d.state.open = false;
         await this.observe(d, "contact.state", { contact: { open: false } });
@@ -164,7 +182,7 @@ export class DevSim {
 
   async contact(id: string, open: boolean) {
     const d = this.dev(id);
-    if (d.kind !== "contact") throw new Error(`${id} is not a contact`);
+    if (!isContact(d.kind)) throw new Error(`${id} is not a contact`);
     d.state.open = open;
     await this.observe(d, open ? "contact.opened" : "contact.closed", { contact: { open } });
   }
@@ -273,7 +291,8 @@ export class DevSim {
 
 export const DEV_DEVICES: DeviceDef[] = [
   { id: "node-07", token: "dev-node-07-token", kind: "pir", slot: 0 },
-  { id: "node-12", token: "dev-node-12-token", kind: "contact", slot: 0, tamper: true },
+  // TL-SN-002 (ADR 0019): built-in magnetic contact in slot 0, lid + wall loop, AA cells.
+  { id: "node-12", token: "dev-node-12-token", kind: "sn002", slot: 0, tamper: true },
   { id: "patio_speaker", token: "dev-patio-speaker-token", kind: "speaker" },
   { id: "lock-3", token: "dev-lock-3-token", kind: "lock" },
 ];

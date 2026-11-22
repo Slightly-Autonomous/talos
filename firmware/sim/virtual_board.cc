@@ -5,6 +5,7 @@
 #include <cstdlib>
 
 #include "firmware/esp_idf/main/board_tl_sn_001.h"
+#include "firmware/esp_idf/main/board_tl_sn_002.h"
 
 namespace talos::fw::sim {
 
@@ -35,7 +36,7 @@ bool I2cBus::held() const {
 bool I2cBus::write(std::uint8_t addr, const std::uint8_t* data, std::size_t n) {
   ++transactions_;
   if (held() || glitch()) return false;
-  if (addr == mux_) {
+  if (mux_ != 0 && addr == mux_) {
     if (n != 1 || mux_nack) return false;
     mask_ = data[0];
     return true;
@@ -48,7 +49,7 @@ bool I2cBus::write_read(std::uint8_t addr, const std::uint8_t* w, std::size_t wn
                         std::size_t rn) {
   ++transactions_;
   if (held() || glitch()) return false;
-  if (addr == mux_) {  // TCA9546A: a read returns the control register
+  if (mux_ != 0 && addr == mux_) {  // TCA9546A: a read returns the control register
     if (mux_nack || wn != 0 || rn != 1) return false;
     r[0] = mask_;
     return true;
@@ -62,7 +63,7 @@ bool I2cBus::write_read(std::uint8_t addr, const std::uint8_t* w, std::size_t wn
 bool I2cBus::probe(std::uint8_t addr) {
   ++transactions_;
   if (held() || glitch()) return false;
-  if (addr == mux_) return !mux_nack;
+  if (mux_ != 0 && addr == mux_) return !mux_nack;
   I2cDevice* d = target(addr);
   return d && d->acks();
 }
@@ -257,10 +258,11 @@ void Lis2dw12::after_read(std::uint8_t reg) {
 
 // --- TMAG5273 ---------------------------------------------------------------------------
 
-Tmag5273::Tmag5273(Gpio& gpio, std::uint8_t wake_line, const Clock& clock)
-    : gpio_(gpio), line_(wake_line), clock_(clock) {
-  regs[0x0D] = 0x01;  // DEVICE_ID: +/-40/80 mT version
-  regs[0x0E] = 0x49;  // MANUFACTURER_ID "TI"
+Tmag5273::Tmag5273(Gpio& gpio, std::uint8_t wake_line, const Clock& clock, std::int32_t range_mt,
+                   std::int32_t lsb_per_mt)
+    : gpio_(gpio), line_(wake_line), clock_(clock), range_mt_(range_mt), lsb_per_mt_(lsb_per_mt) {
+  regs[0x0D] = range_mt > 40 ? 0x02 : 0x01;  // DEVICE_ID: x1 (+/-40/80 mT) or x2 (+/-133/266 mT)
+  regs[0x0E] = 0x49;                         // MANUFACTURER_ID "TI"
   regs[0x0F] = 0x54;
 }
 
@@ -273,8 +275,8 @@ void Tmag5273::update_results() {
   const std::uint8_t channels = regs[0x02] >> 4;  // MAG_CH_EN: bit 0 X, 1 Y, 2 Z
   for (int axis = 0; axis < 3; ++axis) {
     if ((channels & (1u << axis)) == 0) continue;
-    const auto lsb = static_cast<std::int16_t>(
-        std::clamp(field_ut_[axis] * Tmag5273ContactDriver::kLsbPerMt / 1000, -32768, 32767));
+    const auto lsb =
+        static_cast<std::int16_t>(std::clamp(field_ut_[axis] * lsb_per_mt_ / 1000, -32768, 32767));
     regs[0x12 + 2 * axis] = static_cast<std::uint8_t>(static_cast<std::uint16_t>(lsb) >> 8);
     regs[0x13 + 2 * axis] = static_cast<std::uint8_t>(static_cast<std::uint16_t>(lsb) & 0xFF);
   }
@@ -289,7 +291,7 @@ void Tmag5273::evaluate() {
   for (int axis = 0; axis < 3; ++axis) {
     const std::uint8_t code = regs[0x04 + axis] & 0x7F;  // THR_HYST = 1: 7 LSBs, +/- band
     if (code == 0) continue;
-    const std::int32_t thr_ut = code * 40'000 / 128;
+    const std::int32_t thr_ut = code * range_mt_ * 1000 / 128;
     const std::int32_t b = std::abs(field_ut_[axis]);
     fire |= below ? b < thr_ut : b > thr_ut;
   }
@@ -555,6 +557,36 @@ bool RevABoard::cs_n(std::uint8_t slot) const {
 // --- Node -------------------------------------------------------------------------------
 
 BoardSupport tl_sn_001_board() { return board::tl_sn_001(); }
+BoardSupport tl_sn_002_board() { return board::sn002::tl_sn_002(); }
+
+// --- TL-SN-002 board ----------------------------------------------------------------------
+
+Sn002Board::Sn002Board(const BoardSupport& board) : board_(board) {
+  exp.external = [this](std::uint8_t pin) {
+    // Lamp cathodes (P00-P07) are pulled to 3V3 through lamp + 2.2k when undriven;
+    // PIR_PWR has the RC filter's pull-down; P11-P17 are unconnected.
+    (void)this;
+    return pin < 8;
+  };
+  exp.on_write = [this] {
+    const bool on = pir_powered();
+    if (pir_was_on_ && !on) ++pir_power_cycles;
+    pir_was_on_ = on;
+  };
+}
+
+bool Sn002Board::pir_powered() const {
+  const ExpanderPin& p = board_.slot_io[2].aon_enable;
+  return p.wired() && exp.is_output(p.pin) && exp.level(p.pin);
+}
+
+bool Sn002Board::pin_lit(const ExpanderPin& p) const {
+  return p.wired() && exp.is_output(p.pin) && !exp.level(p.pin);
+}
+
+bool Sn002Board::lamp(Lamp l) const { return pin_lit(board_.lamp_n[static_cast<std::size_t>(l)]); }
+
+bool Sn002Board::sensor_led(std::uint8_t slot) const { return pin_lit(board_.slot_led_n[slot]); }
 
 BoardSupport default_board() {
   BoardSupport b;
@@ -587,6 +619,23 @@ IPower& Node::select_power() {
       }
     };
   }
+  if (board.slots[0].fixed_module != 0) {
+    // TL-SN-002: the expander on the root bus, the direct lines read live.
+    sn002_.emplace(board);
+    i2c.attach(I2cBus::kRoot, board.lamp_n[0].address, &sn002_->exp);
+    gpio.live = [this](std::uint8_t line) -> std::optional<bool> {
+      if (line == board.tamper_line) return sn002_->lid_open;
+      if (line == board.user_button_line) return sn002_->user_pressed;
+      if (line == board.usb_present_line) return sn002_->usb;
+      if (line == board.slots[2].wake_line) {
+        return sn002_->pir_powered() && (sn002_->pir_out || sn002_->pir_stuck_high);
+      }
+      return std::nullopt;
+    };
+    attach_built_ins();
+    board_io_.emplace(i2c, clock, adc, board, &gpio);
+    return *board_io_;
+  }
   if (!board.slot_io[0].aon_enable.wired()) return power;
   rev_a_.emplace(board, &clock);
   i2c.attach(I2cBus::kRoot, board.slot_io[0].aon_enable.address, &rev_a_->exp_a);
@@ -607,6 +656,33 @@ IPower& Node::select_power() {
   };
   board_io_.emplace(i2c, clock, adc, board);
   return *board_io_;
+}
+
+// TL-SN-002 built-ins: soldered on, always on the root bus (no mux, no ID EEPROM).
+void Node::attach_built_ins() {
+  for (std::uint8_t slot = 0; slot < kSlots; ++slot) {
+    const auto code = static_cast<ModuleCode>(board.slots[slot].fixed_module);
+    const std::uint8_t wake = board.slots[slot].wake_line;
+    if (code == ModuleCode::kTmag5273A2) {
+      halls_[slot] = std::make_unique<Tmag5273>(
+          gpio, wake, clock, Tmag5273ContactDriver::kA2RangeMt, Tmag5273ContactDriver::kA2LsbPerMt);
+      i2c.attach(I2cBus::kRoot, Tmag5273ContactDriver::kAddr, halls_[slot].get());
+    } else if (code == ModuleCode::kLis2dw12) {
+      imus_[slot] = std::make_unique<Lis2dw12>(gpio, wake, clock);
+      i2c.attach(I2cBus::kRoot, Lis2dw12Driver::kAddr, imus_[slot].get());
+    } else if (code == ModuleCode::kSht40) {
+      shts_[slot] = std::make_unique<Sht40>(clock);
+      i2c.attach(I2cBus::kRoot, Sht40Driver::kAddr, shts_[slot].get());
+    }
+  }
+}
+
+void Node::set_line(std::uint8_t line, bool level) {
+  if (sn002_ && line == board.slots[2].wake_line) {
+    sn002_->pir_out = level;
+    return;
+  }
+  gpio.set(line, level);
 }
 
 void Node::insert(std::uint8_t slot, ModuleCode code) {
@@ -655,6 +731,7 @@ void Node::remove(std::uint8_t slot) {
 void Node::boot() {
   runtime_.reset();
   if (rev_a_) board_io_.emplace(i2c, clock, adc, board);  // same storage: platform_ stays bound
+  if (sn002_) board_io_.emplace(i2c, clock, adc, board, &gpio);
   runtime_.emplace(platform_, &watchdog, &sleep);
   watchdog.last_feed_ms = clock.now_ms();  // the ESP port arms it right before boot()
   runtime_->boot();
