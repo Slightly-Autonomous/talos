@@ -71,4 +71,7 @@ GND hook,TestPoint_Keystone_5000-5004_Miniature,jlc,C238122,5001,Keystone,,THT l
 USER,SW_SPST_PTS810,jlc,C221895,PTS810SJG250SMTRLFS,C&K,,same body as RESET/BOOT
 TPS2116DRLR,SOT-583-8,jlc,C3235557,TPS2116DRLR,TI,,USB/battery priority power mux
 TMAG5273A2QDBVT,SOT-23-6,jlc,C3020565,TMAG5273A2QDBVT,TI,,3-axis Hall A2 range; stock ~490: watch
-PIR223D-S0,PIR_Panasonic_EKMB_TO-5,jlc,C2887901,PIR223D-S0,NEWOPTO,,digital PIR TO-5; JLCPCB THT assembly; pinout VERIFY
+PIR223D-S0,PIR_NEWOPTO_PIR223D_TO-5,jlc,C2887901,PIR223D-S0,NEWOPTO,,digital PIR TO-5; JLCPCB THT assembly; pinout checked vs spec 2020-06-01 (HD-044)
+LID,SW_Push_1P1T_XKB_TS-1187A,jlc,C318884,TS-1187A-B-A-B,XKB Connection,,basic 5.1 mm tactile; lid tamper pressed by the cover's spring finger (-30 C rating, HD-049)
+BATT DOOR,SW_Push_1P1T_XKB_TS-1187A,jlc,C318884,TS-1187A-B-A-B,XKB Connection,,basic 5.1 mm tactile; battery-door tamper (HD-049)
+LOOP,SolderJumper-2_P1.3mm_Bridged_RoundedPad1.0x1.5mm,board_feature,,,,,bridged solder jumper: copper only

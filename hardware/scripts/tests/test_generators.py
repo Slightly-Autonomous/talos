@@ -122,6 +122,23 @@ class SelfContainedNode(unittest.TestCase):
         lamps = [r for r, q in self.p.items() if q["lib_id"] == "Device:LED"]
         self.assertEqual(len(lamps), 10)
 
+    def test_lid_and_battery_door_switches_share_the_tamper_loop(self):  # HD-049
+        """SW4 (lid) and SW5 (battery door) in series on TAMPER; TAMPER_DOOR on EXP P11, the pin the
+        firmware table reads; J9 is an unfitted option behind the bridged JP3."""
+        import re
+        p = self.p
+        self.assertEqual(set(p["SW4"]["pins"].values()), {"TAMPER", "TAMPER_LOOP"})
+        self.assertEqual(set(p["SW5"]["pins"].values()), {"TAMPER_DOOR", "GND"})
+        self.assertEqual(set(p["JP3"]["pins"].values()), {"TAMPER_LOOP", "TAMPER_DOOR"})
+        self.assertTrue(p["J9"]["dnp"])
+        self.assertEqual(p["U14"]["pins"]["14"], "TAMPER_DOOR")  # TCA9535 pin 14 = P11
+        hdr = (ROOT / "firmware" / "esp_idf" / "main" / "board_tl_sn_002.h").read_text()
+        self.assertRegex(hdr, r"kBatteryDoorPin = 9;")  # P11 = expander pin index 9
+        self.assertIn("b.battery_door = {kExp, kBatteryDoorPin};", hdr)
+        r31 = p["R31"]
+        self.assertEqual(set(r31["pins"].values()), {"V3V3", "TAMPER_DOOR"})
+        self.assertTrue(re.match(r"4\.7M", r31["value"]))
+
     def test_firmware_pin_table_matches_the_netlist(self):
         """board_tl_sn_002.h (firmware) and the generated netlist must name the same GPIOs (ADR 0013 rule:
         pins live in the BoardSupport table; this keeps it honest against the hardware)."""
@@ -129,7 +146,7 @@ class SelfContainedNode(unittest.TestCase):
         import re
         hdr = (ROOT / "firmware" / "esp_idf" / "main" / "board_tl_sn_002.h").read_text()
         const = {m.group(1): int(m.group(2), 0) for m in
-                 re.finditer(r"constexpr (?:std::uint8_t|int) (k\w+) = (0x[0-9A-Fa-f]+|\d+);", hdr)}
+                 re.finditer(r"constexpr (?:std::uint8_t|int) (k\w+) =\s*(0x[0-9A-Fa-f]+|\d+);", hdr)}
         ledger = list(csv.DictReader(open(ROOT / "hardware" / "pins" / "esp32h2_mini1_pin_ledger.csv")))
         pad_of_gpio = {int(r["gpio"]): r["pad"] for r in ledger if r["gpio"].strip().isdigit()}
         mcu = self.p["U1"]["pins"]

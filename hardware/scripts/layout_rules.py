@@ -136,6 +136,17 @@ def check(name: str, status: dict) -> list[str]:
         gap = mm(edge.GetRight() - fps["U6"].GetPosition().x)
         if gap > 3.0:
             problems.append(f"Hall sensor U6 is {gap:.1f} mm from the right edge (it must face the door magnet)")
+        # Housing marks (B-04/B-06, housing_marks.py): keep-outs on User.Eco1, the no-coat map on User.Eco2.
+        marks = [g for g in board.Groups() if g.GetName() == "housing_marks"]
+        layers = {i.GetLayer() for g in marks for i in g.GetItems()}
+        for layer, what in ((pcbnew.Eco1_User, "housing keep-outs"), (pcbnew.Eco2_User, "no-coat map")):
+            if layer not in layers:
+                problems.append(f"{what} missing (run hardware/scripts/housing_marks.py)")
+        # The battery-door switch sits under the door opening, beside the holder (HD-049).
+        bt = fps["BT1"].GetCourtyard(pcbnew.F_CrtYd).BBox()
+        sw5 = fps["SW5"].GetPosition()
+        if not (bt.GetRight() <= sw5.x <= edge.GetRight() and bt.GetY() <= sw5.y <= bt.GetBottom()):
+            problems.append("SW5 (battery-door switch) is not beside the AA holder, under the door")
 
     if name in CARDS:
         j1 = fps["J1"]

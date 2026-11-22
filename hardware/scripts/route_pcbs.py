@@ -922,7 +922,19 @@ def main() -> int:
         print(f"{name}: power/rail necks: {wr['widened']} segments widened to class width, {wr['kept_narrow']} "
               f"kept narrow ({wr['narrow_mm']} mm total); {len(errors)} DRC errors", flush=True)
         ok &= not errors
+        # Finishing can rip out thermal vias (seen 2026-11-22 on TL-SN-002's U5): put back any exposed
+        # pad's vias that went missing, kept only if DRC stays as clean as it was (HD-041).
+        board = pcbnew.LoadBoard(str(pcb))
+        if thermal_pad_vias(board):
+            shutil.copy(pcb, keep)
+            board.Save(str(pcb))
+            if len(drc_errors(pcb)) > len(errors):
+                shutil.copy(keep, pcb)
+            keep.unlink(missing_ok=True)
         r = silk_pass.finish(str(BOARDS_DIR / name / f"{name}.kicad_pcb"))
+        if name == "TL-SN-002":  # housing keep-outs, coat map and the housing's board geometry
+            import housing_marks
+            housing_marks.run(name)
         print(f"{name}: silkscreen {r['placed']} references placed, {r['fab_only']} on the fab layer only")
         if pro_bytes is not None:
             pro.write_bytes(pro_bytes)

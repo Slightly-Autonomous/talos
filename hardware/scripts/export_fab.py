@@ -117,6 +117,14 @@ def export(cli: str, board: str) -> list[str]:
     for side in ("top", "bottom"):
         run([cli, "pcb", "render", "--side", side, "--width", "1200", "--height", "900", "--quality", "basic",
              "-o", str(out / f"{board}-{side}.png"), str(pcb)])
+    if board == "TL-SN-002":
+        # B-05: the assembled board for the housing CAD. B-06/B-04: the conformal-coat keep-out map and the
+        # housing keep-outs (housing_marks.py) as PDFs with the outline, for the coating step and printing.
+        run([cli, "pcb", "export", "step", "--subst-models", "--force",
+             "-o", str(out / f"{board}.step"), str(pcb)])
+        for layer, what in (("User.Eco2", "no-coat-map"), ("User.Eco1", "housing-keepouts")):
+            run([cli, "pcb", "export", "pdf", "--layers", f"Edge.Cuts,F.Fab,{layer}", "--include-border-title",
+                 "-o", str(out / f"{board}-{what}.pdf"), str(pcb)])
     return sorted(p.name for p in out.iterdir())
 
 

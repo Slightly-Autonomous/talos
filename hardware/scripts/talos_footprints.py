@@ -108,6 +108,25 @@ def ekmb() -> str:
                       body, -6.5, 6.5)
 
 
+def pir223d() -> str:
+    """NEWOPTO XYC-PIR223D-S0 (spec 2020-06-01, p5 figure C): three 0.45 mm leads on a 5.08 mm PCD at
+    90 degree steps. Bottom view: pin 1 (VDD) at 12 o'clock, pin 2 (REL) at 3, pin 3 (VSS) at 6, tab at 45
+    degrees between pin 1 and 9 o'clock. Top view (this footprint) mirrors X: pin 2 at 9 o'clock, tab
+    upper-right. Not the EKMB pattern (HD-044)."""
+    r = 5.08 / 2
+    body = _tht("1", 0, -r, 1.4, 0.8)  # VDD
+    body += _tht("2", -r, 0, 1.4, 0.8)  # REL (output)
+    body += _tht("3", 0, r, 1.4, 0.8)  # VSS
+    t = 4.55 / math.sqrt(2)
+    body += f'\t(fp_circle (center 0 0) (end 4.55 0) (stroke (width 0.1) (type solid)) (fill no) (layer "F.Fab"))\n'
+    body += f'\t(fp_line (start {t:.3f} {-t:.3f}) (end {t + 0.57:.3f} {-t - 0.57:.3f}) (stroke (width 0.1) (type solid)) (layer "F.Fab"))\n'
+    body += f'\t(fp_circle (center 0 0) (end 5.3 0) (stroke (width 0.12) (type solid)) (fill no) (layer "F.SilkS"))\n'
+    body += f'\t(fp_circle (center 0 0) (end 5.6 0) (stroke (width 0.05) (type solid)) (fill no) (layer "F.CrtYd"))\n'
+    return _footprint("PIR_NEWOPTO_PIR223D_TO-5",
+                      "NEWOPTO XYC-PIR223D-S0 digital PIR, 3 leads 0.45 mm on PCD 5.08 mm at 90 deg, can 9.1 mm",
+                      "through_hole", body, -6.4, 6.4)
+
+
 # Samtec HSEC8-EM2, -10 position (see module docstring). Footprint frame: host edge at y = +1.0,
 # host board toward -y, socket body and card toward +y, pin 1 at +x (the drawing's top view turned
 # 180 degrees so the edge faces the card).
@@ -200,6 +219,7 @@ FOOTPRINTS = {
     "Sensirion_DFN-4_1.5x1.5mm_P0.8mm_SHT4x_CentralKeepout": sht4x_central_keepout,
     "Texas_DLH0010A_WSON-10-1EP_2.2x2mm_P0.4mm": dlh0010a,
     "PIR_Panasonic_EKMB_TO-5": ekmb,
+    "PIR_NEWOPTO_PIR223D_TO-5": pir223d,
     "CardEdge_sensor_edge_v1_2x10_P0.8mm": card_fingers,
     "Samtec_HSEC8-110-01-S-D-EM2": hsec8_em2,
     "ESP32-H2-MINI-1": esp32_h2_mini1,

@@ -48,7 +48,9 @@ FP_LED = "LED_SMD:LED_0603_1608Metric"
 FP_TAG = "Connector:Tag-Connect_TC2030-IDC-NL_2x03_P1.27mm_Vertical"
 FP_HOOK = "TestPoint:TestPoint_Keystone_5000-5004_Miniature"
 # Footprints that are copper/holes only (nothing to buy): kept out of the BOM like the test pads.
-BOARD_FEATURES = (FP_TP, FP_TAG)
+FP_SOLDER_JUMPER = "Jumper:SolderJumper-2_P1.3mm_Bridged_RoundedPad1.0x1.5mm"
+# Copper-only footprints: no part to buy or place, so no BOM line (the stock footprints say so too).
+BOARD_FEATURES = (FP_TP, FP_TAG, FP_SOLDER_JUMPER)
 
 
 @dataclass
@@ -519,8 +521,9 @@ def sensor_node_v2() -> Board:
              "talos:Sensirion_DFN-4_1.5x1.5mm_P0.8mm_SHT4x_CentralKeepout",
              "on the slotted thermal tongue; no copper under the die"),
         C("C17", "100n", v),
-        Part("U10", "talos:EKMB", "PIR223D-S0", {"1": "PIR_VDD", "2": "PIR_OUT", "3": "GND"}, None,
-             "NEWOPTO digital PIR, TO-5; pin order VERIFY against the PIR223D drawing; lens in the housing"),
+        Part("U10", "talos:EKMB", "PIR223D-S0", {"1": "PIR_VDD", "2": "PIR_OUT", "3": "GND"},
+             "talos:PIR_NEWOPTO_PIR223D_TO-5",
+             "NEWOPTO digital PIR, TO-5: 1 VDD, 2 REL, 3 VSS (spec 2020-06-01 p5; HD-044 checked); lens in the housing"),
         # 330 R keeps the expander pin under ~10 mA while C18 charges (spice B12; 100 R peaked at 30 mA)
         R("R17", "330", "PIR_PWR", "PIR_VDD", "PIR supply filter (expander pin, held in deep sleep)"),
         C("C18", "4.7u", "PIR_VDD", bulk=True, note="PIR supply filter"),
@@ -534,27 +537,43 @@ def sensor_node_v2() -> Board:
     for pin, role in zip(p0, roles):
         exp[pin] = f"LED_{role}_N"
     exp[p1[0]] = "PIR_PWR"
-    for pin in p1[1:]:
+    exp[p1[1]] = "TAMPER_DOOR"
+    for pin in p1[2:]:
         exp[pin] = None
     b.add(Part("U14", "Interface_Expansion:TCA9535PWR", "TCA9535PWR", exp,
-               note="0x20: P00-P07 lamps (active low), P10 PIR_PWR, P11-P17 unused (driven low)"),
+               note="0x20: P00-P07 lamps (active low), P10 PIR_PWR, P11 TAMPER_DOOR in, P12-P17 unused (driven low)"),
           C("C21", "100n", v))
     for i, role in enumerate(roles):
         colour = "LED_RED" if role in ("BATT", "FLT") else "LED_GREEN"
         b.add(*LED(f"D{9 + i}", f"R{95 + i}", role, v, f"LED_{role}_N", "2.2k", colour=colour,
                    note=f"{role}: firmware lamp, dark on battery unless service mode"))
     b.add(
-        Part("J9", "Connector_Generic:Conn_01x02", "TAMPER loop", {"1": "TAMPER", "2": "GND"},
+        # Tamper loop, all on the board (owner 2026-11-22: zero-touch, tool-free battery door that alarms).
+        # V3V3 - R30 - TAMPER - SW4 (lid) - TAMPER_LOOP - JP3 (or J9's external switches) - TAMPER_DOOR
+        # - SW5 (battery door) - GND. Housing spring fingers hold both switches pressed (closed) when shut.
+        # TAMPER (the wake line) goes high if either opens. TAMPER_DOOR, read on EXP P11, is high only when
+        # the battery door is open (lid open with the door shut reads low): firmware tells them apart.
+        Part("SW4", "Switch:SW_Push", "LID", {"1": "TAMPER", "2": "TAMPER_LOOP"},
+             "Button_Switch_SMD:SW_Push_1P1T_XKB_TS-1187A",
+             "lid tamper: pressed (closed) by the front cover's spring finger (H-05)"),
+        Part("SW5", "Switch:SW_Push", "BATT DOOR", {"1": "TAMPER_DOOR", "2": "GND"},
+             "Button_Switch_SMD:SW_Push_1P1T_XKB_TS-1187A",
+             "battery-door tamper: pressed (closed) by the tool-free door's spring finger (HD-049)"),
+        Part("JP3", "Jumper:SolderJumper_2_Bridged", "LOOP", {"1": "TAMPER_LOOP", "2": "TAMPER_DOOR"},
+             "Jumper:SolderJumper-2_P1.3mm_Bridged_RoundedPad1.0x1.5mm",
+             "bridged: no external loop. Cut it and fit J9 to add external switches in series"),
+        Part("J9", "Connector_Generic:Conn_01x02", "EXT LOOP", {"1": "TAMPER_LOOP", "2": "TAMPER_DOOR"},
              "Connector_JST:JST_PH_S2B-PH-SM4-TB_1x02-1MP_P2.00mm_Horizontal",
-             "lid and wall switches in series, closed = loop shut (HD-032)"),
+             "optional external switches (wall, extra door) in series; not fitted", dnp=True),
         R("R30", "1M", v, "TAMPER", "tamper pull-up: 3.3 uA while shut; high = open or cut"),
+        R("R31", "4.7M", v, "TAMPER_DOOR", "door-switch sense pull-up: 0.7 uA while the door is shut"),
         C("C38", "10n", "TAMPER", note="tamper RC: tau 10 ms (spice B7)"),
     )
     for i, net in enumerate([v, "GND", "GND", "GND", "VSYS", "VBAT", "BATT_RAW", "USB_VBUS", "SYS_REG", "V3V3_REG",
                              "I2C_SDA", "I2C_SCL", "MAG_WAKE", "MAG_INT_N", "ACC_INT", "PIR_OUT", "PIR_VDD",
                              "TAMPER", "USER_BTN", "CHIP_EN", "BOOT_N", "U0TXD", "U0RXD", "USB_PRESENT",
                              "VBAT_SENSE", "USB_DP", "USB_DN", "SPARE_IO0", "SPARE_IO5", "SPARE_IO22",
-                             "SPARE_IO25"]):
+                             "SPARE_IO25", "TAMPER_DOOR"]):
         b.add(TP(f"TP{i + 1}", net))
     return b
 

@@ -32,7 +32,7 @@ LABELS = {
     "TL-DBG-001": {"J1": "USB", "J2": "CARD", "JP1": "AON mA", "JP2": "SW mA", "D1": "IN",
                    "D3": "PWR", "D4": "AON", "D5": "SW", "D6": "FLT", "TP20": "GND", "TP21": "GND"},
     "TL-TEST-001": {"D1": "SW"},
-    "TL-SN-002": {"J1": "USB", "BT1": "2xAA", "J9": "TAMPER", "SW1": "RST", "SW2": "BOOT", "SW3": "USER",
+    "TL-SN-002": {"J1": "USB", "BT1": "2xAA", "J9": "EXT LOOP", "SW4": "LID", "SW5": "DOOR", "SW1": "RST", "SW2": "BOOT", "SW3": "USER",
                   "J10": "PROG", "D8": "PWR", "D1": "STAT", "D9": "LINK", "D10": "MAG", "D11": "VIB", "D12": "PIR",
                   "D13": "ENV", "D14": "TAMP", "D15": "BATT", "D16": "FLT", "U9": "T/RH"},
 }

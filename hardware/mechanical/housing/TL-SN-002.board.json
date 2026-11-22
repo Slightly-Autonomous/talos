@@ -1,0 +1,235 @@
+{
+ "board": "TL-SN-002",
+ "size_mm": [
+  96.1,
+  66.1
+ ],
+ "thickness_mm": 1.6,
+ "origin": "top-left corner of the board outline, y down, top side up",
+ "generated_by": "hardware/scripts/housing_marks.py",
+ "holes": [
+  {
+   "ref": "H1",
+   "x": 3.2,
+   "y": 3.2,
+   "drill_mm": 2.7
+  },
+  {
+   "ref": "H2",
+   "x": 92.8,
+   "y": 3.2,
+   "drill_mm": 2.7
+  },
+  {
+   "ref": "H3",
+   "x": 3.5,
+   "y": 62.5,
+   "drill_mm": 2.7
+  },
+  {
+   "ref": "H4",
+   "x": 92.5,
+   "y": 62.5,
+   "drill_mm": 2.7
+  }
+ ],
+ "antenna_zone": [
+  4.855,
+  0.0,
+  52.145,
+  15.0
+ ],
+ "tamper_switches": {
+  "SW4": {
+   "x": 17.8,
+   "y": 27.6,
+   "actuator_top_mm": 1.5,
+   "travel_mm": 0.25
+  },
+  "SW5": {
+   "x": 92.4,
+   "y": 44.0,
+   "actuator_top_mm": 1.5,
+   "travel_mm": 0.25
+  }
+ },
+ "battery_holder": {
+  "courtyard": [
+   28.715,
+   31.985,
+   88.815,
+   65.505
+  ],
+  "height_mm": 16.0,
+  "cells": "2 x AA"
+ },
+ "battery_door_opening": [
+  27.215,
+  30.485,
+  96.245,
+  66.1
+ ],
+ "pir": {
+  "x": 66.0,
+  "y": 14.0,
+  "can_diameter_mm": 9.1,
+  "can_height_mm": 4.5,
+  "window_diameter_mm": 13.0
+ },
+ "hall": {
+  "x": 93.6,
+  "y": 22.5,
+  "edge": "right",
+  "max_wall_mm": 1.5
+ },
+ "sht40": {
+  "x": 93.3,
+  "y": 10.6,
+  "tongue": [
+   84.0,
+   6.0,
+   96.1,
+   15.2
+  ]
+ },
+ "usb_c": {
+  "x": 14.0,
+  "edge": "bottom",
+  "width_mm": 10.73,
+  "opening_mm": [
+   9.5,
+   3.8
+  ]
+ },
+ "lamps": [
+  {
+   "ref": "D8",
+   "role": "PWR",
+   "x": 2.4,
+   "y": 18.5
+  },
+  {
+   "ref": "D1",
+   "role": "STAT",
+   "x": 2.4,
+   "y": 21.7
+  },
+  {
+   "ref": "D9",
+   "role": "LINK",
+   "x": 2.4,
+   "y": 24.9
+  },
+  {
+   "ref": "D10",
+   "role": "MAG",
+   "x": 2.4,
+   "y": 28.1
+  },
+  {
+   "ref": "D11",
+   "role": "VIB",
+   "x": 2.4,
+   "y": 31.3
+  },
+  {
+   "ref": "D12",
+   "role": "PIR",
+   "x": 2.4,
+   "y": 34.5
+  },
+  {
+   "ref": "D13",
+   "role": "ENV",
+   "x": 2.4,
+   "y": 37.7
+  },
+  {
+   "ref": "D14",
+   "role": "TAMP",
+   "x": 2.4,
+   "y": 40.9
+  },
+  {
+   "ref": "D15",
+   "role": "BATT",
+   "x": 2.4,
+   "y": 44.1
+  },
+  {
+   "ref": "D16",
+   "role": "FLT",
+   "x": 2.4,
+   "y": 47.3
+  }
+ ],
+ "buttons": {
+  "SW1": {
+   "x": 25.2,
+   "y": 26.65
+  },
+  "SW2": {
+   "x": 53.45,
+   "y": 18.5
+  },
+  "SW3": {
+   "x": 32.7,
+   "y": 24.9
+  }
+ },
+ "tall_parts_mm": {
+  "BT1": 16.0,
+  "U10": 5.5,
+  "J1": 3.3,
+  "U1": 3.2
+ },
+ "no_coat": [
+  "BT1",
+  "C17",
+  "J1",
+  "J10",
+  "J9",
+  "JP1",
+  "JP2",
+  "JP3",
+  "SW1",
+  "SW2",
+  "SW3",
+  "SW4",
+  "SW5",
+  "TP1",
+  "TP10",
+  "TP11",
+  "TP12",
+  "TP13",
+  "TP14",
+  "TP15",
+  "TP16",
+  "TP17",
+  "TP18",
+  "TP19",
+  "TP2",
+  "TP20",
+  "TP21",
+  "TP22",
+  "TP23",
+  "TP24",
+  "TP25",
+  "TP26",
+  "TP27",
+  "TP28",
+  "TP29",
+  "TP3",
+  "TP30",
+  "TP31",
+  "TP32",
+  "TP4",
+  "TP5",
+  "TP6",
+  "TP7",
+  "TP8",
+  "TP9",
+  "U10",
+  "U9"
+ ]
+}

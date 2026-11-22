@@ -150,14 +150,17 @@ def sn2_spec(seed: int = 1) -> dict:
         "U9": (w - 2.7, 10.6, 90),  # SHT40 at the tongue tip
         "U6": (w - 2.4, 22.5, 90),  # 3-axis Hall on the right edge, toward the door magnet
         "U10": (66.0, 14.0, 0),  # PIR under the lid's lens window
+        # Battery-door tamper switch (HD-049) in the free strip right of the holder (its courtyard runs
+        # to the bottom edge), under the door: the tool-free door's spring finger presses it.
+        "SW5": (w - 3.6, 44.0, 90),
     }
     lamps = ("D8", "D1", "D9", "D10", "D11", "D12", "D13", "D14", "D15", "D16")  # PWR STAT LINK MAG VIB PIR ENV TAMP BATT FLT
     for i, ref in enumerate(lamps):
         fixed[ref] = (2.4, 18.5 + 3.2 * i, 0)  # one strip on the left edge (one light pipe, M-06); 3.2 mm leaves label room
     near = {"C1": "U1", "C2": "U1", "C3": "U1", "R1": "U1", "C13": "U6", "R16": "U6", "U7": "U6", "C14": "U7",
             "C15": "U8", "C16": "U8", "R17": "U10", "C18": "U10", "R21": "U10", "C21": "U14",
-            "R10": "J1", "R11": "J1", "C5": "J1", "U2": "J1"}
-    pinned = {"U1", "BT1", "J1", "U9", "C17", "U6", "U10", *lamps}
+            "R10": "J1", "R11": "J1", "C5": "J1", "U2": "J1", "R31": "SW5", "JP3": "SW5", "J9": "SW5"}
+    pinned = {"U1", "BT1", "J1", "U9", "C17", "U6", "U10", "SW5", *lamps}
     return {"size": (w, h), "layers": 2, "fixed": fixed, "near": near, "gap": 0.8, "pinned": pinned,
             "optimize": True, "seed": seed, "keepout_top": 5.2, "cuts": SN2_TONGUE_SLOTS,
             "holes": [(3.2, 3.2), (w - 3.2, 3.2), (3.5, h - 3.5), (w - 3.5, h - 3.5)],
@@ -217,7 +220,7 @@ SPECS = {"TL-SN-001": sn_spec(*(float(v) for v in _SN_SIZE.split("x")), seed=_SN
 for b in ("TL-MOD-001", "TL-MOD-002", "TL-MOD-003", "TL-MOD-004", "TL-TEST-001"):
     SPECS[b] = card_spec(b)
 SPECS["TL-DBG-001"] = dbg_spec()
-SPECS["TL-SN-002"] = sn2_spec(seed=_SN_SEED)
+SPECS["TL-SN-002"] = sn2_spec(seed=int(os.environ.get("TALOS_SEED", "2")))  # seed 1 stopped legalising U5 when SW5 moved (2026-11-22)
 
 
 DRU_SN = """(version 1)
@@ -810,6 +813,22 @@ def add_marking(board, name, spec, fps, w, h, copper) -> None:
             else:
                 raise SystemExit(f"{name}: no room for fiducial {i + 1}")
             board.Add(fp)
+            # The fiducial's 0.6 mm local clearance is not something Freerouting honours: a
+            # rule area keeps tracks and vias off it (1 mm pad + 0.6 mm + margin).
+            z = pcbnew.ZONE(board)
+            z.SetIsRuleArea(True)
+            z.SetDoNotAllowTracks(True)
+            z.SetDoNotAllowVias(True)
+            z.SetDoNotAllowZoneFills(False)
+            z.SetDoNotAllowPads(False)
+            z.SetDoNotAllowFootprints(False)
+            z.SetZoneName(f"FID{i + 1}: no tracks or vias")
+            z.SetLayer(pcbnew.F_Cu)
+            ol = z.Outline()
+            ol.NewOutline()
+            for qx, qy in ((-1.3, -1.3), (1.3, -1.3), (1.3, 1.3), (-1.3, 1.3)):
+                ol.Append(mm(ORIGIN[0] + cx + qx), mm(ORIGIN[1] + cy + qy))
+            board.Add(z)
     if name == "TL-MOD-002":  # EKMB pin legend beside the sensor (bench §8)
         u = fps["U2"]
         ux, uy = pcbnew.ToMM(u.GetPosition().x) - ORIGIN[0], pcbnew.ToMM(u.GetPosition().y) - ORIGIN[1]

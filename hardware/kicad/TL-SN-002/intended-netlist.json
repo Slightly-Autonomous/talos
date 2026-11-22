@@ -553,19 +553,19 @@
   },
   "J9": {
    "datasheet": "~",
-   "dnp": false,
+   "dnp": true,
    "footprint": "Connector_JST:JST_PH_S2B-PH-SM4-TB_1x02-1MP_P2.00mm_Horizontal",
    "lib_id": "Connector_Generic:Conn_01x02",
-   "note": "lid and wall switches in series, closed = loop shut (HD-032)",
+   "note": "optional external switches (wall, extra door) in series; not fitted",
    "pin_names": {
     "1": "Pin_1",
     "2": "Pin_2"
    },
    "pins": {
-    "1": "TAMPER",
-    "2": "GND"
+    "1": "TAMPER_LOOP",
+    "2": "TAMPER_DOOR"
    },
-   "value": "TAMPER loop"
+   "value": "EXT LOOP"
   },
   "JP1": {
    "datasheet": "~",
@@ -598,6 +598,22 @@
     "2": "V3V3"
    },
    "value": "DNP meter"
+  },
+  "JP3": {
+   "datasheet": "~",
+   "dnp": false,
+   "footprint": "Jumper:SolderJumper-2_P1.3mm_Bridged_RoundedPad1.0x1.5mm",
+   "lib_id": "Jumper:SolderJumper_2_Bridged",
+   "note": "bridged: no external loop. Cut it and fit J9 to add external switches in series",
+   "pin_names": {
+    "1": "A",
+    "2": "B"
+   },
+   "pins": {
+    "1": "TAMPER_LOOP",
+    "2": "TAMPER_DOOR"
+   },
+   "value": "LOOP"
   },
   "L1": {
    "datasheet": "~",
@@ -937,6 +953,22 @@
    },
    "value": "1M"
   },
+  "R31": {
+   "datasheet": "~",
+   "dnp": false,
+   "footprint": "Resistor_SMD:R_0402_1005Metric",
+   "lib_id": "Device:R",
+   "note": "door-switch sense pull-up: 0.7 uA while the door is shut",
+   "pin_names": {
+    "1": "",
+    "2": ""
+   },
+   "pins": {
+    "1": "V3V3",
+    "2": "TAMPER_DOOR"
+   },
+   "value": "4.7M"
+  },
   "R4": {
    "datasheet": "~",
    "dnp": false,
@@ -1256,6 +1288,38 @@
     "2": "V3V3"
    },
    "value": "USER"
+  },
+  "SW4": {
+   "datasheet": "~",
+   "dnp": false,
+   "footprint": "Button_Switch_SMD:SW_Push_1P1T_XKB_TS-1187A",
+   "lib_id": "Switch:SW_Push",
+   "note": "lid tamper: pressed (closed) by the front cover's spring finger (H-05)",
+   "pin_names": {
+    "1": "1",
+    "2": "2"
+   },
+   "pins": {
+    "1": "TAMPER",
+    "2": "TAMPER_LOOP"
+   },
+   "value": "LID"
+  },
+  "SW5": {
+   "datasheet": "~",
+   "dnp": false,
+   "footprint": "Button_Switch_SMD:SW_Push_1P1T_XKB_TS-1187A",
+   "lib_id": "Switch:SW_Push",
+   "note": "battery-door tamper: pressed (closed) by the tool-free door's spring finger (HD-049)",
+   "pin_names": {
+    "1": "1",
+    "2": "2"
+   },
+   "pins": {
+    "1": "TAMPER_DOOR",
+    "2": "GND"
+   },
+   "value": "BATT DOOR"
   },
   "TP1": {
    "datasheet": "~",
@@ -1607,6 +1671,20 @@
    },
    "value": "SPARE_IO25"
   },
+  "TP32": {
+   "datasheet": "~",
+   "dnp": false,
+   "footprint": "TestPoint:TestPoint_Pad_D1.0mm",
+   "lib_id": "Connector:TestPoint",
+   "note": "",
+   "pin_names": {
+    "1": "1"
+   },
+   "pins": {
+    "1": "TAMPER_DOOR"
+   },
+   "value": "TAMPER_DOOR"
+  },
   "TP4": {
    "datasheet": "~",
    "dnp": false,
@@ -1812,9 +1890,9 @@
   "U10": {
    "datasheet": "~",
    "dnp": false,
-   "footprint": "talos:PIR_Panasonic_EKMB_TO-5",
+   "footprint": "talos:PIR_NEWOPTO_PIR223D_TO-5",
    "lib_id": "talos:EKMB",
-   "note": "NEWOPTO digital PIR, TO-5; pin order VERIFY against the PIR223D drawing; lens in the housing",
+   "note": "NEWOPTO digital PIR, TO-5: 1 VDD, 2 REL, 3 VSS (spec 2020-06-01 p5; HD-044 checked); lens in the housing",
    "pin_names": {
     "1": "Vdd",
     "2": "OUT",
@@ -1832,7 +1910,7 @@
    "dnp": false,
    "footprint": "Package_SO:TSSOP-24_4.4x7.8mm_P0.65mm",
    "lib_id": "Interface_Expansion:TCA9535PWR",
-   "note": "0x20: P00-P07 lamps (active low), P10 PIR_PWR, P11-P17 unused (driven low)",
+   "note": "0x20: P00-P07 lamps (active low), P10 PIR_PWR, P11 TAMPER_DOOR in, P12-P17 unused (driven low)",
    "pin_names": {
     "1": "~{INT}",
     "10": "P06",
@@ -1865,7 +1943,7 @@
     "11": "LED_FLT_N",
     "12": "GND",
     "13": "PIR_PWR",
-    "14": null,
+    "14": "TAMPER_DOOR",
     "15": null,
     "16": null,
     "17": null,

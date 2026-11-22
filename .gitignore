@@ -36,6 +36,9 @@ firmware/esp_idf/build_production/
 *.pem
 secure_boot_signing_key*
 flash_encryption_key*
+# Development signing keys made for the bench boards live here, on the owner's machine only.
+secrets/*
+!secrets/README.md
 firmware/esp_idf/sdkconfig
 firmware/esp_idf/sdkconfig.old
 firmware/esp_idf/managed_components/
