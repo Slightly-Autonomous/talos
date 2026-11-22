@@ -28,7 +28,7 @@ cc_library(
 
 cc_test(
     name = "node_test",
-    size = "small",
+    size = "medium",  # long virtual time at 1 ms steps; > 60 s under UBSan on CI runners
     srcs = ["node_test.cc"],
     copts = TALOS_COPTS,
     deps = [
@@ -40,7 +40,7 @@ cc_test(
 
 cc_test(
     name = "redteam_test",
-    size = "small",
+    size = "medium",  # long virtual time at 1 ms steps; > 60 s under UBSan on CI runners
     srcs = ["redteam_test.cc"],
     copts = TALOS_COPTS,
     deps = [
@@ -52,7 +52,7 @@ cc_test(
 
 cc_test(
     name = "supervision_test",
-    size = "small",
+    size = "medium",  # long virtual time at 1 ms steps; > 60 s under UBSan on CI runners
     srcs = ["supervision_test.cc"],
     copts = TALOS_COPTS,
     deps = [
