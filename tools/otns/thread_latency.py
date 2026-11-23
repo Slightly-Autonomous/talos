@@ -16,13 +16,14 @@ node per profile under test. Measured:
    floor, before the firmware's own boot time (~30 ms) and CoAP exchange.
 3. **Uplink round trip** for each profile, from 20 pings to the border router: SED with a 250 ms
    poll (sleepy child), and MED (always on).
-4. **Parent loss:** the SED's parent router is removed; time until the SED is a child again.
+4. **Parent loss:** the SED's parent router is removed; time until it is the child of another parent
+   (it only notices when its data polls go unanswered).
 
 Results go to hardware/results/otns.md. The script fails if wake-to-reply exceeds the 2 s budget.
 
 Setup (once, by the owner: it installs Homebrew packages and builds OpenThread):
     cd ~/.cache/talos-tools/ot-ns && ./script/install-deps && ./script/install && ./script/install-nodes
-PROVISIONAL: written against pyOTNS (ot-ns main, 2026-11); not yet run in this repository.
+PROVISIONAL: run against pyOTNS (ot-ns main, 2026-11) on the development Mac; simulated radio only.
 """
 
 from __future__ import annotations
@@ -45,7 +46,14 @@ CHILD = {"child"}
 
 
 def now(ns: OTNS) -> float:
-    return ns.time
+    t = ns.time
+    return t() if callable(t) else t
+
+
+def pings(ns: OTNS) -> list:
+    """Ping results since the last call (a property in some pyOTNS versions, a method in others)."""
+    p = ns.pings
+    return list(p() if callable(p) else p)
 
 
 def wait_state(ns: OTNS, node: int, states: set[str], limit_s: float) -> float | None:
@@ -61,13 +69,16 @@ def wait_state(ns: OTNS, node: int, states: set[str], limit_s: float) -> float |
 def first_reply(ns: OTNS, src: int, dst: int, limit_s: float) -> float | None:
     """Ping every 100 ms until one comes back; seconds from the first ping to that reply."""
     t0 = now(ns)
-    ns.pings  # clear old results
+    pings(ns)  # clear old results
     while now(ns) - t0 < limit_s:
-        ns.ping(src, dst, addrtype="mleid", datasize=16, count=1)
-        ns.go(0.1)
-        got = ns.pings
-        if got:
-            return now(ns) - t0
+        try:
+            ns.ping(src, dst, addrtype="mleid", datasize=16, count=1)
+        except Exception:  # Busy: the previous echo is still outstanding
+            pass
+        for _ in range(10):  # wait up to 0.5 s for this echo
+            ns.go(0.05)
+            if pings(ns):
+                return now(ns) - t0
     return None
 
 
@@ -88,26 +99,45 @@ def one_run(seed: int) -> dict:
 
         # Uplink round trips per profile.
         for node, key in ((sed, "rtt_sleepy_child_s"), (med, "rtt_always_on_s")):
-            ns.pings
+            pings(ns)
             ns.ping(node, br, addrtype="mleid", datasize=32, count=20, interval=1.0)
             ns.go(25)
-            delays = [d / 1000.0 for (_, _, _, d) in ns.pings]  # pyOTNS reports ms
+            delays = [d / 1000.0 for (_, _, _, d) in pings(ns)]  # pyOTNS reports ms
             out[key] = statistics.median(delays) if delays else None
 
-        # Wake from deep sleep: power cycle with settings kept, then attach and first reply.
+        # Wake from deep sleep: power cycle with settings kept. The firmware enables IPv6 and
+        # Thread at every boot (thread_link.cc), as here; then attach and first reply.
         ns.node_cmd(sed, "reset")
+        ns.go(0.03)  # the ESP32-H2's own boot to OpenThread start (~30 ms)
+        ns.ifconfig_up(sed)
+        ns.thread_start(sed)
         attach = wait_state(ns, sed, CHILD, 30.0)
         out["wake_attach_s"] = attach
-        out["wake_first_reply_s"] = (attach or 0.0) + (first_reply(ns, sed, br, 10.0) or float("inf"))
+        reply = first_reply(ns, sed, br, 10.0) if attach is not None else None
+        out["wake_first_reply_s"] = 0.03 + attach + reply if reply is not None else None
 
         # Parent loss: remove whichever router is the SED's parent.
-        parent_rloc = ns.node_cmd(sed, "parent")
-        victim = r1 if any(f"{ns.get_rloc16(r1):04x}" in line for line in parent_rloc) else r2
-        if any(f"{ns.get_rloc16(br):04x}" in line for line in parent_rloc):
-            victim = br
+        if ns.get_state(sed) not in CHILD:
+            out["parent_loss_reattach_s"] = None
+            return out
+        parent_lines = ns.node_cmd(sed, "parent")
+        candidates = {n: f"{ns.get_rloc16(n):04x}" for n in (br, r1, r2)}
+        victim = next((n for n, rloc in candidates.items() if any(rloc in l.lower() for l in parent_lines)), r1)
+        victim_rloc = candidates[victim]
+        if victim == br:  # keep the border router (the hub): drop a router it could fall back to instead
+            out["parent_loss_reattach_s"] = None
+            return out
         ns.delete(victim)
-        out["parent_loss_reattach_s"] = wait_state(ns, sed, CHILD, 120.0) if ns.get_state(sed) not in CHILD \
-            else 0.0
+        # Time until the SED is a child of another parent (it only notices the loss when polls fail).
+        t0 = now(ns)
+        out["parent_loss_reattach_s"] = None
+        while now(ns) - t0 < 300.0:
+            ns.go(0.25)
+            if ns.get_state(sed) in CHILD:
+                lines = ns.node_cmd(sed, "parent")
+                if not any(victim_rloc in l.lower() for l in lines):
+                    out["parent_loss_reattach_s"] = now(ns) - t0
+                    break
         return out
     finally:
         ns.close()
@@ -138,7 +168,9 @@ def main() -> int:
         worst[k] = max(known) if known else None
         lines.append(f"| {k} | " + " | ".join(fmt(v) for v in vals) + f" | {fmt(worst[k])} |")
     ok = worst["wake_first_reply_s"] is not None and worst["wake_first_reply_s"] <= BUDGET_DEEP_S
-    lines += ["", f"- Deep-sleep budget (wake to first reply) {BUDGET_DEEP_S} s: **{'PASS' if ok else 'FAIL'}**",
+    lines += ["", "- `-` for parent loss: in that run the SED's parent was the border router itself, which the "
+              "harness never removes (it stands in for the hub).",
+              f"- Deep-sleep budget (wake to first reply) {BUDGET_DEEP_S} s: **{'PASS' if ok else 'FAIL'}**",
               f"- Wall time {wall.time() - t0:.0f} s.", ""]
     pathlib.Path(a.out).write_text("\n".join(lines))
     print("\n".join(lines))
