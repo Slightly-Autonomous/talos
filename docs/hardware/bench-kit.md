@@ -49,13 +49,14 @@ All bought parts; nothing for JLCPCB. Quantities are for two cameras.
 | **Aluminium heatsink for the Zero 2 W** (adhesive, low profile) | 2 | VB-01 thermals in a closed housing | $3 each |
 | **High-endurance microSD, 32 GB** (SanDisk High Endurance or Samsung PRO Endurance) | 3 | System card, plus a spare for re-flash tests (VB-06) | $10 each |
 | **Lever microswitch** with a normally-open contact (e.g. Omron SS-5GL or D2F-L class); the lid presses it closed | 4 | Lid tamper on GPIO17 | $2 each |
-| **Clear acrylic disc** about 30 mm × 2 mm (or a cast-acrylic offcut) | 4 | Camera window; IR boards sit behind a separate baffle | $5 for a few |
+| **Clear cast-acrylic disc**, 30 mm × 2 mm | 8 | Three windows per camera (the lens and each IR board), plus spares; clear silicone to seal them | $8 for ten |
 | **Closed-cell foam strip**, 3 mm | 1 | Light baffle between the IR LEDs and the lens (stops IR glare in the window) | $5 |
 | **Short Cat6 patch cables**, 0.5–1 m | 3 | Bench | $10 |
 | **Jumper wires** (female) and a 5 V 2.5 A micro-USB supply | 1 set | Tamper switch and IR power from the header; bench power without PoE | $15 |
 
-Housing (Bambu P2S): ASA, M2.5 inserts and screws (already in the list above), and a cable gland for
-the RJ45 (PG9 with a split insert). Frigate runs on this Mac in Docker for now, so the hub side needs
+Housing (Bambu P2S, `hardware/mechanical/vision_node/`): ASA; M2 × 5 screws (camera, IR boards); M2.5
+inserts and screws (Pi stack); four M3 × 10 screws per lid; M5 × 30 bolt, washer and wing nut (mount);
+and a PG9 cable gland with a split insert for the Ethernet cable, so the plug doesn't have to come off. Frigate runs on this Mac in Docker for now, so the hub side needs
 nothing new.
 
 ## What happens when they arrive
