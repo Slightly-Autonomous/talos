@@ -47,7 +47,7 @@ export interface RuleDraft {
   zoneId: string; // "" = any zone
   modes: ArmMode[];
   schedule: { start: string; end: string } | null;
-  action: "speak" | "notify";
+  action: "speak" | "notify" | "bookmark";
   targetDeviceId: string;
   text: string;
   volumePercent: number;
@@ -72,6 +72,7 @@ export function draftFromRule(r: Rule): RuleDraft {
   const a = r.actions[0];
   const speak = a?.args?.kind.case === "audioSpeak" ? a.args.kind.value : undefined;
   const notify = a?.args?.kind.case === "notify" ? a.args.kind.value : undefined;
+  const bookmark = a?.args?.kind.case === "bookmark" ? a.args.kind.value : undefined;
   return {
     id: r.id,
     enabled: r.enabled,
@@ -81,7 +82,7 @@ export function draftFromRule(r: Rule): RuleDraft {
     schedule: r.schedule
       ? { start: formatHhMm(r.schedule.startMinute), end: formatHhMm(r.schedule.endMinute) }
       : null,
-    action: notify ? "notify" : "speak",
+    action: bookmark ? "bookmark" : notify ? "notify" : "speak",
     targetDeviceId: a?.target?.deviceId ?? "",
     text: speak?.text ?? notify?.text ?? "",
     volumePercent: speak?.volumePercent ?? 65,
@@ -91,11 +92,12 @@ export function draftFromRule(r: Rule): RuleDraft {
 export type DraftError = string;
 
 // Builds a typed Rule. Speak actions verify by observing playback; notify is
-// ack-only (no independent evidence a person read it).
+// ack-only (no independent evidence a person read it); a camera bookmark is
+// verified only by the recorder's clip for that command (ADR 0020).
 export function ruleFromDraft(d: RuleDraft, propertyId: string, revision = 1): Rule | DraftError {
   if (!/^[a-z0-9_]+$/.test(d.id)) return "Rule id: lowercase letters, digits and _ only";
   if (!d.targetDeviceId) return "Choose a target device";
-  if (!d.text.trim()) return "Enter the message text";
+  if (d.action !== "bookmark" && !d.text.trim()) return "Enter the message text";
   let schedule;
   if (d.schedule) {
     const start = parseHhMm(d.schedule.start);
@@ -105,7 +107,21 @@ export function ruleFromDraft(d: RuleDraft, propertyId: string, revision = 1): R
   }
   const target = {
     deviceId: d.targetDeviceId,
-    capabilityId: d.action === "speak" ? "audio.speak" : "notify",
+    capabilityId:
+      d.action === "speak"
+        ? "audio.speak"
+        : d.action === "bookmark"
+          ? "camera.recording"
+          : "notify",
+  };
+  const bookmark = {
+    operation: "camera.bookmark",
+    target,
+    args: { kind: { case: "bookmark" as const, value: { durationS: 30, label: "talos" } } },
+    ttlMs: 10000n,
+    verification: VerificationMode.OBSERVED_STATE,
+    // The clip exists once the 30 s bookmark ends and the recorder writes it.
+    verificationWindowMs: 180000n,
   };
   return create(RuleSchema, {
     id: d.id,
@@ -118,29 +134,34 @@ export function ruleFromDraft(d: RuleDraft, propertyId: string, revision = 1): R
     armedModes: d.modes,
     schedule,
     actions: [
-      d.action === "speak"
-        ? {
-            operation: "audio.speak",
-            target,
-            args: {
-              kind: { case: "audioSpeak", value: { text: d.text, volumePercent: d.volumePercent } },
+      d.action === "bookmark"
+        ? bookmark
+        : d.action === "speak"
+          ? {
+              operation: "audio.speak",
+              target,
+              args: {
+                kind: {
+                  case: "audioSpeak",
+                  value: { text: d.text, volumePercent: d.volumePercent },
+                },
+              },
+              ttlMs: 5000n,
+              verification: VerificationMode.OBSERVED_STATE,
+              verificationWindowMs: 3000n,
+              expect: {
+                source: target,
+                payload: { kind: { case: "audioPlayback", value: { playing: true } } },
+              },
+            }
+          : {
+              operation: "notify",
+              target,
+              args: { kind: { case: "notify", value: { recipientRole: "owner", text: d.text } } },
+              ttlMs: 5000n,
+              verification: VerificationMode.ACK_ONLY,
+              verificationWindowMs: 3000n,
             },
-            ttlMs: 5000n,
-            verification: VerificationMode.OBSERVED_STATE,
-            verificationWindowMs: 3000n,
-            expect: {
-              source: target,
-              payload: { kind: { case: "audioPlayback", value: { playing: true } } },
-            },
-          }
-        : {
-            operation: "notify",
-            target,
-            args: { kind: { case: "notify", value: { recipientRole: "owner", text: d.text } } },
-            ttlMs: 5000n,
-            verification: VerificationMode.ACK_ONLY,
-            verificationWindowMs: 3000n,
-          },
     ],
   });
 }

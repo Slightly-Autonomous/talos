@@ -4,6 +4,7 @@ import { ArmMode } from "@talos/contracts/talos/v1/rule_pb";
 import { FloorPlan } from "../components/FloorPlan";
 import { useHub } from "../hub/HubProvider";
 import { CommandList } from "../components/CommandList";
+import { CameraCard } from "../components/CameraCard";
 import {
   armLabel,
   describeEntry,
@@ -17,6 +18,7 @@ import {
   tamperStatus,
   otherTampers,
   causeLabel,
+  cameraGroups,
 } from "../model/view";
 import { endMaintenanceCommandRequest, maintenanceCommandRequest } from "../model/commands";
 import type { Health } from "@talos/contracts/talos/v1/health_pb";
@@ -115,6 +117,14 @@ export function Live() {
           <h3>Commands</h3>
           <CommandList state={state} />
         </section>
+        {cameraGroups(property).length > 0 && (
+          <section className="panel">
+            <h3>Cameras</h3>
+            {cameraGroups(property).map((g) => (
+              <CameraCard key={g.host.id} group={g} />
+            ))}
+          </section>
+        )}
         <section className="panel">
           <h3>Devices</h3>
           {maintError && (
@@ -142,6 +152,9 @@ export function Live() {
                 <li key={d.id} data-testid={`health-${d.id}`}>
                   <span className={`dot dot-${tone}`} aria-hidden /> {d.id}
                   <span className="muted"> · {label}</span>
+                  {d.hostDeviceId && (
+                    <span className="muted small"> (recorder view of {d.hostDeviceId})</span>
+                  )}
                   {sensors && (
                     <div
                       className="muted small"

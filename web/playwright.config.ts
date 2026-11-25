@@ -27,7 +27,8 @@ export default defineConfig({
     {
       command: `${hubBin} --config ${join(root, "deploy/config/hub.dev.yaml")}`,
       url: "http://127.0.0.1:8080/v1/health",
-      env: { TALOS_SQLITE_PATH: journal, PORT: "8080" },
+      // Camera media comes from devsim's fake recorder (ADR 0020).
+      env: { TALOS_SQLITE_PATH: journal, PORT: "8080", TALOS_FRIGATE_URL: "http://127.0.0.1:8090" },
       reuseExistingServer: false,
       stdout: "pipe",
     },

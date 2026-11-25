@@ -147,7 +147,11 @@ describe("DevSim", () => {
     await s.tamper("node-12", false);
     expect(
       observations(calls)
-        .filter((c) => (c.body!.source as Record<string, unknown>).capabilityId === "tamper.enclosure")
+        .filter(
+          (c) =>
+            c.token === "dev-node-12-token" &&
+            (c.body!.source as Record<string, unknown>).capabilityId === "tamper.enclosure",
+        )
         .map((c) => c.body!.eventType),
     ).toEqual(["tamper.state", "tamper.opened", "tamper.closed"]);
     await expect(s.tamper("node-07", true)).rejects.toThrow("no tamper loop");
@@ -170,5 +174,56 @@ describe("DevSim", () => {
     const after = observations(calls).slice(before);
     expect(after.map((c) => c.body!.eventType)).toEqual(["device.heartbeat"]);
     await expect(s.userButton("node-07")).rejects.toThrow("no USER button");
+  });
+});
+
+describe("Vision Node and recorder (ADR 0020)", () => {
+  test("boot reports the stream, lid and heartbeat; the stream can go down", async () => {
+    const { s, calls } = sim();
+    await s.boot();
+    const cam = observations(calls).filter((c) => c.token === "dev-cam-patio-token");
+    expect(cam.map((c) => c.body!.eventType)).toEqual([
+      "tamper.state",
+      "camera.stream_status",
+      "device.heartbeat",
+    ]);
+    expect(cam[1]!.body).toMatchObject({
+      source: { deviceId: "cam_patio", capabilityId: "camera.stream" },
+      payload: { streamStatus: { up: true, width: 1920 } },
+    });
+    await s.stream("cam_patio", false);
+    expect(observations(calls).at(-1)!.body).toMatchObject({
+      payload: { streamStatus: { up: false } },
+    });
+    await expect(s.stream("node-07", false)).rejects.toThrow(/Vision Node/);
+  });
+
+  test("detections carry a media id the fake recorder then serves", async () => {
+    const { s, calls } = sim();
+    const id = await s.detect("cam_patio_video", "person");
+    expect(s.media.has(id)).toBe(true);
+    expect(observations(calls).at(-1)!.body).toMatchObject({
+      eventType: "camera.object_detected",
+      source: { deviceId: "cam_patio_video", capabilityId: "camera.detection" },
+      payload: { objectDetected: { label: "person", media: { mediaId: id, hasSnapshot: true } } },
+    });
+  });
+
+  test("a bookmark is ACKed, then its clip is reported with the command id", async () => {
+    const pending = {
+      cam_patio_video: [
+        { id: "cmd:r:e1", operation: "camera.bookmark", args: { bookmark: { durationS: 30 } } },
+      ],
+    };
+    const hub = fakeHub(pending);
+    const s = new DevSim({ hubUrl: "http://hub", devices: DEV_DEVICES, fetch: hub.fetch, clipDelayMs: 0 });
+    await s.pollOnce();
+    const acks = hub.calls.filter((c) => c.path === "/v1/devices/acks");
+    expect(acks[0]!.body).toMatchObject({ commandId: "cmd:r:e1", accepted: true });
+    expect(observations(hub.calls).at(-1)!.body).toMatchObject({
+      source: { deviceId: "cam_patio_video", capabilityId: "camera.recording" },
+      eventType: "camera.clip_recorded",
+      payload: { clipRecorded: { commandId: "cmd:r:e1" } },
+    });
   });
 });

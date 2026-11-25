@@ -2,7 +2,7 @@
 // Development only, but still guarded against CSRF: any website a developer
 // visits could otherwise POST motion or contact events into the dev hub.
 import type { IncomingMessage, ServerResponse } from "node:http";
-import type { DevSim, Fault } from "./devsim.ts";
+import { SNAPSHOT_JPEG, type DevSim, type Fault } from "./devsim.ts";
 
 export interface ControlRequestMeta {
   method: string | undefined;
@@ -54,6 +54,15 @@ export function controlHandler(sim: DevSim, allowedOrigins: readonly string[]) {
         body = JSON.parse(Buffer.concat(chunks).toString() || "{}") as Record<string, unknown>;
       }
       const id = String(body.device_id ?? "");
+      // The fake recorder's media (ADR 0020): what the hub's media proxy fetches when the
+      // hub runs with TALOS_FRIGATE_URL pointing here. Only ids devsim reported exist.
+      const media = /^\/api\/events\/([A-Za-z0-9._-]+)\/(snapshot\.jpg|clip\.mp4)$/.exec(
+        req.url ?? "",
+      );
+      if (req.method === "GET" && media) {
+        if (!sim.media.has(media[1]!) || media[2] !== "snapshot.jpg") return send(404, {});
+        return res.writeHead(200, { "Content-Type": "image/jpeg" }).end(SNAPSHOT_JPEG);
+      }
       switch (`${req.method} ${req.url}`) {
         case "GET /v1/sim/status":
           return send(200, sim.status());
@@ -69,6 +78,11 @@ export function controlHandler(sim: DevSim, allowedOrigins: readonly string[]) {
         case "POST /v1/sim/user_button":
           await sim.userButton(id);
           return send(200, { ok: true });
+        case "POST /v1/sim/stream":
+          await sim.stream(id, body.up === true);
+          return send(200, { ok: true });
+        case "POST /v1/sim/detect":
+          return send(200, { mediaId: await sim.detect(id, String(body.label ?? "person")) });
         case "POST /v1/sim/fault":
           sim.setFault(id, String(body.fault) as Fault);
           return send(200, { ok: true });

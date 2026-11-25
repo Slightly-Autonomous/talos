@@ -6,7 +6,9 @@
 export type Fault = "none" | "silent_ack" | "no_response" | "jam";
 // "sn002": a TL-SN-002 self-contained node (ADR 0019) reporting its built-in door
 // contact (slot 0) and enclosure loop on 2 x AA lithium cells, with a USER button.
-export type Kind = "pir" | "contact" | "speaker" | "lock" | "sn002";
+// "vision": a TL-VN-001 Vision Node agent (ADR 0020): stream status, lid, heartbeats.
+// "recorder": Frigate's view of that camera: detections with media ids, bookmarks and clips.
+export type Kind = "pir" | "contact" | "speaker" | "lock" | "sn002" | "vision" | "recorder";
 
 export interface DeviceDef {
   id: string;
@@ -30,6 +32,8 @@ export interface DevSimOptions {
   doorContactDevice?: string;
   // Device clock, for the command dispatch deadline. Defaults to Date.now.
   nowMs?: () => number;
+  // A bookmark's clip is reported after this long (a real one waits for the bookmark to end).
+  clipDelayMs?: number;
 }
 
 interface Device extends DeviceDef {
@@ -44,7 +48,12 @@ interface Command {
   id: string;
   // Dispatch deadline (int64 as a JSON string). A device never acts after it.
   expiresAtUnixMs?: string | number;
-  args?: { audioSpeak?: { text: string }; setLocked?: { locked?: boolean } };
+  operation?: string;
+  args?: {
+    audioSpeak?: { text: string };
+    setLocked?: { locked?: boolean };
+    bookmark?: { durationS?: number };
+  };
 }
 
 const CAPABILITY: Record<Kind, string> = {
@@ -53,7 +62,15 @@ const CAPABILITY: Record<Kind, string> = {
   speaker: "audio.speak",
   lock: "access.lock",
   sn002: "contact.open_state",
+  vision: "camera.stream",
+  recorder: "camera.detection",
 };
+
+// A tiny placeholder snapshot (160x90 JPEG) the fake recorder serves for every media id.
+export const SNAPSHOT_JPEG = Buffer.from(
+  "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",
+  "base64",
+);
 
 // Battery a heartbeat reports: TL-SN-002's AA pair under load (fresh ~3.0 V), else 1S Li-ion.
 const HEARTBEAT_MV: Partial<Record<Kind, number>> = { sn002: 3000 };
@@ -66,6 +83,9 @@ export class DevSim {
   private timers: ReturnType<typeof setInterval>[] = [];
   private holdTimers = new Map<string, ReturnType<typeof setTimeout>>();
   readonly log: string[] = [];
+  // Media ids the fake recorder has reported (served by the control server, ADR 0020).
+  readonly media = new Set<string>();
+  private mediaSeq = 0;
 
   constructor(private readonly opts: DevSimOptions) {
     this.fetchImpl = opts.fetch ?? globalThis.fetch.bind(globalThis);
@@ -160,6 +180,10 @@ export class DevSim {
         d.state.locked = false;
         await this.observe(d, "lock.state", { lock: { locked: false } });
       }
+      if (d.kind === "vision") {
+        d.state.streaming = true;
+        await this.streamReport(d);
+      }
       await this.heartbeat(d.id);
     }
   }
@@ -200,6 +224,45 @@ export class DevSim {
     );
   }
 
+  private async streamReport(d: Device) {
+    const up = d.state.streaming === true;
+    await this.observe(d, "camera.stream_status", {
+      streamStatus: up
+        ? { up, width: 1920, height: 1080, fpsMilli: 15000, bitrateKbps: 4000, socMilliC: 51000 }
+        : { up, socMilliC: 51000 },
+    });
+  }
+
+  // The Vision Node's camera stops or starts producing video.
+  async stream(id: string, up: boolean) {
+    const d = this.dev(id);
+    if (d.kind !== "vision") throw new Error(`${id} is not a Vision Node`);
+    d.state.streaming = up;
+    await this.streamReport(d);
+  }
+
+  // Frigate detected something on this camera: a detection with a media id the hub can serve.
+  async detect(id: string, label = "person") {
+    const d = this.dev(id);
+    if (d.kind !== "recorder") throw new Error(`${id} is not a recorder view`);
+    const mediaId = `devsim-${Date.now()}-${++this.mediaSeq}`;
+    this.media.add(mediaId);
+    await this.observe(d, "camera.object_detected", {
+      objectDetected: {
+        label,
+        confidencePermille: 880,
+        media: {
+          store: "frigate",
+          mediaId,
+          startUnixMs: String(Date.now()),
+          hasClip: false,
+          hasSnapshot: true,
+        },
+      },
+    });
+    return mediaId;
+  }
+
   setFault(id: string, fault: Fault) {
     this.dev(id).fault = fault;
   }
@@ -207,7 +270,7 @@ export class DevSim {
   // Fetch and execute pending commands for every actuator once.
   async pollOnce() {
     for (const d of this.devices.values()) {
-      if (d.kind !== "speaker" && d.kind !== "lock") continue;
+      if (d.kind !== "speaker" && d.kind !== "lock" && d.kind !== "recorder") continue;
       const pending = (await this.hub(d, "/v1/devices/commands")) as { commands?: Command[] };
       for (const cmd of pending.commands ?? []) await this.execute(d, cmd);
     }
@@ -250,6 +313,24 @@ export class DevSim {
       await this.observe(d, "lock.state", { lock: { locked: d.state.locked === true } });
       return;
     }
+    if (d.kind === "recorder" && cmd.operation === "camera.bookmark") {
+      await ack(true, "frigate event created");
+      await delay(this.opts.clipDelayMs ?? 2000);
+      const mediaId = `devsim-bm-${++this.mediaSeq}`;
+      this.media.add(mediaId);
+      await this.observe(
+        d,
+        "camera.clip_recorded",
+        {
+          clipRecorded: {
+            commandId: cmd.id,
+            media: { store: "frigate", mediaId, hasClip: true, hasSnapshot: false },
+          },
+        },
+        "camera.recording",
+      );
+      return;
+    }
     await ack(false, "unsupported command");
   }
 
@@ -265,7 +346,10 @@ export class DevSim {
           .finally(() => (polling = false));
       }, poll),
       setInterval(() => {
-        for (const id of this.devices.keys()) void this.heartbeat(id).catch(() => {});
+        for (const d of this.devices.values()) {
+          void this.heartbeat(d.id).catch(() => {});
+          if (d.kind === "vision") void this.streamReport(d).catch(() => {});
+        }
       }, this.opts.heartbeatMs ?? 30_000),
     );
   }
@@ -295,4 +379,7 @@ export const DEV_DEVICES: DeviceDef[] = [
   { id: "node-12", token: "dev-node-12-token", kind: "sn002", slot: 0, tamper: true },
   { id: "patio_speaker", token: "dev-patio-speaker-token", kind: "speaker" },
   { id: "lock-3", token: "dev-lock-3-token", kind: "lock" },
+  // TL-VN-001 Vision Node (ADR 0020) and Frigate's view of its camera.
+  { id: "cam_patio", token: "dev-cam-patio-token", kind: "vision", tamper: true },
+  { id: "cam_patio_video", token: "dev-cam-patio-video-token", kind: "recorder" },
 ];

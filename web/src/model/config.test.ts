@@ -62,6 +62,24 @@ describe("rule drafts", () => {
     expect(draftFromRule(rule)).toEqual(draft);
   });
 
+  test("a camera bookmark targets camera.recording, is verified by its clip, needs no text", () => {
+    const b = ruleFromDraft(
+      { ...draft, action: "bookmark", targetDeviceId: "cam_patio_video", text: "" },
+      "house-01",
+    );
+    if (typeof b === "string") throw new Error(b);
+    const a = b.actions[0]!;
+    expect(a.operation).toBe("camera.bookmark");
+    expect(a.target?.capabilityId).toBe("camera.recording");
+    expect(a.args?.kind).toEqual({
+      case: "bookmark",
+      value: expect.objectContaining({ durationS: 30, label: "talos" }),
+    });
+    expect(a.verificationWindowMs).toBe(180000n);
+    expect(a.expect).toBeUndefined(); // the hub derives the clip expectation (ADR 0020)
+    expect(draftFromRule(b).action).toBe("bookmark");
+  });
+
   test("notify is ack-only and validation errors are explained", () => {
     const n = ruleFromDraft({ ...draft, action: "notify" }, "house-01");
     if (typeof n === "string") throw new Error(n);

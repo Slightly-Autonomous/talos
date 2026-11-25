@@ -30,6 +30,9 @@ import {
   causeLabel,
   zoneActivity,
   zoneOf,
+  cameraGroups,
+  streamView,
+  recentDetections,
 } from "./view";
 
 const property = create(PropertySchema, {
@@ -490,5 +493,99 @@ describe("other tamper causes", () => {
     const c = otherTampers(node, st, "node-12");
     expect(causeLabel(c[1]!)).toBe("mount in place");
     expect(causeLabel(c[2]!)).toBe("door magnet unknown (last: normal)");
+  });
+});
+
+describe("cameras (ADR 0020)", () => {
+  const camProperty = create(PropertySchema, {
+    id: "house-01",
+    devices: [
+      { id: "cam_patio", capabilities: ["camera.stream", "tamper.enclosure"] },
+      { id: "cam_patio_video", hostDeviceId: "cam_patio", capabilities: ["camera.detection"] },
+      { id: "node-07", capabilities: ["motion.detect"] },
+    ],
+  });
+  const stream = (up: boolean, freshness: Freshness, throttled = 0) =>
+    create(StateResponseSchema, {
+      capabilities: [
+        {
+          ref: { deviceId: "cam_patio", capabilityId: "camera.stream" },
+          freshness,
+          value: {
+            kind: {
+              case: "streamStatus",
+              value: {
+                up,
+                width: 1920,
+                height: 1080,
+                fpsMilli: 15000,
+                bitrateKbps: 4000,
+                socMilliC: 61000,
+                throttled,
+              },
+            },
+          },
+        },
+      ],
+    });
+
+  test("groups a Vision Node with the views that name it as host", () => {
+    const g = cameraGroups(camProperty);
+    expect(g).toHaveLength(1);
+    expect(g[0]!.host.id).toBe("cam_patio");
+    expect(g[0]!.views.map((d) => d.id)).toEqual(["cam_patio_video"]);
+  });
+
+  test("a stream is streaming only while fresh and up; stale or missing is unknown", () => {
+    expect(streamView(stream(true, Freshness.FRESH), "cam_patio")).toMatchObject({
+      display: "streaming",
+    });
+    expect(streamView(stream(true, Freshness.FRESH), "cam_patio").label).toContain("1920×1080");
+    expect(streamView(stream(false, Freshness.FRESH), "cam_patio").display).toBe("down");
+    expect(streamView(stream(true, Freshness.STALE), "cam_patio").display).toBe("unknown");
+    expect(streamView(undefined, "cam_patio").display).toBe("unknown");
+    expect(streamView(stream(true, Freshness.FRESH, 0x4), "cam_patio").label).toContain(
+      "THROTTLED",
+    );
+  });
+
+  test("recent detections come newest first with their media reference", () => {
+    const det = (seq: number, device: string, label: string, media?: string) =>
+      create(JournalEntrySchema, {
+        journalSeq: BigInt(seq),
+        receivedAtUnixMs: BigInt(1_800_000_000_000 + seq),
+        event: {
+          case: "observation",
+          value: {
+            envelope: {
+              source: { deviceId: device, capabilityId: "camera.detection" },
+              eventType: "camera.object_detected",
+              payload: {
+                kind: {
+                  case: "objectDetected",
+                  value: {
+                    label,
+                    confidencePermille: 870,
+                    media: media
+                      ? { store: "frigate", mediaId: media, hasSnapshot: true, hasClip: true }
+                      : undefined,
+                  },
+                },
+              },
+            },
+          },
+        },
+      });
+    const out = recentDetections(
+      [
+        det(1, "cam_patio_video", "person", "e1"),
+        det(2, "other", "car"),
+        det(3, "cam_patio_video", "dog"),
+      ],
+      ["cam_patio_video"],
+    );
+    expect(out.map((d) => d.label)).toEqual(["dog", "person"]);
+    expect(out[1]).toMatchObject({ mediaId: "e1", hasSnapshot: true, confidencePercent: 87 });
+    expect(out[0]!.mediaId).toBeUndefined();
   });
 });

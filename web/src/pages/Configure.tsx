@@ -379,7 +379,9 @@ function RuleEditor() {
     }
   }
 
-  const speakers = property.devices.map((d) => d.id);
+  const speakers = property.devices
+    .filter((d) => draft.action !== "bookmark" || d.capabilities.includes("camera.recording"))
+    .map((d) => d.id);
   return (
     <div className="live">
       <section className="panel editor-panel">
@@ -494,6 +496,7 @@ function RuleEditor() {
             >
               <option value="speak">Speak on a speaker (verified by playback)</option>
               <option value="notify">Notify the owner (acknowledged only)</option>
+              <option value="bookmark">Bookmark camera footage (verified by the clip)</option>
             </select>
           </label>
           <label>
@@ -509,7 +512,7 @@ function RuleEditor() {
               ))}
             </select>
           </label>
-          <label>
+          <label hidden={draft.action === "bookmark"}>
             Message
             <input
               value={draft.text}

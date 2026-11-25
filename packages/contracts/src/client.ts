@@ -111,6 +111,25 @@ export class HubClient {
     return fromJson(schema, body as never, { ignoreUnknownFields: true });
   }
 
+  // Camera media through the hub (ADR 0020): a snapshot or clip the hub
+  // fetched from the recorder, for a media id this device reported. People
+  // only; the hub refuses agents.
+  async media(
+    deviceId: string,
+    mediaId: string,
+    kind: "snapshot.jpg" | "clip.mp4",
+  ): Promise<Blob> {
+    const path = `/v1/media/${encodeURIComponent(deviceId)}/${encodeURIComponent(mediaId)}/${kind}`;
+    const res = await this.fetchImpl(hubUrl(this.opts.baseUrl, path), {
+      headers: { Authorization: `Bearer ${this.opts.token}` },
+    });
+    if (!res.ok) {
+      const body = parseJson(await res.text()) as { code?: string; message?: string } | undefined;
+      throw new HubError(res.status, body?.code ?? `http_${res.status}`, body?.message ?? res.statusText);
+    }
+    return res.blob();
+  }
+
   health() {
     return this.call(HealthResponseSchema, "/v1/health");
   }

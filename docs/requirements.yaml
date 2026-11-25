@@ -354,3 +354,9 @@ requirements:
     test: //simulation/runner:scenario_test and //simulation/runner:backend_parity_test (vision_backyard_bookmark_verified, vision_stream_down_intrusion_still_handled, vision_frigate_unreachable_bookmark_not_success, vision_lid_opened_alarm)
     severity: high
     status: verified_sim
+  - id: REQ-058
+    statement: The website shows each camera's stream as streaming only while fresh and up (stale or missing is unknown, a stopped stream DOWN), its recent detections with snapshots fetched through the hub's media proxy with the person's token, and offers a camera bookmark rule action verified by its clip
+    subsystem: web
+    test: web/src/model/view.test.ts (cameras), web/src/model/config.test.ts (bookmark), web/e2e/camera.spec.ts, tools/devsim/src/devsim.test.ts
+    severity: high
+    status: verified_sim

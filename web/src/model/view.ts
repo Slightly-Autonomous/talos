@@ -609,3 +609,89 @@ export function sensorsLabel(s: DeviceSensors): string {
   if (s.kind === "built-in") return `built-in: ${s.items.map((i) => i.label).join(", ")}`;
   return `slots: ${s.items.map((i) => `${i.index} ${i.label}`).join(", ")}`;
 }
+
+// --- Cameras (ADR 0020) ---------------------------------------------------------------------
+//
+// A camera is a Vision Node ("host": the Pi agent's health, stream and lid) plus the devices
+// that name it as host_device_id (Frigate's view: detections, bookmarks, clips). The stream is
+// "streaming" only while the hub calls it fresh and up; anything else is down or unknown.
+
+export interface CameraGroup {
+  host: Device;
+  views: Device[];
+}
+
+export function cameraGroups(property: Property | undefined): CameraGroup[] {
+  if (!property) return [];
+  const out: CameraGroup[] = [];
+  for (const host of property.devices) {
+    if (!host.capabilities.includes("camera.stream")) continue;
+    out.push({ host, views: property.devices.filter((d) => d.hostDeviceId === host.id) });
+  }
+  return out;
+}
+
+export interface StreamView {
+  display: "streaming" | "down" | "unknown";
+  label: string;
+}
+
+export function streamView(state: StateResponse | undefined, hostId: string): StreamView {
+  const cap = state?.capabilities.find(
+    (c) => c.ref?.deviceId === hostId && c.ref.capabilityId === "camera.stream",
+  );
+  const v = cap?.value?.kind.case === "streamStatus" ? cap.value.kind.value : undefined;
+  if (!v) return { display: "unknown", label: "stream: unknown (never reported)" };
+  const temp = v.socMilliC ? `, SoC ${(v.socMilliC / 1000).toFixed(0)} °C` : "";
+  const throttled = v.throttled & 0x7 ? ", THROTTLED" : "";
+  if (cap?.freshness !== Freshness.FRESH) {
+    return {
+      display: "unknown",
+      label: `stream: unknown (last report ${v.up ? "streaming" : "down"}, now stale)`,
+    };
+  }
+  if (!v.up) return { display: "down", label: `stream: DOWN${temp}${throttled}` };
+  return {
+    display: "streaming",
+    label: `streaming ${v.width}×${v.height} at ${(v.fpsMilli / 1000).toFixed(0)} fps, ${(
+      v.bitrateKbps / 1000
+    ).toFixed(1)} Mbit/s${temp}${throttled}`,
+  };
+}
+
+export interface DetectionView {
+  deviceId: string;
+  label: string;
+  confidencePercent: number;
+  atMs: number;
+  mediaId?: string;
+  hasSnapshot: boolean;
+  hasClip: boolean;
+}
+
+// Newest first, from the journal entries the client holds (no media id = no image to fetch).
+export function recentDetections(
+  entries: JournalEntry[],
+  deviceIds: string[],
+  limit = 4,
+): DetectionView[] {
+  const out: DetectionView[] = [];
+  for (let i = entries.length - 1; i >= 0 && out.length < limit; i--) {
+    const e = entries[i]!;
+    if (e.event.case !== "observation") continue;
+    const env = e.event.value.envelope;
+    const device = env?.source?.deviceId ?? "";
+    if (!deviceIds.includes(device) || env?.payload?.kind.case !== "objectDetected") continue;
+    const d = env.payload.kind.value;
+    out.push({
+      deviceId: device,
+      label: d.label,
+      confidencePercent: Math.round(d.confidencePermille / 10),
+      atMs: Number(env.observedAtUnixMs ?? e.receivedAtUnixMs),
+      mediaId: d.media?.mediaId || undefined,
+      hasSnapshot: d.media?.hasSnapshot ?? false,
+      hasClip: d.media?.hasClip ?? false,
+    });
+  }
+  return out;
+}
