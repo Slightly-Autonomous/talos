@@ -315,5 +315,37 @@ TEST(Ledger, ReplayingTransitionsRebuildsIdenticalLedger) {
   EXPECT_TRUE(rebuilt.request(lock_command("cmd-9"), kAllow, kT0).duplicate);
 }
 
+// ADR 0020: a bookmark verifies only on a clip for this command, and a clip
+// arriving after the window is recorded as late, never hidden.
+TEST(Ledger, BookmarkVerifiesOnTheClipForThisCommandOnly) {
+  const CapabilityRef rec{DeviceId("cam_patio_video"), std::nullopt,
+                          CapabilityId("camera.recording")};
+  Command c = lock_command();
+  c.target = rec;
+  c.operation = "camera.bookmark";
+  c.args = Bookmark{30, "talos"};
+  c.verification_window = Millis{40'000};
+  c.expect = ExpectedObservation{rec, ClipRecorded{"cmd-1", {}}};
+  CommandLedger l;
+  commit(l, l.request(c, kAllow, kT0).transitions);
+  commit(l, l.dispatch(CommandId("cmd-1"), kT0 + Millis{10}));
+  auto clip = [&](std::string cmd, std::string id) {
+    ObservationEnvelope o;
+    o.property = PropertyId("house-01");
+    o.source = rec;
+    o.event_type = "camera.clip_recorded";
+    o.event_id = EventId(id);
+    o.position = {1, 2};
+    o.payload = ClipRecorded{std::move(cmd), MediaRef{"frigate", "e-9", 1, 2, true, true}};
+    return o;
+  };
+  EXPECT_TRUE(
+      l.on_observation(clip("cmd-other", "cam_patio_video:1:1"), kT0 + Millis{100}).empty());
+  auto ts = commit(l, l.on_observation(clip("cmd-1", "cam_patio_video:1:2"), kT0 + Millis{45'000}));
+  ASSERT_EQ(ts.size(), 1u);
+  EXPECT_EQ(status(l), CommandStatus::kVerified);
+  EXPECT_TRUE(ts[0].late);
+}
+
 }  // namespace
 }  // namespace talos

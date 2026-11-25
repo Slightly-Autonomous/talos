@@ -147,6 +147,33 @@ HubService::HubService(LoadedConfig config, std::unique_ptr<IJournal> journal, c
                                 PrincipalId(current_->principal), ec.property, ec.rules,
                                 ec.principals);
   }
+  for (const auto& e : read_all(*journal_)) {
+    if (const auto* o = std::get_if<ObservationRecorded>(&e.event)) index_media_locked(o->envelope);
+  }
+}
+
+void HubService::index_media_locked(const ObservationEnvelope& env) {
+  const MediaRef* m = nullptr;
+  if (const auto* d = std::get_if<ObjectDetected>(&env.payload); d && d->media) m = &*d->media;
+  if (const auto* c = std::get_if<ClipRecorded>(&env.payload)) m = &c->media;
+  if (m) media_index_.emplace(env.source.device, m->media_id);
+}
+
+Status HubService::authorize_media(const PrincipalId& who, const DeviceId& device,
+                                   const std::string& media_id) const {
+  std::lock_guard lock(mu_);
+  const Principal* principal = nullptr;
+  for (const auto& p : engine_->config().principals) {
+    if (p.id == who) principal = &p;
+  }
+  if (!principal) return Error{"unknown_principal", who.str()};
+  if (auto a = authorize_media_view(*principal, config_.engine.property.id); !a.allowed) {
+    return Error{"denied", a.reason};
+  }
+  if (!media_index_.contains({device, media_id})) {
+    return Error{"not_found", "no media " + media_id + " from " + device.str()};
+  }
+  return Status::Ok();
 }
 
 talos::v1::Property HubService::property() const {
@@ -446,6 +473,7 @@ Result<api::IngestResponse> HubService::ingest_observation(
   opts.epoch_ceiling = static_cast<std::uint32_t>(
       std::min<std::int64_t>(now.unix_ms / 1000 + kHttpEpochSkewSeconds, 0xFFFF'FFFFll));
   IngestResult r = engine_->on_observation(env.value(), opts);
+  if (r.status == IngestStatus::kAccepted) index_media_locked(env.value());
   after_mutation_locked();
   (r.status == IngestStatus::kAccepted    ? metrics_.ingest_accepted
    : r.status == IngestStatus::kDuplicate ? metrics_.ingest_duplicate
@@ -749,6 +777,23 @@ api::HealthListResponse HubService::device_health() const {
       tamper_detail += (tamper_detail.empty() ? "" : ", ") + std::string(what);
     }
     if (!other_cause) tamper_detail.clear();
+    // A Vision Node whose stream is down or unreported is degraded, never
+    // healthy: its camera sees nothing (ADR 0020).
+    std::string camera_fault;
+    if (d.declares(CapabilityId("camera.stream"))) {
+      const CapabilityRef stream_ref{d.id, std::nullopt, CapabilityId("camera.stream")};
+      auto it = caps.find(stream_ref);
+      const auto* v = it == caps.end() ? nullptr : std::get_if<StreamStatus>(&it->second.value);
+      if (!v) {
+        camera_fault = "camera stream never reported";
+      } else if (engine_->freshness_of(stream_ref) != Freshness::kFresh) {
+        camera_fault = "camera stream status is stale (unknown)";
+      } else if (!v->up) {
+        camera_fault = "camera stream down";
+      } else if (v->throttled & 0x7u) {
+        camera_fault = "camera throttled now (undervoltage, frequency cap or throttling)";
+      }
+    }
     std::optional<Timestamp> maintenance_until;
     if (auto m = engine_->state().maintenance.find(d.id); m != engine_->state().maintenance.end()) {
       maintenance_until = m->second.until;
@@ -758,6 +803,16 @@ api::HealthListResponse HubService::device_health() const {
                        engine_->config().freshness_max_age, registry_.anomaly(d.id), tamper_open,
                        maintenance_until, board_has_primary_cells(d.board),
                        board_has_built_in_sensors(d.board), tamper_detail);
+    auto& h = *out.mutable_devices(out.devices_size() - 1);
+    if (!camera_fault.empty() && h.status() == talos::v1::HEALTH_STATUS_HEALTHY) {
+      h.set_status(talos::v1::HEALTH_STATUS_DEGRADED);
+      h.clear_evidence();
+      h.add_evidence(camera_fault);
+      h.set_recommended_action(
+          "Check the camera's ribbon cable, its MediaMTX service and its power (PoE)");
+    } else if (!camera_fault.empty()) {
+      h.add_evidence(camera_fault);
+    }
   }
   return out;
 }

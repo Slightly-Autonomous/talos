@@ -71,7 +71,15 @@ struct SetMaintenance {
   std::uint32_t duration_ms = 0;
   auto operator<=>(const SetMaintenance&) const = default;
 };
-using CommandArgs = std::variant<std::monostate, AudioSpeak, SetLocked, Notify, SetMaintenance>;
+// camera.bookmark: mark the recorder's footage around now (ADR 0020).
+// duration_s 0 = the default, 30 s (5-120 s); label 1-32 of [a-z0-9_], "" = "talos".
+struct Bookmark {
+  std::uint32_t duration_s = 0;
+  std::string label;
+  auto operator<=>(const Bookmark&) const = default;
+};
+using CommandArgs =
+    std::variant<std::monostate, AudioSpeak, SetLocked, Notify, SetMaintenance, Bookmark>;
 
 enum class VerificationMode : std::uint8_t {
   kAckOnly,        // best outcome is completed_unverified (e.g. notify)

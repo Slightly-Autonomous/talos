@@ -30,10 +30,43 @@ message AudioPlayback {
   bool playing = 1;
 }
 
+// Where a camera's media lives (ADR 0020). Video bytes stay in the recorder
+// (Frigate); the hub only serves media ids its journal saw from that device.
+message MediaRef {
+  // Recorder kind, e.g. "frigate". 1-16 of [a-z].
+  string store = 1;
+  // Recorder's id for the event. 1-128 of [A-Za-z0-9._-].
+  string media_id = 2;
+  int64 start_unix_ms = 3;
+  int64 end_unix_ms = 4;  // 0 while the event is still open
+  bool has_clip = 5;
+  bool has_snapshot = 6;
+}
+
 // Camera/vision detection metadata (never pixels).
 message ObjectDetected {
   string label = 1;
   uint32 confidence_permille = 2;
+  optional MediaRef media = 3;
+}
+
+// Camera stream status from a Vision Node (capability "camera.stream").
+message StreamStatus {
+  bool up = 1;
+  uint32 width = 2;
+  uint32 height = 3;
+  uint32 fps_milli = 4;
+  uint32 bitrate_kbps = 5;
+  int32 soc_milli_c = 6;
+  // Raspberry Pi `vcgencmd get_throttled` bits (0 = never throttled).
+  uint32 throttled = 7;
+}
+
+// A recorder clip exists for a camera.bookmark command (capability
+// "camera.recording"). Its command_id is what verifies the bookmark.
+message ClipRecorded {
+  string command_id = 1;
+  MediaRef media = 2;
 }
 
 // Periodic device supervision report.
@@ -58,6 +91,8 @@ message ObservationPayload {
     ObjectDetected object_detected = 7;
     Heartbeat heartbeat = 8;
     TamperState tamper = 9;
+    StreamStatus stream_status = 10;
+    ClipRecorded clip_recorded = 11;
   }
 }
 

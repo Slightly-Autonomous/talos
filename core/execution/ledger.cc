@@ -1,5 +1,7 @@
 #include "core/execution/ledger.h"
 
+#include "core/execution/operations.h"
+
 namespace talos {
 
 Timestamp CommandRecord::verification_deadline() const {
@@ -124,7 +126,7 @@ std::vector<CommandTransition> CommandLedger::on_observation(const ObservationEn
     // Ack-only commands never become verified, whatever they carry (ADR 0004).
     if (rec.command.verification == VerificationMode::kAckOnly) continue;
     const auto& expect = *rec.command.expect;
-    if (expect.source != obs.source || expect.payload != obs.payload) continue;
+    if (expect.source != obs.source || !expectation_met(expect.payload, obs.payload)) continue;
     if (received_at < *rec.dispatched_at) continue;  // predates the command
     // A report the device made before (or at) dispatch says nothing about
     // what the command did (ADR 0004 amendment).

@@ -125,5 +125,21 @@ TEST(Policy, ExpiredRequestDenied) {
   EXPECT_EQ(evaluate(owner(), cmd("notify"), {kNow + Millis{5'000}, true}).reason, "expired");
 }
 
+// ADR 0020: camera images are for people with at least a sensitive_read grant.
+TEST(Policy, MediaIsForHumansWithASensitiveReadGrant) {
+  EXPECT_TRUE(authorize_media_view(owner(), PropertyId("house-01")).allowed);
+  Principal viewer = owner();
+  viewer.grants[0].max_risk = RiskClass::kSensitiveRead;
+  EXPECT_TRUE(authorize_media_view(viewer, PropertyId("house-01")).allowed);
+  viewer.grants[0].max_risk = RiskClass::kInformational;
+  EXPECT_EQ(authorize_media_view(viewer, PropertyId("house-01")).reason, "risk_exceeds_grant");
+  Principal agent{PrincipalId("agent-1"),
+                  PrincipalKind::kAgent,
+                  {{PropertyId("house-01"), RiskClass::kDisruptiveOutput}}};
+  EXPECT_EQ(authorize_media_view(agent, PropertyId("house-01")).reason,
+            "requires_human_authorization");
+  EXPECT_EQ(authorize_media_view(owner(), PropertyId("house-02")).reason, "no_grant_for_property");
+}
+
 }  // namespace
 }  // namespace talos

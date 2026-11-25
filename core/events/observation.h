@@ -42,11 +42,43 @@ struct AudioPlayback {
   auto operator<=>(const AudioPlayback&) const = default;
 };
 
+// Where a camera's media lives (ADR 0020). Video stays in the recorder.
+struct MediaRef {
+  std::string store;     // "frigate"; 1-16 of [a-z]
+  std::string media_id;  // recorder's event id; 1-128 of [A-Za-z0-9._-]
+  std::int64_t start_unix_ms = 0;
+  std::int64_t end_unix_ms = 0;  // 0 while the event is open
+  bool has_clip = false;
+  bool has_snapshot = false;
+  auto operator<=>(const MediaRef&) const = default;
+};
+
 // Camera/vision detection metadata (never pixels).
 struct ObjectDetected {
   std::string label;  // e.g. "person"
   std::uint16_t confidence_permille = 0;
+  std::optional<MediaRef> media;
   auto operator<=>(const ObjectDetected&) const = default;
+};
+
+// Vision Node stream status (capability "camera.stream").
+struct StreamStatus {
+  bool up = false;
+  std::uint32_t width = 0;
+  std::uint32_t height = 0;
+  std::uint32_t fps_milli = 0;
+  std::uint32_t bitrate_kbps = 0;
+  std::int32_t soc_milli_c = 0;
+  std::uint32_t throttled = 0;  // vcgencmd get_throttled bits
+  auto operator<=>(const StreamStatus&) const = default;
+};
+
+// A recorder clip exists for a camera.bookmark command (capability
+// "camera.recording"); command_id is what verifies the bookmark.
+struct ClipRecorded {
+  std::string command_id;
+  MediaRef media;
+  auto operator<=>(const ClipRecorded&) const = default;
 };
 // Enclosure tamper loop (capability "tamper.enclosure"): open = lid open or
 // loop cut. A security event in every arm mode (ADR 0007 amendment).
@@ -62,7 +94,8 @@ struct Heartbeat {
 
 using ObservationPayload =
     std::variant<std::monostate, ContactState, MotionState, ImpactDetected, TemperatureHumidity,
-                 LockState, AudioPlayback, ObjectDetected, Heartbeat, TamperState>;
+                 LockState, AudioPlayback, ObjectDetected, Heartbeat, TamperState, StreamStatus,
+                 ClipRecorded>;
 
 // Per-device source position. `boot_epoch` is a persistent counter the device
 // increments on every boot; `sequence` restarts at each boot. Together they
@@ -92,6 +125,8 @@ struct ObservationEnvelope {
 inline constexpr std::size_t kMaxEventIdLen = 128;
 inline constexpr std::size_t kMaxEventTypeLen = 64;
 inline constexpr std::size_t kMaxLabelLen = 64;
+inline constexpr std::size_t kMaxMediaStoreLen = 16;
+inline constexpr std::size_t kMaxMediaIdLen = 128;
 
 // Structural validation of an envelope arriving from any adapter: required
 // fields, and bounded lengths and character sets for device-controlled text.

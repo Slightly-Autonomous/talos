@@ -55,4 +55,8 @@ Authorization authorize_arm_change(const Principal& principal, const PropertyId&
 // Changing layout or rules can silence alarms: security-critical, humans only.
 Authorization authorize_config_change(const Principal& principal, const PropertyId& property);
 
+// Viewing camera snapshots and clips (ADR 0020): humans only, with at least
+// a sensitive_read grant on the property. Agents and rules never see images.
+Authorization authorize_media_view(const Principal& principal, const PropertyId& property);
+
 }  // namespace talos

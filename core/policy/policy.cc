@@ -67,4 +67,16 @@ Authorization authorize_config_change(const Principal& principal, const Property
   return {true, "granted"};
 }
 
+Authorization authorize_media_view(const Principal& principal, const PropertyId& property) {
+  const Grant* grant = nullptr;
+  for (const auto& g : principal.grants) {
+    if (g.property == property) grant = &g;
+  }
+  if (principal.id.empty() || !grant) return {false, "no_grant_for_property"};
+  // Camera images are people's private spaces: no agent or rule sees them.
+  if (principal.kind != PrincipalKind::kHuman) return {false, "requires_human_authorization"};
+  if (grant->max_risk < RiskClass::kSensitiveRead) return {false, "risk_exceeds_grant"};
+  return {true, "granted"};
+}
+
 }  // namespace talos

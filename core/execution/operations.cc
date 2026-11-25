@@ -25,9 +25,13 @@ constexpr OperationSpec kCatalog[] = {
     // (fresh device.health). Ending it raises protection again: benign.
     {"device.maintenance", RiskClass::kSecurityCritical, true, 4, "device.health", true},
     {"device.maintenance_end", RiskClass::kBenignOutput, true, kNoArgs, "device.health", true},
+    // Marks the recorder's footage around now (ADR 0020). Verified only by a
+    // ClipRecorded observation carrying this command's id.
+    {"camera.bookmark", RiskClass::kBenignOutput, true, 5, "camera.recording"},
 };
 
-static_assert(std::variant_size_v<CommandArgs> == 5, "update the operation catalog");
+static_assert(std::variant_size_v<CommandArgs> == 6, "update the operation catalog");
+static_assert(std::is_same_v<std::variant_alternative_t<5, CommandArgs>, Bookmark>);
 static_assert(std::is_same_v<std::variant_alternative_t<4, CommandArgs>, SetMaintenance>);
 static_assert(std::is_same_v<std::variant_alternative_t<1, CommandArgs>, AudioSpeak>);
 static_assert(std::is_same_v<std::variant_alternative_t<2, CommandArgs>, SetLocked>);
@@ -59,6 +63,10 @@ std::optional<ExpectedObservation> derive_expectation(const Command& command) {
   if (const auto* lock = std::get_if<SetLocked>(&command.args)) {
     return ExpectedObservation{command.target, LockState{lock->locked}};
   }
+  if (std::holds_alternative<Bookmark>(command.args)) {
+    // Matched on command_id only (expectation_met): the recorder picks the media.
+    return ExpectedObservation{command.target, ClipRecorded{command.id.str(), {}}};
+  }
   return std::nullopt;  // notify and no-args operations have nothing to observe
 }
 
@@ -84,6 +92,17 @@ Result<Command> normalize_command(const Command& command) {
                   command.operation + " must target " + std::string(spec->target_capability));
   }
   Command out = command;
+  if (auto* b = std::get_if<Bookmark>(&out.args)) {
+    if (b->duration_s == 0) b->duration_s = kDefaultBookmarkS;
+    if (b->label.empty()) b->label = "talos";
+    bool label_ok = b->label.size() <= kMaxBookmarkLabelLen;
+    for (char c : b->label) {
+      label_ok &= (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_';
+    }
+    if (b->duration_s < kMinBookmarkS || b->duration_s > kMaxBookmarkS || !label_ok) {
+      return reject("args_out_of_bounds", "bookmark lasts 5-120 s; label 1-32 of [a-z0-9_]");
+    }
+  }
   if (auto* m = std::get_if<SetMaintenance>(&out.args)) {
     if (m->duration_ms == 0) m->duration_ms = static_cast<std::uint32_t>(kDefaultMaintenance.count);
     if (Millis{m->duration_ms} < kMinMaintenance || Millis{m->duration_ms} > kMaxMaintenance) {
@@ -118,6 +137,14 @@ Result<Command> normalize_command(const Command& command) {
     out.expect = derived;
   }
   return out;
+}
+
+bool expectation_met(const ObservationPayload& expected, const ObservationPayload& observed) {
+  if (const auto* want = std::get_if<ClipRecorded>(&expected)) {
+    const auto* got = std::get_if<ClipRecorded>(&observed);
+    return got && got->command_id == want->command_id;
+  }
+  return expected == observed;
 }
 
 }  // namespace talos

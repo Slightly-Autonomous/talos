@@ -20,6 +20,8 @@ bool payload_fits(const CapabilityId& capability, const ObservationPayload& p) {
   if (c == "audio.speak") return std::holds_alternative<AudioPlayback>(p);
   if (c == "camera.detection") return std::holds_alternative<ObjectDetected>(p);
   if (c == "device.health") return std::holds_alternative<Heartbeat>(p);
+  if (c == "camera.stream") return std::holds_alternative<StreamStatus>(p);
+  if (c == "camera.recording") return std::holds_alternative<ClipRecorded>(p);
   // tamper.enclosure, tamper.battery_door, tamper.mount, tamper.magnet (and later causes).
   if (c.rfind("tamper.", 0) == 0) return std::holds_alternative<TamperState>(p);
   return true;
@@ -46,6 +48,8 @@ bool event_type_fits(const std::string& t, const ObservationPayload& p) {
   if (std::holds_alternative<TemperatureHumidity>(p)) return t == "environment.reading";
   if (std::holds_alternative<ObjectDetected>(p)) return t == "camera.object_detected";
   if (std::holds_alternative<Heartbeat>(p)) return t == "device.heartbeat";
+  if (std::holds_alternative<StreamStatus>(p)) return t == "camera.stream_status";
+  if (std::holds_alternative<ClipRecorded>(p)) return t == "camera.clip_recorded";
   if (const auto* x = std::get_if<TamperState>(&p)) {
     return t == "tamper.state" || t == (x->open ? "tamper.opened" : "tamper.closed");
   }

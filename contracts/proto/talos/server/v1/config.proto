@@ -104,6 +104,16 @@ message HubConfig {
   // Ed25519 public keys trusted to sign firmware releases (ADR 0014).
   repeated SigningKey firmware_signing_keys = 17;
   SupabaseAuth supabase_auth = 18;
+  MediaConfig media = 19;
+}
+
+// Camera media (ADR 0020): the hub serves a camera's snapshots and clips from
+// the recorder, only for media ids that device's journaled observations named.
+message MediaConfig {
+  // Frigate base URL on the LAN, e.g. "http://127.0.0.1:5000". Empty = off.
+  string frigate_url = 1;
+  // Largest clip served, bytes (0 = 64 MiB).
+  uint32 max_clip_bytes = 2;
 }
 
 // AUTH_MODE_SUPABASE (ADR 0015): accept Supabase-issued HS256 JWTs in

@@ -85,5 +85,23 @@ TEST(Property, ZoneOfPrefersAssetZoneThenDevicePlacement) {
   EXPECT_EQ(p.zone_of({DeviceId("ghost"), std::nullopt, CapabilityId("x")}), std::nullopt);
 }
 
+// ADR 0020: a camera's Frigate view names its Vision Node as host.
+TEST(ValidateProperty, HostMustBeAnotherDeviceWithNoHost) {
+  auto p = sample();
+  Device video;
+  video.id = DeviceId("cam_video");
+  video.property = p.id;
+  video.host = DeviceId("node-07");
+  p.devices.push_back(video);
+  EXPECT_TRUE(validate_property(p));
+  p.devices.back().host = DeviceId("ghost");
+  EXPECT_EQ(validate_property(p).error().code, "invalid_host");
+  p.devices.back().host = DeviceId("cam_video");
+  EXPECT_EQ(validate_property(p).error().code, "invalid_host");
+  p.devices.back().host = DeviceId("node-07");
+  p.devices.front().host = DeviceId("cam_video");  // a chain
+  EXPECT_EQ(validate_property(p).error().code, "invalid_host");
+}
+
 }  // namespace
 }  // namespace talos

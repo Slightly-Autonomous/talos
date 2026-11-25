@@ -535,6 +535,12 @@ export function capabilityLabel(c: CapabilityView): string {
       return `${v.value.label} (${(v.value.confidencePermille / 10).toFixed(0)}%)`;
     case "tamper":
       return v.value.open ? "TAMPER: open" : "enclosure closed";
+    case "streamStatus":
+      return v.value.up
+        ? `streaming ${v.value.width}×${v.value.height} at ${(v.value.fpsMilli / 1000).toFixed(0)} fps`
+        : "stream down";
+    case "clipRecorded":
+      return `clip for ${v.value.commandId}`;
     default:
       return "—";
   }

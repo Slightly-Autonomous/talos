@@ -36,15 +36,20 @@ TEST(Codec, ObservationRoundTripsKnownFields) {
 }
 
 TEST(Codec, AllPayloadKindsRoundTrip) {
-  std::vector<ObservationPayload> payloads = {ContactState{true},
-                                              MotionState{true},
-                                              ImpactDetected{-840, 12},
-                                              TemperatureHumidity{21500, 455},
-                                              LockState{true},
-                                              AudioPlayback{true},
-                                              ObjectDetected{"person", 870},
-                                              Heartbeat{3700},
-                                              TamperState{true}};
+  std::vector<ObservationPayload> payloads = {
+      ContactState{true},
+      MotionState{true},
+      ImpactDetected{-840, 12},
+      TemperatureHumidity{21500, 455},
+      LockState{true},
+      AudioPlayback{true},
+      ObjectDetected{"person", 870, std::nullopt},
+      ObjectDetected{"car", 640,
+                     MediaRef{"frigate", "1700000000.5-ab12", 1700000000500, 0, true, true}},
+      Heartbeat{3700},
+      TamperState{true},
+      StreamStatus{true, 1920, 1080, 15000, 4000, 61250, 0},
+      ClipRecorded{"cmd:r1:e1", MediaRef{"frigate", "x-1", 1, 2, true, false}}};
   for (const auto& p : payloads) {
     auto e = testing::motion("node-07", 1, 1);
     e.payload = p;

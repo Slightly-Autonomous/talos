@@ -50,6 +50,16 @@ Millis max_ttl_for(RiskClass risk);
 inline constexpr Millis kMaxVerificationWindow{5 * 60 * 1000};
 inline constexpr std::size_t kMaxSpeakTextLen = 280;
 inline constexpr std::size_t kMaxNotifyTextLen = 1024;
+// camera.bookmark: short enough that the clip exists inside the longest
+// verification window (the recorder closes the event at its end).
+inline constexpr std::uint32_t kDefaultBookmarkS = 30;
+inline constexpr std::uint32_t kMinBookmarkS = 5;
+inline constexpr std::uint32_t kMaxBookmarkS = 120;
+inline constexpr std::size_t kMaxBookmarkLabelLen = 32;
+
+// Whether an observed payload is the evidence `expected` asks for. Exact
+// equality, except a ClipRecorded matches on its command id alone.
+bool expectation_met(const ObservationPayload& expected, const ObservationPayload& observed);
 
 // The observation that verifies `command`, derived from its operation, args
 // and target. nullopt when the operation has no observable effect (notify):

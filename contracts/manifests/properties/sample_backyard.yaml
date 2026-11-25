@@ -57,6 +57,23 @@ devices:
     capabilities: [contact.open_state, tamper.enclosure, tamper.battery_door, tamper.mount, tamper.magnet]
     zone_id: hallway
     position: {x: 2.2, y: 0.4}
+  # TL-VN-001 Vision Node (ADR 0020) under the patio eave, looking into the backyard. The Pi agent
+  # reports health, stream and lid; Frigate's view of the same camera is its own device.
+  - id: cam_patio
+    property_id: house-01
+    board_id: vision_node_pi_zero2w
+    board_revision: build-1
+    capabilities: [camera.stream, tamper.enclosure]
+    zone_id: patio
+    position: {x: 9, y: 12.8}
+  - id: cam_patio_video
+    property_id: house-01
+    host_device_id: cam_patio
+    capabilities: [camera.detection, camera.recording]
+    zone_id: patio
+    position: {x: 9, y: 12.8}
+    coverage:
+      - {capability_id: camera.detection, heading_deg: 100, half_angle_deg: 55, range_m: 14}
   - {id: patio_speaker, property_id: house-01, zone_id: patio, position: {x: 6, y: 10.6}, capabilities: [audio.speak]}
   - {id: lock-3, property_id: house-01, zone_id: hallway, position: {x: 2.6, y: 0.3}, capabilities: [access.lock]}
 assets:

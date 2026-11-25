@@ -39,6 +39,20 @@ v1::CapabilityRef ref_to(const CapabilityRef& r) {
 
 // ---- Payloads ---------------------------------------------------------------
 
+MediaRef media_from(const v1::MediaRef& m) {
+  return MediaRef{m.store(),       m.media_id(), m.start_unix_ms(),
+                  m.end_unix_ms(), m.has_clip(), m.has_snapshot()};
+}
+
+void media_to(const MediaRef& m, v1::MediaRef* p) {
+  p->set_store(m.store);
+  p->set_media_id(m.media_id);
+  p->set_start_unix_ms(m.start_unix_ms);
+  p->set_end_unix_ms(m.end_unix_ms);
+  p->set_has_clip(m.has_clip);
+  p->set_has_snapshot(m.has_snapshot);
+}
+
 ObservationPayload payload_from(const v1::ObservationPayload& p) {
   switch (p.kind_case()) {
     case v1::ObservationPayload::kContact:
@@ -56,9 +70,18 @@ ObservationPayload payload_from(const v1::ObservationPayload& p) {
       return AudioPlayback{p.audio_playback().playing()};
     case v1::ObservationPayload::kObjectDetected: {
       const auto conf = p.object_detected().confidence_permille();
-      return ObjectDetected{p.object_detected().label(),
-                            static_cast<std::uint16_t>(conf > 1000 ? 1000 : conf)};
+      ObjectDetected o{p.object_detected().label(),
+                       static_cast<std::uint16_t>(conf > 1000 ? 1000 : conf), std::nullopt};
+      if (p.object_detected().has_media()) o.media = media_from(p.object_detected().media());
+      return o;
     }
+    case v1::ObservationPayload::kStreamStatus: {
+      const auto& x = p.stream_status();
+      return StreamStatus{x.up(),           x.width(),       x.height(),   x.fps_milli(),
+                          x.bitrate_kbps(), x.soc_milli_c(), x.throttled()};
+    }
+    case v1::ObservationPayload::kClipRecorded:
+      return ClipRecorded{p.clip_recorded().command_id(), media_from(p.clip_recorded().media())};
     case v1::ObservationPayload::kHeartbeat:
       return Heartbeat{p.heartbeat().battery_mv()};
     case v1::ObservationPayload::kTamper:
@@ -89,6 +112,21 @@ struct PayloadTo {
   void operator()(const ObjectDetected& v) const {
     p.mutable_object_detected()->set_label(v.label);
     p.mutable_object_detected()->set_confidence_permille(v.confidence_permille);
+    if (v.media) media_to(*v.media, p.mutable_object_detected()->mutable_media());
+  }
+  void operator()(const StreamStatus& v) const {
+    auto* x = p.mutable_stream_status();
+    x->set_up(v.up);
+    x->set_width(v.width);
+    x->set_height(v.height);
+    x->set_fps_milli(v.fps_milli);
+    x->set_bitrate_kbps(v.bitrate_kbps);
+    x->set_soc_milli_c(v.soc_milli_c);
+    x->set_throttled(v.throttled);
+  }
+  void operator()(const ClipRecorded& v) const {
+    p.mutable_clip_recorded()->set_command_id(v.command_id);
+    media_to(v.media, p.mutable_clip_recorded()->mutable_media());
   }
   void operator()(const Heartbeat& v) const { p.mutable_heartbeat()->set_battery_mv(v.battery_mv); }
   void operator()(const TamperState& v) const { p.mutable_tamper()->set_open(v.open); }
@@ -115,6 +153,8 @@ Result<CommandArgs> args_from(const v1::CommandArgs& p) {
       return CommandArgs{Notify{p.notify().recipient_role(), p.notify().text()}};
     case v1::CommandArgs::kSetMaintenance:
       return CommandArgs{SetMaintenance{p.set_maintenance().duration_ms()}};
+    case v1::CommandArgs::kBookmark:
+      return CommandArgs{Bookmark{p.bookmark().duration_s(), p.bookmark().label()}};
     case v1::CommandArgs::KIND_NOT_SET:
       break;
   }
@@ -135,6 +175,10 @@ struct ArgsTo {
   }
   void operator()(const SetMaintenance& a) const {
     p.mutable_set_maintenance()->set_duration_ms(a.duration_ms);
+  }
+  void operator()(const Bookmark& a) const {
+    p.mutable_bookmark()->set_duration_s(a.duration_s);
+    p.mutable_bookmark()->set_label(a.label);
   }
 };
 
@@ -539,6 +583,7 @@ Result<Property> from_proto(const v1::Property& p) {
     }
     if (d.has_zone_id()) dev.zone = ZoneId(d.zone_id());
     if (d.has_board_revision()) dev.board_revision = d.board_revision();
+    if (d.has_host_device_id()) dev.host = DeviceId(d.host_device_id());
     for (const auto& c : d.capabilities()) {
       if (c.empty()) return Error{"invalid_property", "device " + d.id() + ": empty capability"};
       dev.capabilities.emplace_back(c);

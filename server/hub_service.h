@@ -16,7 +16,9 @@
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <set>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "core/engine/engine.h"
@@ -89,6 +91,12 @@ class HubService {
       const PrincipalId& who, const DeviceId& device,
       const talos::api::v1::DeviceConfigRequest& req);
   talos::api::v1::HealthListResponse device_health() const;
+  // Camera media (ADR 0020): Ok when `who` may view images (humans with a
+  // sensitive_read grant) and `media_id` was named by one of `device`'s
+  // journaled observations. The transport then fetches it from the recorder.
+  Status authorize_media(const PrincipalId& who, const DeviceId& device,
+                         const std::string& media_id) const;
+  const talos::server::v1::MediaConfig& media_config() const { return config_.hub.media(); }
   talos::api::v1::DiagnosticsResponse diagnostics(const DeviceId& device) const;
   Status import_firmware(const PrincipalId& who, const talos::v1::FirmwareRelease& manifest,
                          const std::string& image);
@@ -118,6 +126,7 @@ class HubService {
 
  private:
   void after_mutation_locked();
+  void index_media_locked(const ObservationEnvelope& env);
   talos::api::v1::StateResponse view_locked(const PropertyState& s, Timestamp now) const;
 
   LoadedConfig config_;
@@ -130,6 +139,9 @@ class HubService {
   std::unique_ptr<HubEngine> engine_;
   std::unique_ptr<SqliteFirmwareStore> firmware_;
   DeviceRegistry registry_;
+  // (device, media id) pairs seen in accepted observations; rebuilt from the
+  // journal at start (ADR 0020).
+  std::set<std::pair<DeviceId, std::string>> media_index_;
   std::map<DeviceId, fw::ConfigUpdate> desired_config_;
   // A campaign is pinned to the exact release (board, revision, digest)
   // that passed the compatibility check at start (red team #5).

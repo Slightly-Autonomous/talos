@@ -66,6 +66,9 @@ message Device {
   // the hub rejects observations and commands for any other capability
   // (device.health is implied). Empty: not checked (legacy configs).
   repeated string capabilities = 9;
+  // The device this one belongs to, shown as one unit: a camera's Frigate
+  // view ("<cam>_video") names the Vision Node (ADR 0020). Must exist.
+  optional string host_device_id = 10;
 }
 
 message Property {

@@ -25,6 +25,11 @@ bool label_char(char c) {
          c == '-' || c == ' ' || c == '.';
 }
 
+bool media_id_char(char c) {
+  return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_' ||
+         c == '.' || c == '-';
+}
+
 }  // namespace
 
 Status validate_envelope(const ObservationEnvelope& env) {
@@ -52,6 +57,29 @@ Status validate_envelope(const ObservationEnvelope& env) {
   if (const auto* o = std::get_if<ObjectDetected>(&env.payload);
       o && (o->label.size() > kMaxLabelLen || !all_of(o->label, label_char))) {
     return bad("object label must be at most 64 of [A-Za-z0-9 _.-]");
+  }
+  // Media ids reach a recorder URL through the hub's media proxy: keep them
+  // to a plain character set so they can never become a path or a query.
+  auto media_ok = [](const MediaRef& m) {
+    return !m.store.empty() && m.store.size() <= kMaxMediaStoreLen &&
+           all_of(m.store, [](char c) { return c >= 'a' && c <= 'z'; }) && !m.media_id.empty() &&
+           m.media_id.size() <= kMaxMediaIdLen && m.media_id.front() != '.' &&
+           all_of(m.media_id, media_id_char) && m.start_unix_ms >= 0 && m.end_unix_ms >= 0;
+  };
+  if (const auto* o = std::get_if<ObjectDetected>(&env.payload);
+      o && o->media && !media_ok(*o->media)) {
+    return bad(
+        "media: store 1-16 of [a-z], media_id 1-128 of [A-Za-z0-9._-], not starting with '.'");
+  }
+  if (const auto* c = std::get_if<ClipRecorded>(&env.payload)) {
+    if (!media_ok(c->media)) {
+      return bad(
+          "media: store 1-16 of [a-z], media_id 1-128 of [A-Za-z0-9._-], not starting with '.'");
+    }
+    if (c->command_id.empty() || c->command_id.size() > kMaxEventIdLen ||
+        !all_of(c->command_id, id_char)) {
+      return bad("command_id must be 1-128 of [A-Za-z0-9_:@.-]");
+    }
   }
   if (std::holds_alternative<std::monostate>(env.payload)) return bad("payload is empty");
   if (env.source.slot && *env.source.slot >= 4) return bad("slot out of range");

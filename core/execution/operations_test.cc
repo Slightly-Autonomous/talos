@@ -105,5 +105,39 @@ TEST(Operations, FreeTextArgsAreBounded) {
             "args_out_of_bounds");
 }
 
+// ADR 0020: a bookmark is verified by the recorder's clip for this command,
+// whatever media id the recorder picks; its args are bounded.
+TEST(Operations, BookmarkDefaultsBoundsAndClipExpectation) {
+  const CapabilityRef rec{DeviceId("cam_patio_video"), std::nullopt,
+                          CapabilityId("camera.recording")};
+  auto c = command("camera.bookmark", rec, Bookmark{});
+  c.verification = VerificationMode::kObservedState;
+  c.verification_window = Millis{60'000};
+  auto n = normalize_command(c);
+  ASSERT_TRUE(n.ok()) << n.error().message;
+  EXPECT_EQ(std::get<Bookmark>(n.value().args).duration_s, kDefaultBookmarkS);
+  EXPECT_EQ(std::get<Bookmark>(n.value().args).label, "talos");
+  EXPECT_EQ(n.value().verification, VerificationMode::kObservedState);
+  ASSERT_TRUE(n.value().expect);
+  EXPECT_EQ(std::get<ClipRecorded>(n.value().expect->payload).command_id, "c");
+  EXPECT_EQ(find_operation("camera.bookmark")->risk, RiskClass::kBenignOutput);
+
+  for (Bookmark bad : {Bookmark{4, ""}, Bookmark{121, ""}, Bookmark{30, "Front Door"},
+                       Bookmark{30, std::string(33, 'a')}}) {
+    EXPECT_EQ(normalize_command(command("camera.bookmark", rec, bad)).error().code,
+              "args_out_of_bounds");
+  }
+  EXPECT_EQ(normalize_command(command("camera.bookmark", kSpeaker, Bookmark{})).error().code,
+            "target_does_not_match_operation");
+
+  const ObservationPayload want = ClipRecorded{"c", {}};
+  EXPECT_TRUE(
+      expectation_met(want, ClipRecorded{"c", MediaRef{"frigate", "e1", 1, 2, true, true}}));
+  EXPECT_FALSE(
+      expectation_met(want, ClipRecorded{"other", MediaRef{"frigate", "e1", 1, 2, true, true}}));
+  EXPECT_FALSE(expectation_met(want, LockState{true}));
+  EXPECT_TRUE(expectation_met(LockState{true}, LockState{true}));
+}
+
 }  // namespace
 }  // namespace talos

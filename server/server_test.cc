@@ -12,6 +12,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
+#include <functional>
 #include <thread>
 
 #include "codec/yaml_loader.h"
@@ -58,6 +59,8 @@ const std::string kSpeakerToken = "speaker-secret";
 const std::string kNode12Token = "node-12-secret";
 const std::string kLockToken = "lock-3-secret";
 const std::string kMetricsToken = "metrics-secret";
+const std::string kCamToken = "cam-patio-secret";
+const std::string kCamVideoToken = "cam-patio-video-secret";
 
 sv::HubConfig hub_config(const std::string& sqlite_path) {
   sv::HubConfig h;
@@ -109,6 +112,8 @@ rules:
   add_device("node-12", kNode12Token);
   add_device("patio_speaker", kSpeakerToken);
   add_device("lock-3", kLockToken);
+  add_device("cam_patio", kCamToken);
+  add_device("cam_patio_video", kCamVideoToken);
   return h;
 }
 
@@ -303,8 +308,11 @@ class Hub {
  public:
   Hub(const std::string& db, AtomicClock& clock,
       int max_event_streams = HttpServer::kMaxEventStreams,
-      HttpServer::ConnectionLimits limits = {}) {
-    auto cfg = build_config(hub_config(db), ".");
+      HttpServer::ConnectionLimits limits = {},
+      const std::function<void(sv::HubConfig&)>& tweak = {}) {
+    auto hc = hub_config(db);
+    if (tweak) tweak(hc);
+    auto cfg = build_config(hc, ".");
     EXPECT_TRUE(cfg.ok()) << (cfg.ok() ? "" : cfg.error().message);
     auth_ = std::make_unique<Authenticator>(cfg.value().hub);
     service_ = std::make_unique<HubService>(cfg.value(), SqliteJournal::open(db).value(), clock,
@@ -1383,6 +1391,170 @@ TEST(SupabaseAuth, OutOfRangeTimeClaimsIssuerAndDottedLocalTokens) {
   EXPECT_FALSE(a.authenticate(token("1e300", iss)));  // would overflow int64 when cast
   EXPECT_FALSE(a.authenticate(token("-1e300", iss)));
   EXPECT_EQ(a.authenticate("Bearer agent.token.v1")->id, "agent-1");
+}
+
+// --- Vision Node and camera media (ADR 0020) ---------------------------------------------
+
+// A stand-in for Frigate's event media endpoints.
+class FakeFrigate {
+ public:
+  FakeFrigate() {
+    srv_.Get(R"(/api/events/([^/]+)/snapshot\.jpg)",
+             [this](const httplib::Request& r, httplib::Response& res) {
+               ++hits;
+               res.set_content("JPEG:" + std::string(r.matches[1]), "image/jpeg");
+             });
+    srv_.Get(R"(/api/events/([^/]+)/clip\.mp4)",
+             [this](const httplib::Request&, httplib::Response& res) {
+               ++hits;
+               res.status = 404;
+             });
+    port_ = srv_.bind_to_any_port("127.0.0.1");
+    thread_ = std::thread([this] { srv_.listen_after_bind(); });
+    srv_.wait_until_ready();
+  }
+  ~FakeFrigate() {
+    srv_.stop();
+    thread_.join();
+  }
+  std::string url() const { return "http://127.0.0.1:" + std::to_string(port_); }
+  std::atomic<int> hits{0};
+
+ private:
+  httplib::Server srv_;
+  int port_ = 0;
+  std::thread thread_;
+};
+
+auto detection(std::uint64_t seq, const std::string& media_id) {
+  return envelope("cam_patio_video", std::nullopt, "camera.detection", "camera.object_detected",
+                  seq,
+                  R"({"objectDetected":{"label":"person","confidencePermille":910,"media":)"
+                  R"({"store":"frigate","mediaId":")" +
+                      media_id +
+                      R"(","startUnixMs":"1800000000000","hasClip":true,)"
+                      R"("hasSnapshot":true}}})");
+}
+
+auto with_frigate(const FakeFrigate& f) {
+  return [&f](sv::HubConfig& h) { h.mutable_media()->set_frigate_url(f.url()); };
+}
+
+TEST_F(HttpE2E, MediaIsServedOnlyForJournaledIdsAndOnlyToPeople) {
+  FakeFrigate frigate;
+  Hub hub(db, clock, HttpServer::kMaxEventStreams, {}, with_frigate(frigate));
+  auto c = hub.client();
+  ASSERT_EQ(
+      post(c, "/v1/devices/observations", kCamVideoToken, json(detection(1, "e1.5-ab")))->status,
+      200);
+  auto ok = c.Get("/v1/media/cam_patio_video/e1.5-ab/snapshot.jpg", bearer(kOwnerToken));
+  ASSERT_TRUE(ok);
+  EXPECT_EQ(ok->status, 200);
+  EXPECT_EQ(ok->body, "JPEG:e1.5-ab");
+  EXPECT_EQ(ok->get_header_value("Content-Type"), "image/jpeg");
+  // Never journaled, or journaled by another device: the recorder is not asked.
+  const int before = frigate.hits.load();
+  EXPECT_EQ(c.Get("/v1/media/cam_patio_video/e2/snapshot.jpg", bearer(kOwnerToken))->status, 404);
+  EXPECT_EQ(c.Get("/v1/media/cam_patio/e1.5-ab/snapshot.jpg", bearer(kOwnerToken))->status, 404);
+  // Agents never see images; a device token is not a principal.
+  EXPECT_EQ(c.Get("/v1/media/cam_patio_video/e1.5-ab/snapshot.jpg", bearer(kAgentToken))->status,
+            403);
+  EXPECT_EQ(c.Get("/v1/media/cam_patio_video/e1.5-ab/snapshot.jpg", bearer(kCamVideoToken))->status,
+            403);
+  // Anything that is not a plain id never matches the route.
+  EXPECT_EQ(
+      c.Get("/v1/media/cam_patio_video/..%2Fconfig/snapshot.jpg", bearer(kOwnerToken))->status,
+      404);
+  EXPECT_EQ(c.Get("/v1/media/cam_patio_video/.hidden/snapshot.jpg", bearer(kOwnerToken))->status,
+            404);
+  EXPECT_EQ(frigate.hits.load(), before);
+  // The recorder's own 404 passes through.
+  EXPECT_EQ(c.Get("/v1/media/cam_patio_video/e1.5-ab/clip.mp4", bearer(kOwnerToken))->status, 404);
+}
+
+TEST_F(HttpE2E, MediaWithoutARecorderIsUnavailableAndTheIndexSurvivesRestart) {
+  {
+    Hub hub(db, clock);
+    auto c = hub.client();
+    ASSERT_EQ(post(c, "/v1/devices/observations", kCamVideoToken, json(detection(1, "e7")))->status,
+              200);
+    EXPECT_EQ(c.Get("/v1/media/cam_patio_video/e7/snapshot.jpg", bearer(kOwnerToken))->status, 503);
+  }
+  FakeFrigate frigate;
+  Hub again(db, clock, HttpServer::kMaxEventStreams, {}, with_frigate(frigate));
+  auto c = again.client();
+  EXPECT_EQ(c.Get("/v1/media/cam_patio_video/e7/snapshot.jpg", bearer(kOwnerToken))->status, 200);
+}
+
+talos::v1::Health health_of(httplib::Client& c, const std::string& device) {
+  auto all = parse<api::HealthListResponse>(c.Get("/v1/health/devices", bearer(kOwnerToken))->body);
+  for (const auto& h : all.devices()) {
+    if (h.device_id() == device) return h;
+  }
+  ADD_FAILURE() << "no health for " << device;
+  return {};
+}
+
+auto stream_status(std::uint64_t seq, bool up) {
+  return envelope("cam_patio", std::nullopt, "camera.stream", "camera.stream_status", seq,
+                  up ? R"({"streamStatus":{"up":true,"width":1920,"height":1080,"fpsMilli":15000}})"
+                     : R"({"streamStatus":{"up":false}})");
+}
+
+TEST_F(HttpE2E, VisionNodeWithItsStreamDownIsDegradedNeverHealthy) {
+  Hub hub(db, clock);
+  auto c = hub.client();
+  auto beat = envelope("cam_patio", std::nullopt, "device.health", "device.heartbeat", 1,
+                       R"({"heartbeat":{"batteryMv":0}})");
+  ASSERT_EQ(post(c, "/v1/devices/observations", kCamToken, json(beat))->status, 200);
+  auto h = health_of(c, "cam_patio");
+  EXPECT_EQ(h.status(), talos::v1::HEALTH_STATUS_DEGRADED);
+  ASSERT_GT(h.evidence_size(), 0);
+  EXPECT_EQ(h.evidence(0), "camera stream never reported");
+  ASSERT_EQ(post(c, "/v1/devices/observations", kCamToken, json(stream_status(2, true)))->status,
+            200);
+  EXPECT_EQ(health_of(c, "cam_patio").status(), talos::v1::HEALTH_STATUS_HEALTHY);
+  ASSERT_EQ(post(c, "/v1/devices/observations", kCamToken, json(stream_status(3, false)))->status,
+            200);
+  h = health_of(c, "cam_patio");
+  EXPECT_EQ(h.status(), talos::v1::HEALTH_STATUS_DEGRADED);
+  ASSERT_GT(h.evidence_size(), 0);
+  EXPECT_EQ(h.evidence(0), "camera stream down");
+  // The agent may not report for Frigate's device.
+  EXPECT_EQ(post(c, "/v1/devices/observations", kCamToken, json(detection(4, "x")))->status, 403);
+}
+
+TEST_F(HttpE2E, BookmarkIsVerifiedOnlyByTheClipForThatCommand) {
+  Hub hub(db, clock);
+  auto c = hub.client();
+  auto r = command_response(post(c, "/v1/commands", kOwnerToken, R"({
+    "commandId": "bm1", "operation": "camera.bookmark", "ttlMs": 5000,
+    "verificationWindowMs": 60000,
+    "target": {"deviceId": "cam_patio_video", "capabilityId": "camera.recording"},
+    "args": {"bookmark": {"durationS": 20}}})"));
+  ASSERT_EQ(r.status(), talos::v1::COMMAND_STATUS_ACCEPTED) << r.reason();
+  auto pending =
+      parse<api::PendingCommands>(c.Get("/v1/devices/commands", bearer(kCamVideoToken))->body);
+  ASSERT_EQ(pending.commands_size(), 1);
+  EXPECT_EQ(pending.commands(0).args().bookmark().label(), "talos");
+  ASSERT_EQ(post(c, "/v1/devices/acks", kCamVideoToken,
+                 R"({"commandId":"bm1","accepted":true,"detail":"frigate event e9"})")
+                ->status,
+            200);
+  auto clip = [&](std::uint64_t seq, const std::string& cmd) {
+    return envelope("cam_patio_video", std::nullopt, "camera.recording", "camera.clip_recorded",
+                    seq,
+                    R"({"clipRecorded":{"commandId":")" + cmd +
+                        R"(","media":{"store":"frigate","mediaId":"e9","hasClip":true}}})");
+  };
+  clock.advance(25'000);
+  ASSERT_EQ(post(c, "/v1/devices/observations", kCamVideoToken, json(clip(1, "other")))->status,
+            200);
+  auto view = parse<api::CommandView>(c.Get("/v1/commands/bm1", bearer(kOwnerToken))->body);
+  EXPECT_EQ(view.status(), talos::v1::COMMAND_STATUS_DEVICE_ACKNOWLEDGED);
+  ASSERT_EQ(post(c, "/v1/devices/observations", kCamVideoToken, json(clip(2, "bm1")))->status, 200);
+  view = parse<api::CommandView>(c.Get("/v1/commands/bm1", bearer(kOwnerToken))->body);
+  EXPECT_EQ(view.status(), talos::v1::COMMAND_STATUS_VERIFIED);
 }
 
 }  // namespace

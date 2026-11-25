@@ -28,6 +28,7 @@ The API is JSON over HTTP using the protobuf JSON mapping. The schemas are in `c
 | POST | `/v1/rules/preview` | Dry-run a rule against history; dispatches nothing |
 | GET | `/v1/health/devices` | Health projection per device (ADR 0014) |
 | GET | `/v1/diagnostics?device_id=` | Recent device diagnostics (never the journal) |
+| GET | `/v1/media/{device}/{mediaId}/snapshot.jpg` or `clip.mp4` | Camera media from the recorder (ADR 0020). Humans with at least a `sensitive_read` grant only (agents and rules never see images); only a media id one of that device's journaled observations named (404 otherwise, and the recorder is not asked); 503 with no `media.frigate_url` configured; 502 if the recorder fails or the clip exceeds `media.max_clip_bytes` |
 | POST | `/v1/devices/{id}/config` | Desired node config; owner only |
 | POST | `/v1/devices/{id}/sequence/reset` | Forget the device's source positions (journaled `SourceReset`); owner only. Use after a poisoned boot epoch or a reflash, together with a key rotation (ADR 0008) |
 | POST | `/v1/firmware/releases` | `{manifest, image}`; Ed25519 signature from an owner key; owner only. Keyed by (board, revision, version); an existing release is never replaced (409); version is a build number 1..4294967295 |

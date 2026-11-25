@@ -318,3 +318,21 @@ requirements:
     test: //firmware/sim:sn002_tamper_test (Sn002TxPower, Sn002Reset), //server:server_test (Sn002UsbResetWhileClosedIsProbingEvidence)
     severity: high
     status: verified_sim
+  - id: REQ-052
+    statement: The hub serves a camera snapshot or clip only to a human principal with at least a sensitive_read grant, and only for a media id that device's journaled observations named; agents, rules and devices never receive images, and the recorder is never asked for anything else
+    subsystem: server/core.policy/core.events
+    test: //server:server_test (HttpE2E.MediaIsServedOnlyForJournaledIdsAndOnlyToPeople, HttpE2E.MediaWithoutARecorderIsUnavailableAndTheIndexSurvivesRestart), //core/policy:policy_test (Policy.MediaIsForHumansWithASensitiveReadGrant), //core/events:observation_test (ValidateEnvelope.MediaReferencesAreBounded)
+    severity: critical
+    status: verified_sim
+  - id: REQ-053
+    statement: A camera.bookmark is VERIFIED only by a ClipRecorded observation carrying its own command id; a clip for another command never verifies it, and a late clip is recorded with late=true
+    subsystem: core.execution/server
+    test: //core/execution:ledger_test (Ledger.BookmarkVerifiesOnTheClipForThisCommandOnly), //core/execution:operations_test (Operations.BookmarkDefaultsBoundsAndClipExpectation), //server:server_test (HttpE2E.BookmarkIsVerifiedOnlyByTheClipForThatCommand)
+    severity: high
+    status: verified_sim
+  - id: REQ-054
+    statement: A Vision Node whose camera stream is down, stale or never reported is DEGRADED, never healthy
+    subsystem: server
+    test: //server:server_test (HttpE2E.VisionNodeWithItsStreamDownIsDegradedNeverHealthy)
+    severity: high
+    status: verified_sim

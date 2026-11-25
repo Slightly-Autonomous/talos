@@ -50,6 +50,9 @@ struct Device {
   // Capabilities this device may report and be commanded on. Fail closed: an
   // empty list declares none. device.health is implied for every device.
   std::vector<CapabilityId> capabilities;
+  // The device this one belongs to (a camera's Frigate view names its Vision
+  // Node, ADR 0020). Shown as one unit; must name another configured device.
+  std::optional<DeviceId> host;
 
   bool declares(const CapabilityId& capability) const;
 };

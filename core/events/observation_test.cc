@@ -36,5 +36,27 @@ TEST(ValidateEnvelope, RejectsUnknownSchemaVersion) {
   EXPECT_EQ(validate_envelope(e).error().code, "unsupported_schema");
 }
 
+// ADR 0020: media ids reach a recorder URL, so only a plain id is accepted.
+TEST(ValidateEnvelope, MediaReferencesAreBounded) {
+  auto e = valid();
+  e.source = {DeviceId("cam_patio_video"), std::nullopt, CapabilityId("camera.detection")};
+  e.event_type = "camera.object_detected";
+  e.event_id = EventId("cam_patio_video:frigate:1");
+  e.payload =
+      ObjectDetected{"person", 900, MediaRef{"frigate", "1700000000.25-x9k2", 1, 0, true, true}};
+  EXPECT_TRUE(validate_envelope(e));
+  for (std::string bad : {std::string("../config"), std::string("a/b"), std::string(".."),
+                          std::string("x?y"), std::string(""), std::string(129, 'a')}) {
+    std::get<ObjectDetected>(e.payload).media->media_id = bad;
+    EXPECT_FALSE(validate_envelope(e)) << bad;
+  }
+  std::get<ObjectDetected>(e.payload).media = MediaRef{"Frigate", "ok", 0, 0, false, false};
+  EXPECT_FALSE(validate_envelope(e));
+  e.payload = ClipRecorded{"cmd:r1:e1", MediaRef{"frigate", "e1", 1, 2, true, false}};
+  EXPECT_TRUE(validate_envelope(e));
+  e.payload = ClipRecorded{"cmd 1", MediaRef{"frigate", "e1", 1, 2, true, false}};
+  EXPECT_FALSE(validate_envelope(e));
+}
+
 }  // namespace
 }  // namespace talos

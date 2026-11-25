@@ -426,6 +426,54 @@ void HttpServer::routes() {
           send(res, 200, hub_.diagnostics(DeviceId(req.get_param_value("device_id"))));
         }));
 
+  // Camera media (ADR 0020): a snapshot or clip from the recorder, for a
+  // human with media access, and only for a media id this device's journaled
+  // observations named. The id's character set is enforced at ingest, so it
+  // can never become another recorder path.
+  s.Get(
+      R"(/v1/media/([A-Za-z0-9_\-]+)/([A-Za-z0-9_\-][A-Za-z0-9._\-]{0,127})/(snapshot\.jpg|clip\.mp4))",
+      principal(
+          [this](const PrincipalId& who, const httplib::Request& req, httplib::Response& res) {
+            const DeviceId device(req.matches[1]);
+            const std::string media_id = req.matches[2];
+            const std::string kind = req.matches[3];
+            if (Status st = hub_.authorize_media(who, device, media_id); !st) {
+              return send_error(res, st.error());
+            }
+            const auto& mc = hub_.media_config();
+            if (mc.frigate_url().empty()) {
+              return send_error(res, 503, "media_unavailable", "no recorder is configured");
+            }
+            httplib::Client frigate(mc.frigate_url());
+            frigate.set_connection_timeout(3, 0);
+            frigate.set_read_timeout(kind == "clip.mp4" ? 30 : 5, 0);
+            const std::size_t limit = kind == "clip.mp4"
+                                          ? (mc.max_clip_bytes() ? mc.max_clip_bytes() : 64u << 20)
+                                          : (8u << 20);
+            std::string body;
+            bool too_big = false;
+            auto r = frigate.Get("/api/events/" + media_id + "/" + kind,
+                                 [&](const char* data, std::size_t n) {
+                                   if (body.size() + n > limit) {
+                                     too_big = true;
+                                     return false;
+                                   }
+                                   body.append(data, n);
+                                   return true;
+                                 });
+            if (too_big) return send_error(res, 502, "media_too_large", "recorder media too large");
+            if (!r) return send_error(res, 502, "recorder_unreachable", "recorder did not answer");
+            if (r->status == 404)
+              return send_error(res, 404, "not_found", "recorder has no " + kind);
+            if (r->status != 200) {
+              return send_error(res, 502, "recorder_error",
+                                "recorder answered " + std::to_string(r->status));
+            }
+            res.status = 200;
+            res.set_header("Cache-Control", "private, max-age=300");
+            res.set_content(std::move(body), kind == "clip.mp4" ? "video/mp4" : "image/jpeg");
+          }));
+
   // Owner only: forget a device's source positions (journaled SourceReset),
   // after a poisoned boot epoch or a reflash with a rotated key (ADR 0008).
   s.Post(R"(/v1/devices/([A-Za-z0-9_\-]+)/sequence/reset)",

@@ -255,7 +255,8 @@ void VirtualDevice::sample(std::int64_t t_ms, Timestamp now, World& world,
         emit(out,
              envelope(now, cam.slot, "camera.detection", "camera.object_detected",
                       ObjectDetected{actor.kind == ActorKind::kPerson ? "person" : "animal",
-                                     static_cast<std::uint16_t>(cam.spec.confidence_permille())}));
+                                     static_cast<std::uint16_t>(cam.spec.confidence_permille()),
+                                     std::nullopt}));
         break;
       }
     }

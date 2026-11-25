@@ -68,6 +68,19 @@ Status validate_property(const Property& p) {
       return err("unknown_zone", "device " + d.id.str() + " placed in unknown zone");
     }
   }
+  // A host is one level deep: a camera's Frigate view names its Vision Node,
+  // which has no host of its own (ADR 0020).
+  for (const auto& d : p.devices) {
+    if (!d.host) continue;
+    const Device* host = nullptr;
+    for (const auto& h : p.devices) {
+      if (h.id == *d.host) host = &h;
+    }
+    if (!host || host->id == d.id || host->host) {
+      return err("invalid_host", "device " + d.id.str() + ": host " + d.host->str() +
+                                     " must be another configured device with no host");
+    }
+  }
 
   std::set<AssetId> asset_ids;
   for (const auto& a : p.assets) {
