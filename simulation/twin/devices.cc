@@ -83,6 +83,8 @@ VirtualDevice::VirtualDevice(const v1::SiteDevice& spec, PropertyId property, st
   if (spec.has_lock()) lock_ = spec.lock();
   if (spec.has_notifier()) notifier_ = spec.notifier();
   if (spec.has_enclosure()) enclosure_ = spec.enclosure();
+  if (spec.has_stream()) stream_ = spec.stream();
+  if (spec.has_recorder()) recorder_ = spec.recorder();
   // TL-SN-002's board table (firmware/esp_idf/main/board_tl_sn_002.h) locks the console.
   console_lock_ = spec.board_id() == "sensor_node_v2";
 }
@@ -128,10 +130,26 @@ void VirtualDevice::report_initial_state(Timestamp now, const World& world,
       emit(out, envelope(now, std::nullopt, "access.lock", "lock.state", LockState{p->locked}));
     }
   }
+  if (stream_) stream_last_.reset();  // the next sample reports the stream at once
   if (heartbeat_interval_ms_ > 0) {
     emit(out,
          envelope(now, std::nullopt, "device.health", "device.heartbeat", Heartbeat{battery_mv_}));
   }
+}
+
+void VirtualDevice::report_stream(std::int64_t t_ms, Timestamp now, bool up,
+                                  std::vector<Uplink>& out) {
+  stream_last_ = up;
+  next_stream_report_ =
+      t_ms + (stream_->report_interval_ms() ? stream_->report_interval_ms() : 60'000);
+  StreamStatus st{up, 0, 0, 0, 0, 52'000, 0};
+  if (up) {
+    st.width = stream_->width() ? stream_->width() : 1920;
+    st.height = stream_->height() ? stream_->height() : 1080;
+    st.fps_milli = (stream_->fps() ? stream_->fps() : 15) * 1000;
+    st.bitrate_kbps = 4000;
+  }
+  emit(out, envelope(now, std::nullopt, "camera.stream", "camera.stream_status", st));
 }
 
 void VirtualDevice::boot(std::int64_t t_ms, Timestamp now, const World& world,
@@ -247,6 +265,7 @@ void VirtualDevice::sample(std::int64_t t_ms, Timestamp now, World& world,
   }
 
   for (auto& cam : cameras_) {
+    if (recorder_blind(world)) break;  // no frames, no detections
     if (t_ms - cam.last_emit < cam.spec.min_interval_ms()) continue;
     for (const auto& [aid, actor] : world.actors()) {
       if (cam.wedge.contains(actor.position) &&
@@ -275,7 +294,15 @@ void VirtualDevice::sample(std::int64_t t_ms, Timestamp now, World& world,
     }
   }
 
-  if (heartbeat_interval_ms_ > 0 && t_ms >= next_heartbeat_) {
+  if (stream_) {
+    const bool up = world.stream_up(id_);
+    if (!stream_last_ || *stream_last_ != up || t_ms >= next_stream_report_) {
+      report_stream(t_ms, now, up, out);
+    }
+  }
+
+  // Frigate sends no heartbeat for a camera that sends it no frames (connectors/frigate).
+  if (heartbeat_interval_ms_ > 0 && t_ms >= next_heartbeat_ && !recorder_blind(world)) {
     next_heartbeat_ = t_ms + heartbeat_interval_ms_;
     emit(out,
          envelope(now, std::nullopt, "device.health", "device.heartbeat", Heartbeat{battery_mv_}));
@@ -309,6 +336,14 @@ void VirtualDevice::receive(std::int64_t t_ms, const Command& command, World& wo
     latency = lock_->travel_ms();
   } else if (std::holds_alternative<Notify>(command.args) && notifier_) {
     latency = notifier_->latency_ms();
+  } else if (const auto* b = std::get_if<Bookmark>(&command.args); b && recorder_) {
+    // The connector creates the Frigate event and ACKs at once; the clip follows the
+    // bookmark's end, if Frigate got frames meanwhile.
+    latency = 200;
+    const std::int64_t clip_at =
+        t_ms + std::int64_t{b->duration_s} * 1000 +
+        (recorder_->clip_latency_ms() ? recorder_->clip_latency_ms() : 2000);
+    pending_.push_back({clip_at, command, true, t_ms});
   }
   pending_.push_back({t_ms + latency, command});
 }
@@ -319,6 +354,21 @@ void VirtualDevice::complete(std::int64_t t_ms, Timestamp now, const PendingActi
   auto ack = [&](bool accepted, std::string detail) {
     out.push_back({id_, CommandAck{cmd.id, accepted, std::move(detail)}});
   };
+  if (action.clip) {
+    // A clip exists only if the camera sent frames for the whole bookmark.
+    if (!recorder_blind(world) &&
+        !world.stream_was_down_since(recorder_->host_device_id(), action.started_ms)) {
+      ++clips_;
+      const std::string media = id_ + "-bm" + std::to_string(clips_);
+      world.record_effect(t_ms, id_, cmd.id.str(), "clip " + media);
+      emit(out,
+           envelope(now, std::nullopt, "camera.recording", "camera.clip_recorded",
+                    ClipRecorded{cmd.id.str(), MediaRef{"frigate", media, 0, 0, true, false}}));
+    } else {
+      world.record(t_ms, "recorder.no_clip", id_, cmd.id.str());
+    }
+    return;
+  }
   if (fault_ == v1::ACTUATOR_FAULT_SILENT_ACK) {
     ack(true, "ok");
     return;
@@ -347,6 +397,10 @@ void VirtualDevice::complete(std::int64_t t_ms, Timestamp now, const PendingActi
   if (const auto* note = std::get_if<Notify>(&cmd.args); note && notifier_) {
     world.record_effect(t_ms, id_, cmd.id.str(), "notified " + note->recipient_role);
     ack(true, "delivered");
+    return;
+  }
+  if (std::holds_alternative<Bookmark>(cmd.args) && recorder_) {
+    ack(true, "frigate event created");
     return;
   }
   ack(false, "unsupported command");

@@ -84,6 +84,12 @@ class World {
   // Bounces raised since the last call for this device: durations in ms.
   std::vector<std::uint32_t> take_enclosure_bounces(const std::string& device);
 
+  // Vision Node camera streams (ADR 0020): up unless a stimulus stopped it.
+  void set_stream(std::int64_t t_ms, const std::string& device, bool up);
+  bool stream_up(const std::string& device) const;
+  // Whether the stream went down at or after t_ms (a gap in the recording).
+  bool stream_was_down_since(const std::string& device, std::int64_t t_ms) const;
+
   // USER button presses (TL-SN-002) since the last call for this device: hold times in ms.
   void press_user_button(std::int64_t t_ms, const std::string& device, std::uint32_t hold_ms);
   // TL-SN-002 battery door (HD-049).
@@ -121,6 +127,8 @@ class World {
   std::map<std::string, std::vector<std::uint32_t>> bounces_;
   std::map<std::string, std::vector<std::uint32_t>> user_presses_;
   std::map<std::string, bool> battery_doors_;
+  std::map<std::string, bool> streams_;
+  std::map<std::string, std::int64_t> stream_down_at_;
   std::map<std::string, std::vector<std::string>> console_lines_;
   std::map<std::string, std::uint32_t> batteries_;
 };

@@ -157,7 +157,8 @@ TEST(Binding, FirmwareBoundCameraIsSkippedWithTheReason) {
   const auto r = run_scenario(f.sc, f.site);
   EXPECT_TRUE(r.skipped);
   EXPECT_FALSE(r.passed);
-  EXPECT_NE(r.skip_reason.find("no camera"), std::string::npos) << r.skip_reason;
+  // camera_backyard is Frigate's view of the Vision Node (ADR 0020).
+  EXPECT_NE(r.skip_reason.find("Vision Node"), std::string::npos) << r.skip_reason;
 }
 
 TEST(Binding, HardwareBindingIsSkippedNotPassed) {

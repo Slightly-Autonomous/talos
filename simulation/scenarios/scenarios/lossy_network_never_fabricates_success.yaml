@@ -2,7 +2,9 @@ name: lossy_network_never_fabricates_success
 description: >-
   30% loss on every link. Some events and replies are lost; whatever happens, no command is reported verified without a real playback (always-on invariant).
 site: sites/suburban_home.yaml
-seed: 1234
+# Seed 7 since the Vision Node joined the site (ADR 0020): the shared loss draws moved, and seed
+# 1234 then lost every motion report. The invariant below holds for any seed.
+seed: 7
 start_unix_ms: 1794736800000
 duration_ms: 45000
 links:

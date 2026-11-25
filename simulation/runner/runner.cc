@@ -98,6 +98,11 @@ Property build_property(const v1::Site& site, const World& world) {
     if (d.has_lock()) declare("access.lock");
     if (d.has_speaker()) declare("audio.speak");
     if (d.has_notifier()) declare("notify");
+    if (d.has_stream()) declare("camera.stream");
+    if (d.has_recorder()) {
+      declare("camera.recording");
+      dev.host = DeviceId(d.recorder().host_device_id());
+    }
     if (d.has_enclosure()) {
       declare("tamper.enclosure");
       // TL-SN-002 also reports its battery door, mount pose and magnet defeat (HD-049).
@@ -398,6 +403,9 @@ class Run {
         break;
       case v1::Stimulus::kUserButton:
         world_.press_user_button(t, s.user_button().device_id(), s.user_button().hold_ms());
+        break;
+      case v1::Stimulus::kStreamSet:
+        world_.set_stream(t, s.stream_set().device_id(), s.stream_set().up());
         break;
       case v1::Stimulus::kBatteryDoorSet:
         world_.set_battery_door(t, s.battery_door_set().device_id(), s.battery_door_set().open());

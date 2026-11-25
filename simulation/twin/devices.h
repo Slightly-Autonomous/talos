@@ -101,6 +101,9 @@ class VirtualDevice final : public IDeviceBackend {
   struct PendingAction {
     std::int64_t due_ms;
     Command command;
+    // camera.bookmark: the recorder's clip report, after the ACK (ADR 0020).
+    bool clip = false;
+    std::int64_t started_ms = 0;
   };
 
   ObservationEnvelope envelope(Timestamp now, std::optional<std::uint8_t> slot,
@@ -134,6 +137,16 @@ class VirtualDevice final : public IDeviceBackend {
   std::int64_t console_unreported_ = 0;
   std::optional<std::int64_t> console_reported_ms_;
   std::int64_t next_heartbeat_ = 0;
+  // Vision Node (ADR 0020): its stream, and Frigate's view of a camera (recorder).
+  std::optional<talos::sim::v1::StreamSpec> stream_;
+  std::optional<bool> stream_last_;
+  std::int64_t next_stream_report_ = 0;
+  std::optional<talos::sim::v1::RecorderSpec> recorder_;
+  std::uint64_t clips_ = 0;
+  bool recorder_blind(const World& world) const {
+    return recorder_ && !world.stream_up(recorder_->host_device_id());
+  }
+  void report_stream(std::int64_t t_ms, Timestamp now, bool up, std::vector<Uplink>& out);
   std::vector<Pir> pirs_;
   std::vector<Contact> contacts_;
   std::vector<Impact> impacts_;

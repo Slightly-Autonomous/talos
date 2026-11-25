@@ -44,6 +44,22 @@ void World::set_battery_door(std::int64_t t_ms, const std::string& device, bool 
   record(t_ms, open ? "battery_door.opened" : "battery_door.closed", device);
 }
 
+void World::set_stream(std::int64_t t_ms, const std::string& device, bool up) {
+  streams_[device] = up;
+  if (!up) stream_down_at_[device] = t_ms;
+  record(t_ms, up ? "stream.up" : "stream.down", device);
+}
+
+bool World::stream_was_down_since(const std::string& device, std::int64_t t_ms) const {
+  auto it = stream_down_at_.find(device);
+  return it != stream_down_at_.end() && it->second >= t_ms;
+}
+
+bool World::stream_up(const std::string& device) const {
+  auto it = streams_.find(device);
+  return it == streams_.end() || it->second;
+}
+
 bool World::battery_door_open(const std::string& device) const {
   auto it = battery_doors_.find(device);
   return it != battery_doors_.end() && it->second;

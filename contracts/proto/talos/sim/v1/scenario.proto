@@ -148,6 +148,12 @@ message UsbConsoleLine {
   string line = 2;
 }
 
+// A Vision Node's camera stops (or starts) producing video (ADR 0020).
+message StreamSet {
+  string device_id = 1;
+  bool up = 2;
+}
+
 message Stimulus {
   uint32 at_ms = 1;
   oneof kind {
@@ -169,6 +175,7 @@ message Stimulus {
     BatterySet battery_set = 17;
     UsbConsoleLine usb_console = 18;
     BatteryDoorSet battery_door_set = 19;
+    StreamSet stream_set = 20;
   }
 }
 

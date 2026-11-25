@@ -1,0 +1,50 @@
+name: vision_frigate_unreachable_bookmark_not_success
+description: >-
+  ADR 0020. Frigate (camera_backyard's connector) is unreachable during an intrusion. The bookmark can
+  never be handed over or confirmed, so it ends expired or unknown, never as success.
+site: sites/suburban_home.yaml
+seed: 42
+start_unix_ms: 1794736800000
+principals:
+  - {id: owner, kind: PRINCIPAL_KIND_HUMAN, max_risk: RISK_CLASS_SECURITY_CRITICAL}
+duration_ms: 90000
+rules:
+  - id: backyard_motion_warning
+    revision: 1
+    property_id: house-01
+    principal_id: "rule:backyard_motion_warning"
+    enabled: true
+    trigger_event_type: motion.detected
+    trigger_zone_id: backyard
+    armed_modes: [ARM_MODE_ARMED_AWAY]
+    actions:
+      - operation: audio.speak
+        target: {device_id: patio_speaker, capability_id: audio.speak}
+        args: {audio_speak: {text: "This property is monitored.", volume_percent: 65}}
+        ttl_ms: 5000
+        verification_window_ms: 3000
+        expect: {source: {device_id: patio_speaker, capability_id: audio.speak}, payload: {audio_playback: {playing: true}}}
+  - id: backyard_motion_bookmark
+    revision: 1
+    property_id: house-01
+    principal_id: "rule:backyard_motion_bookmark"
+    enabled: true
+    trigger_event_type: motion.detected
+    trigger_zone_id: backyard
+    armed_modes: [ARM_MODE_ARMED_AWAY]
+    actions:
+      - operation: camera.bookmark
+        target: {device_id: camera_backyard, capability_id: camera.recording}
+        args: {bookmark: {duration_s: 20, label: talos}}
+        ttl_ms: 10000
+        verification_window_ms: 60000
+stimuli:
+  - {at_ms: 2000, link_set: {device_id: camera_backyard, connected: false}}
+  - {at_ms: 0, arm_mode_set: {principal_id: owner, mode: ARM_MODE_ARMED_AWAY}}
+  - {at_ms: 10000, actor_enter: {actor: intruder, kind: ACTOR_KIND_PERSON, position: {x: 6, y: 24}, speed_mps: 1.4}}
+  - {at_ms: 10000, actor_move: {actor: intruder, path: [{x: 6, y: 16}, {x: 6, y: 11.5}]}}
+expect:
+  - name: warning still verified
+    command: {operation: audio.speak, final_status_in: [COMMAND_STATUS_VERIFIED], count: 1}
+  - name: bookmark not success
+    command: {operation: camera.bookmark, final_status_in: [COMMAND_STATUS_EXPIRED, COMMAND_STATUS_UNKNOWN_RESULT], count: 1}

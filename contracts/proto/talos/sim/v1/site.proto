@@ -123,6 +123,24 @@ message EnclosureSpec {
   bool open_at_start = 2;
 }
 
+// TL-VN-001 Vision Node agent (ADR 0020): reports its camera stream.
+message StreamSpec {
+  // Periodic camera.stream report; 0 = 60 s. Changes are reported at once.
+  uint32 report_interval_ms = 1;
+  uint32 width = 2;
+  uint32 height = 3;
+  uint32 fps = 4;
+}
+
+// Frigate's view of a camera (ADR 0020): its detections and heartbeats stop
+// while the host Vision Node's stream is down, and a camera.bookmark becomes a
+// clip once the bookmark ends and Frigate has written it.
+message RecorderSpec {
+  string host_device_id = 1;
+  // From the end of the bookmark to the clip report. 0 = 2 s.
+  uint32 clip_latency_ms = 2;
+}
+
 message SiteDevice {
   string id = 1;
   Point position = 2;
@@ -136,6 +154,8 @@ message SiteDevice {
   optional NotifierSpec notifier = 9;
   DeviceBinding binding = 10;
   optional EnclosureSpec enclosure = 11;
+  optional StreamSpec stream = 12;
+  optional RecorderSpec recorder = 13;
 }
 
 message Site {

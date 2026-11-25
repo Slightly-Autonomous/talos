@@ -44,6 +44,9 @@ std::string FirmwareDevice::unsupported_reason(const v1::SiteDevice& spec) {
   if (spec.has_speaker() || spec.has_lock() || spec.has_notifier()) {
     return "the firmware has no actuators";
   }
+  if (spec.has_stream() || spec.has_recorder()) {
+    return "a Vision Node runs Linux and the Talos agent, not the node firmware (ADR 0020)";
+  }
   std::optional<std::uint32_t> threshold;
   const fw::BoardSupport board = board_for(spec);
   for (const auto& s : spec.sensors()) {

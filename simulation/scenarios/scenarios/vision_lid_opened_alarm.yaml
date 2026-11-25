@@ -1,0 +1,31 @@
+name: vision_lid_opened_alarm
+description: >-
+  ADR 0020. Someone opens the Vision Node's housing while disarmed: its lid switch raises the
+  enclosure tamper alarm, as for every Talos enclosure.
+site: sites/suburban_home.yaml
+seed: 42
+start_unix_ms: 1794736800000
+principals:
+  - {id: owner, kind: PRINCIPAL_KIND_HUMAN, max_risk: RISK_CLASS_SECURITY_CRITICAL}
+duration_ms: 20000
+rules:
+  - id: enclosure_tamper_alarm
+    revision: 1
+    property_id: house-01
+    principal_id: "rule:enclosure_tamper_alarm"
+    enabled: true
+    trigger_event_type: tamper.opened
+    actions:
+      - operation: audio.speak
+        target: {device_id: patio_speaker, capability_id: audio.speak}
+        args: {audio_speak: {text: "Tamper alarm.", volume_percent: 80}}
+        ttl_ms: 5000
+        verification_window_ms: 3000
+        expect: {source: {device_id: patio_speaker, capability_id: audio.speak}, payload: {audio_playback: {playing: true}}}
+stimuli:
+  - {at_ms: 5000, enclosure_set: {device_id: vn_backyard, open: true}}
+expect:
+  - name: lid opening reported
+    observation: {event_type: tamper.opened, device_id: vn_backyard, from_ms: 5000, to_ms: 6000, capability_id: tamper.enclosure}
+  - name: alarm verified
+    command: {operation: audio.speak, final_status_in: [COMMAND_STATUS_VERIFIED], count: 1}

@@ -32,9 +32,18 @@ devices:
       - {slot: 0, module_id: pir_ekmb_v1, pir: {heading_deg: -90, half_angle_deg: 45, range_m: 12, hold_ms: 5000, warmup_ms: 0, pet_sensitivity: 0.0}}
       - {slot: 2, module_id: smart_camera_s3_v1, camera: {heading_deg: -90, half_angle_deg: 40, range_m: 15, min_interval_ms: 2000, confidence_permille: 870}}
       - {slot: 3, module_id: environment_sht40_v1, environment: {report_interval_ms: 300000, bias_milli_c: 0, noise_milli_c: 200}}
+  # TL-VN-001 Vision Node (ADR 0020) in the backyard corner: the Pi agent reports its stream and
+  # lid; camera_backyard is Frigate's view of the same camera (detections, bookmarks, clips).
+  - id: vn_backyard
+    position: {x: 0.5, y: 24.5}
+    board_id: vision_node_pi_zero2w
+    heartbeat_interval_ms: 60000
+    stream: {report_interval_ms: 60000, width: 1920, height: 1080, fps: 15}
+    enclosure: {}
   - id: camera_backyard
     position: {x: 0.5, y: 24.5}
     heartbeat_interval_ms: 30000
+    recorder: {host_device_id: vn_backyard, clip_latency_ms: 2000}
     sensors:
       - {slot: 0, module_id: smart_camera_s3_v1, camera: {heading_deg: -45, half_angle_deg: 35, range_m: 18, min_interval_ms: 2000, confidence_permille: 910}}
   - id: node_window

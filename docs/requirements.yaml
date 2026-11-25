@@ -348,3 +348,9 @@ requirements:
     test: firmware/vision_node/tests/test_provision.py
     severity: medium
     status: implemented
+  - id: REQ-057
+    statement: In the twin, a Vision Node's stream is reported down at once when it stops; Frigate's view of that camera then sends no detections or heartbeats and no clip, so a bookmark is never verified without footage, and a PIR intrusion is still handled; an unreachable recorder never yields a successful bookmark; the camera's lid raises the tamper alarm
+    subsystem: simulation
+    test: //simulation/runner:scenario_test and //simulation/runner:backend_parity_test (vision_backyard_bookmark_verified, vision_stream_down_intrusion_still_handled, vision_frigate_unreachable_bookmark_not_success, vision_lid_opened_alarm)
+    severity: high
+    status: verified_sim
