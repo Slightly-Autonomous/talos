@@ -786,7 +786,7 @@ bool Diag::selftest_i2c(IDiagOut& out) {
   for (std::uint8_t i = 0; i < kSlots; ++i) {
     switch (static_cast<ModuleCode>(p_.board.slots[i].fixed_module)) {
       case ModuleCode::kTmag5273A2:
-        add(Tmag5273ContactDriver::kAddr);
+        add(Tmag5273ContactDriver::kX2Addr);
         break;
       case ModuleCode::kLis2dw12:
         add(Lis2dw12Driver::kAddr);

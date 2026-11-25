@@ -260,7 +260,7 @@ std::uint8_t Tmag5273ContactDriver::threshold_code(std::int32_t ut, std::int32_t
 
 bool Tmag5273ContactDriver::read_field(SlotIo& io, std::int32_t (&ut)[3]) {
   std::uint8_t raw[6] = {};
-  if (!io.reg_read(kAddr, kXMsbResult, raw, 6)) return false;
+  if (!io.reg_read(addr_, kXMsbResult, raw, 6)) return false;
   for (int axis = 0; axis < 3; ++axis) {
     const auto v = static_cast<std::int16_t>(
         static_cast<std::uint16_t>((raw[2 * axis] << 8) | raw[2 * axis + 1]));
@@ -275,14 +275,14 @@ bool Tmag5273ContactDriver::read_field(SlotIo& io, std::int32_t (&ut)[3]) {
 // ~0.2 ms (tstart 70 us + 3 channels); wait 1 ms, then insist RESULT_STATUS
 // says the results are new before trusting them.
 bool Tmag5273ContactDriver::convert_all(SlotIo& io, std::int32_t (&ut)[3]) {
-  if (!io.reg_write(kAddr, kSensorConfig1, 0x70) ||
-      !io.reg_write(kAddr, kDeviceConfig2, kModeContinuous)) {
+  if (!io.reg_write(addr_, kSensorConfig1, 0x70) ||
+      !io.reg_write(addr_, kDeviceConfig2, kModeContinuous)) {
     return false;
   }
   for (int attempt = 0; attempt < 3; ++attempt) {
     io.delay_ms(1);
     std::uint8_t status = 0;
-    if (!io.reg_read(kAddr, kConvStatus, &status, 1)) return false;
+    if (!io.reg_read(addr_, kConvStatus, &status, 1)) return false;
     if (status & 0x01) return read_field(io, ut);
   }
   return false;
@@ -295,23 +295,23 @@ bool Tmag5273ContactDriver::arm(SlotIo& io, const std::int32_t (&ut)[3]) {
   }
   // Standby first so the new thresholds apply cleanly, then symmetric (+/-)
   // thresholds (THR_HYST = 1). A zero threshold disables that axis' check.
-  if (!io.reg_write(kAddr, kDeviceConfig2, 0x20)) return false;
+  if (!io.reg_write(addr_, kDeviceConfig2, 0x20)) return false;
   const std::uint8_t channels = open_ ? 0x7 : static_cast<std::uint8_t>(1u << dominant);
   for (int axis = 0; axis < 3; ++axis) {
     const bool checked = open_ || axis == dominant;
     const std::uint8_t code = checked ? threshold_code(open_ ? kCloseUt : kOpenUt, range_mt_) : 0;
-    if (!io.reg_write(kAddr, static_cast<std::uint8_t>(kXThr + axis), code)) return false;
+    if (!io.reg_write(addr_, static_cast<std::uint8_t>(kXThr + axis), code)) return false;
   }
-  return io.reg_write(kAddr, kSensorConfig2, open_ ? 0x00 : 0x20) &&  // MAG_THR_DIR: above/below
-         io.reg_write(kAddr, kSensorConfig1,
+  return io.reg_write(addr_, kSensorConfig2, open_ ? 0x00 : 0x20) &&  // MAG_THR_DIR: above/below
+         io.reg_write(addr_, kSensorConfig1,
                       static_cast<std::uint8_t>((channels << 4) | kSleep100Ms)) &&
-         io.reg_write(kAddr, kIntConfig1, 0x44) &&  // threshold INT on INT pin, latched
-         io.reg_write(kAddr, kDeviceConfig2, static_cast<std::uint8_t>(0x20 | kModeWakeSleep));
+         io.reg_write(addr_, kIntConfig1, 0x44) &&  // threshold INT on INT pin, latched
+         io.reg_write(addr_, kDeviceConfig2, static_cast<std::uint8_t>(0x20 | kModeWakeSleep));
 }
 
 bool Tmag5273ContactDriver::init(SlotIo& io, IEventSink& sink, TimeMs) {
   std::uint8_t id[2] = {};
-  if (!io.reg_read(kAddr, kManufacturerIdLsb, id, 2) ||
+  if (!io.reg_read(addr_, kManufacturerIdLsb, id, 2) ||
       static_cast<std::uint16_t>((id[1] << 8) | id[0]) != kManufacturerId) {
     return false;
   }
@@ -319,7 +319,7 @@ bool Tmag5273ContactDriver::init(SlotIo& io, IEventSink& sink, TimeMs) {
   if (!convert_all(io, ut)) {
     // It answered but will not convert: park it in sleep (5 nA) rather than
     // leave it in standby (0.45 mA) for the life of the battery.
-    io.reg_write(kAddr, kDeviceConfig2, kModeSleep);
+    io.reg_write(addr_, kDeviceConfig2, kModeSleep);
     return false;
   }
   std::int32_t peak = 0;
@@ -333,7 +333,7 @@ bool Tmag5273ContactDriver::resume(SlotIo& io, IEventSink& sink, TimeMs now, std
   // The latch (WAKE) is what woke the node; any transaction clears it, so the
   // decision comes from a fresh conversion compared with the pre-sleep state.
   std::uint8_t id[2] = {};
-  if (!io.reg_read(kAddr, kManufacturerIdLsb, id, 2) ||
+  if (!io.reg_read(addr_, kManufacturerIdLsb, id, 2) ||
       static_cast<std::uint16_t>((id[1] << 8) | id[0]) != kManufacturerId) {
     return false;
   }
@@ -373,7 +373,7 @@ void Tmag5273ContactDriver::failed(SlotIo& io, IEventSink& sink, TimeMs now) {
     return;
   }
   // Still failing: park it in sleep (5 nA) and say the door is unsupervised.
-  io.reg_write(kAddr, kDeviceConfig2, kModeSleep);
+  io.reg_write(addr_, kDeviceConfig2, kModeSleep);
   if (!unarmed_reported_) {
     unarmed_reported_ = true;
     sink.emit(io.slot(), EventKind::kModuleFault, Priority::kP2Health, false,
@@ -386,7 +386,7 @@ void Tmag5273ContactDriver::supervise(SlotIo& io, IEventSink& sink, TimeMs now) 
   if (retry_at_ != kNever) return;  // already recovering
   const bool wake = io.read_wake_line();
   std::uint8_t cfg = 0;
-  if (!io.reg_read(kAddr, kDeviceConfig2, &cfg, 1)) return failed(io, sink, now);
+  if (!io.reg_read(addr_, kDeviceConfig2, &cfg, 1)) return failed(io, sink, now);
   if ((cfg & 0x03) == kModeWakeSleep) {
     wake_fault_reported_ = false;
     // Armed and quiet. While the door reads closed only its dominant axis is

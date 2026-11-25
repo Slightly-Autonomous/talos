@@ -226,7 +226,7 @@ The owner accepted this on 2026-11-21 with the PIR on every board, 2 x AA lithiu
 - **External loop:** J9 is now an unfitted option behind the bridged solder jumper JP3, for adding external switches in series.
 - **Datasheet checks:**
   - PIR223D footprint corrected (90° lead pattern, HD-044).
-  - TMAG5273A2 confirmed at 0x35, 250 LSB/mT (HD-045).
+  - TMAG5273A2 confirmed at 0x35, 250 LSB/mT (HD-045). **2026-11-24:** replaced by the TMAG5273B2 at 0x22 (same die and range) after the A2 went out of stock at JLCPCB.
   - Keystone 2462 is polypropylene with no published temperature rating (HD-046).
   - L91 internal resistance confirms the 25 °C pair model (HD-043).
 

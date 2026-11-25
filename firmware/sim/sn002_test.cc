@@ -544,7 +544,7 @@ TEST(Sn002Quarantine, AMissingBuiltInSensorIsAP0FaultAndRetriedWithBackoff) {
   EXPECT_FALSE(n.runtime().slot(kMag).enabled);
   EXPECT_TRUE(n.runtime().slot(kVib).enabled) << "the others keep working";
   // The part comes back (a cold joint that reflowed): retried after an hour.
-  n.i2c.attach(I2cBus::kRoot, Tmag5273ContactDriver::kAddr, &n.hall(kMag));
+  n.i2c.attach(I2cBus::kRoot, Tmag5273ContactDriver::kX2Addr, &n.hall(kMag));
   n.run_for(30 * 60'000);
   n.drain_and_ack();
   EXPECT_FALSE(n.runtime().slot(kMag).enabled);
@@ -793,7 +793,7 @@ TEST(Sn002Console, ReadOnlyWhileTheLidIsClosed) {
   const auto identity_before = load_identity(n.store);
   // Everything that changes state or could blind the node is refused, and changes nothing.
   for (const char* rw : {"provision intruder 00112233445566778899aabbccddeeff",
-                         "i2c wr 0x35 0x02 0x00", "i2c rd 0x19 0x27 1", "rail 2 aon off", "reboot",
+                         "i2c wr 0x22 0x02 0x00", "i2c rd 0x19 0x27 1", "rail 2 aon off", "reboot",
                          "board-id TL-SN-002 A EVIL-0001", "led service on", "rescan",
                          "selftest imu 1", "selftest sht 3", "uart 0", "mux 1", "frobnicate"}) {
     const Text t = c.run(rw);
@@ -873,7 +873,7 @@ TEST(Sn002Console, RefusalsAreReportedRateLimited) {
   // Nothing new: nothing more.
   EXPECT_TRUE(of(run_acked(n, 3 * kConsoleReportMs), EventKind::kConsoleLocked).empty());
   // A flood of 1000 refusals: the first is reported at once, the rest in one report.
-  for (int i = 0; i < 1'000; ++i) c.run("i2c wr 0x35 0x02 0x00");
+  for (int i = 0; i < 1'000; ++i) c.run("i2c wr 0x22 0x02 0x00");
   ev = of(run_acked(n, kConsoleReportMs + 100), EventKind::kConsoleLocked);
   ASSERT_EQ(ev.size(), 2u);
   EXPECT_EQ(ev[0].a, 1);

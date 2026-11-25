@@ -30,13 +30,13 @@ from .runner import Bench, Result, Test
 BOARD = {"board": "TL-SN-002", "rev": "A"}
 # Built-in "slots" (firmware/esp_idf/main/board_tl_sn_002.h).
 SENSORS = {
-    0: ("MAG", "0x0105", "TMAG5273A2 at 0x35 (INT_N through the SN74AUP1G04 to GPIO10)"),
+    0: ("MAG", "0x0105", "TMAG5273B2 at 0x22 (INT_N through the SN74AUP1G04 to GPIO10)"),
     1: ("VIB", "0x0201", "LIS2DW12 at 0x19 (SA0 and CS high; INT1 to GPIO11)"),
     2: ("PIR", "0x0106", "PIR223D-S0 on PIR_PWR (EXP P10), output to GPIO12"),
     3: ("ENV", "0x0301", "SHT40-AD1B at 0x44"),
 }
 ROOT_PARTS = {0x19: "LIS2DW12 (0x19)", 0x20: "TCA9535 lamp expander (0x20, A0-A2 GND)",
-              0x35: "TMAG5273A2 (0x35)", 0x44: "SHT40 (0x44)"}
+              0x22: "TMAG5273B2 (0x22)", 0x44: "SHT40 (0x44)"}
 LAMPS = ["LINK", "TAMP", "BATT", "FLT"]  # `led` lamp_lit order (firmware Lamp enum)
 TAMPER_GPIO = 13
 USER_GPIO = 14

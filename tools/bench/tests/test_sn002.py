@@ -49,8 +49,8 @@ class Sn002Bench(unittest.TestCase):
 
     def test_missing_tmag(self):
         by_id, _ = run(["tmag_missing"])
-        self.assertDiagnosis(by_id, "N-05", "TMAG5273A2 (0x35)")
-        self.assertDiagnosis(by_id, "N-01.mag", "TMAG5273A2", "no card to reseat")
+        self.assertDiagnosis(by_id, "N-05", "TMAG5273B2 (0x22)")
+        self.assertDiagnosis(by_id, "N-01.mag", "TMAG5273B2", "no card to reseat")
         self.assertEqual(by_id["N-02.vib"].verdict, "pass")  # the others keep working
 
     def test_dead_imu_self_test(self):

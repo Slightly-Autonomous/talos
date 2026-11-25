@@ -504,9 +504,9 @@ def sensor_node_v2() -> Board:
     # Sensors, every board (ADR 0019): 3-axis Hall at an edge, accelerometer by a mounting hole,
     # temperature/humidity on a slotted thermal tongue, PIR (lens in the housing)
     b.add(
-        Part("U6", "Sensor_Magnetic:TMAG5273x2QDBV", "TMAG5273A2QDBVT",
+        Part("U6", "Sensor_Magnetic:TMAG5273x2QDBV", "TMAG5273B2QDBVR",
              {"1": "I2C_SCL", "2": "GND", "3": "GND", "4": v, "5": "MAG_INT_N", "6": "I2C_SDA"},
-             note="3-axis Hall, A2 range; I2C address per datasheet (A = 0x35, VERIFY); volatile config"),
+             note="3-axis Hall, x2 range; B2 = I2C 0x22 (SLYS045C Table 6-2); A2 out of stock 2026-11-24"),
         C("C13", "100n", v), R("R16", "100k", v, "MAG_INT_N", "INT open-drain pull-up"),
         Part("U7", "74xGxx:74AUP1G04", "SN74AUP1G04DBVR",
              {"1": None, "2": "MAG_INT_N", "3": "GND", "4": "MAG_WAKE", "5": v}, "Package_TO_SOT_SMD:SOT-23-5",

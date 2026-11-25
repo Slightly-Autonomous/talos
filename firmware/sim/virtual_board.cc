@@ -669,7 +669,7 @@ void Node::attach_built_ins() {
     if (code == ModuleCode::kTmag5273A2) {
       halls_[slot] = std::make_unique<Tmag5273>(
           gpio, wake, clock, Tmag5273ContactDriver::kA2RangeMt, Tmag5273ContactDriver::kA2LsbPerMt);
-      i2c.attach(I2cBus::kRoot, Tmag5273ContactDriver::kAddr, halls_[slot].get());
+      i2c.attach(I2cBus::kRoot, Tmag5273ContactDriver::kX2Addr, halls_[slot].get());
     } else if (code == ModuleCode::kLis2dw12) {
       imus_[slot] = std::make_unique<Lis2dw12>(gpio, wake, clock);
       i2c.attach(I2cBus::kRoot, Lis2dw12Driver::kAddr, imus_[slot].get());

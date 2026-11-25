@@ -1,6 +1,6 @@
 # KiCad check results (generated)
 
-`hardware/scripts/check_kicad.py`, kicad-cli **10.0.8**, 2026-11-22. This shows the schematics are self-consistent. **It is not an electrical design review.**
+`hardware/scripts/check_kicad.py`, kicad-cli **10.0.8**, 2026-11-24. This shows the schematics are self-consistent. **It is not an electrical design review.**
 
 | Board | Parts | ERC errors | ERC warnings | Waived | Netlist round-trip | Safe defaults | PCB DRC errors | PCB DRC warnings |
 |---|---:|---:|---:|---:|---|---|---:|---:|

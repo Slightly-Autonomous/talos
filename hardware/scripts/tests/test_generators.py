@@ -113,7 +113,7 @@ class SelfContainedNode(unittest.TestCase):
 
     def test_every_sensor_and_the_pir_are_fitted(self):
         values = {q["value"] for q in self.p.values() if not q.get("dnp")}
-        for v in ("TMAG5273A2QDBVT", "LIS2DW12TR", "SHT40-AD1B", "PIR223D-S0", "TCA9535PWR"):
+        for v in ("TMAG5273B2QDBVR", "LIS2DW12TR", "SHT40-AD1B", "PIR223D-S0", "TCA9535PWR"):
             self.assertIn(v, values)
 
     def test_usb_c_buttons_and_ten_lamps(self):

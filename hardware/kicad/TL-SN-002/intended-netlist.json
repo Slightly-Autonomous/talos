@@ -2056,7 +2056,7 @@
    "dnp": false,
    "footprint": "Package_TO_SOT_SMD:SOT-23-6",
    "lib_id": "Sensor_Magnetic:TMAG5273x2QDBV",
-   "note": "3-axis Hall, A2 range; I2C address per datasheet (A = 0x35, VERIFY); volatile config",
+   "note": "3-axis Hall, x2 range; B2 = I2C 0x22 (SLYS045C Table 6-2); A2 out of stock 2026-11-24",
    "pin_names": {
     "1": "SCL",
     "2": "GND",
@@ -2073,7 +2073,7 @@
     "5": "MAG_INT_N",
     "6": "I2C_SDA"
    },
-   "value": "TMAG5273A2QDBVT"
+   "value": "TMAG5273B2QDBVR"
   },
   "U7": {
    "datasheet": "https://www.ti.com/lit/ds/symlink/sn74aup1g04.pdf",

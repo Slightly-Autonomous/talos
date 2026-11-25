@@ -13796,7 +13796,7 @@
 				)
 			)
 		)
-		(property "Value" "TMAG5273A2QDBVT"
+		(property "Value" "TMAG5273B2QDBVR"
 			(at 482.6 127 0)
 			(effects
 				(font
@@ -13822,7 +13822,7 @@
 				(hide yes)
 			)
 		)
-		(property "Talos_Note" "3-axis Hall, A2 range; I2C address per datasheet (A = 0x35, VERIFY); volatile config"
+		(property "Talos_Note" "3-axis Hall, x2 range; B2 = I2C 0x22 (SLYS045C Table 6-2); A2 out of stock 2026-11-24"
 			(at 482.6 119.38 0)
 			(effects
 				(font

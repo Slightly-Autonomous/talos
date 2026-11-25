@@ -63,7 +63,7 @@ expanders:
       - {pin: P16, direction: unused}
       - {pin: P17, direction: unused}
 wake_lines:
-  - {net: MAG_WAKE, mcu_pin: GPIO10, active_high: true, note: "TMAG5273A2 INT_N through SN74AUP1G04"}
+  - {net: MAG_WAKE, mcu_pin: GPIO10, active_high: true, note: "TMAG5273B2 (0x22) INT_N through SN74AUP1G04"}
   - {net: ACC_INT, mcu_pin: GPIO11, active_high: true, note: "LIS2DW12 INT1, push-pull"}
   - {net: PIR_OUT, mcu_pin: GPIO12, active_high: true, note: "PIR223D-S0, 1M pull-down"}
   - {net: TAMPER, mcu_pin: GPIO13, active_high: true, note: "lid + wall loop, high = open"}

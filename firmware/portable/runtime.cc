@@ -696,6 +696,7 @@ bool NodeRuntime::init_slot(std::uint8_t i, SlotIo& io, TimeMs now, const Resume
       auto& d = st.driver.emplace<Tmag5273ContactDriver>();
       if (st.code == ModuleCode::kTmag5273A2) {
         d.set_range(Tmag5273ContactDriver::kA2RangeMt, Tmag5273ContactDriver::kA2LsbPerMt);
+        d.set_address(Tmag5273ContactDriver::kX2Addr);
       }
       ok = resume ? d.resume(io, *this, now, rs) : d.init(io, *this, now);
       break;

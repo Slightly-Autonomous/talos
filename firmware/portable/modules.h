@@ -203,7 +203,7 @@ class ContactDriver {
 // after every power-up.
 class Tmag5273ContactDriver {
  public:
-  static constexpr std::uint8_t kAddr = 0x35;  // TMAG5273A1 factory address
+  static constexpr std::uint8_t kAddr = 0x35;  // TMAG5273A1 (contact card) factory address
   static constexpr std::uint8_t kDeviceConfig2 = 0x01, kSensorConfig1 = 0x02;
   static constexpr std::uint8_t kSensorConfig2 = 0x03, kXThr = 0x04, kIntConfig1 = 0x08;
   static constexpr std::uint8_t kManufacturerIdLsb = 0x0E, kXMsbResult = 0x12;
@@ -217,10 +217,12 @@ class Tmag5273ContactDriver {
   static constexpr std::int32_t kOpenUt = 10'000;
   static constexpr std::int32_t kCloseUt = 20'000;
   static constexpr std::int32_t kLsbPerMt = 820;  // +/-40 mT range (A1)
-  // TMAG5273A2 (TL-SN-002): the x2 range variant, +/-133 mT (or +/-266 mT with
-  // X_Y_RANGE/Z_RANGE set); the A in the name is the factory address 0x35
-  // (SLYS045C Table 6-2). A threshold code is 133 mT / 128 (Table 8-x). Checked
-  // against the datasheet 2026-11-22 (HD-045 closed).
+  // TL-SN-002's built-in Hall sensor: the x2 range class, +/-133 mT (or +/-266 mT
+  // with X_Y_RANGE/Z_RANGE set). A threshold code is 133 mT / 128. The letter is the
+  // address variant (SLYS045C Table 6-2: A2 35h, B2 22h). Fitted part: TMAG5273B2
+  // at 0x22 since 2026-11-24 (the A2 went out of stock at JLCPCB; HD-045). The
+  // ModuleCode and module id keep the "A2" name: they name the range class.
+  static constexpr std::uint8_t kX2Addr = 0x22;
   static constexpr std::int32_t kA2RangeMt = 133;
   static constexpr std::int32_t kA2LsbPerMt = 250;  // SLYS045C 5.8: 250 LSB/mT at +/-133 mT
   // Range variant; call before init()/resume(). Defaults to the A1 (+/-40 mT).
@@ -229,6 +231,9 @@ class Tmag5273ContactDriver {
     lsb_per_mt_ = lsb_per_mt;
   }
   std::int32_t range_mt() const { return range_mt_; }
+  // I2C address variant; call before init()/resume(). Defaults to the A1's 0x35.
+  void set_address(std::uint8_t addr) { addr_ = addr; }
+  std::uint8_t address() const { return addr_; }
   // A failed convert/re-arm (an I2C glitch) is retried: kRetryMs apart up to
   // kMaxRetries, then the sensor is parked in sleep (5 nA, not 0.45 mA standby),
   // reported (kBusError, b = kFaultDetailUnarmed) and retried every kSlowRetryMs.
@@ -264,6 +269,7 @@ class Tmag5273ContactDriver {
   std::uint32_t field_seq_ = 0;
   std::int32_t range_mt_ = 40;
   std::int32_t lsb_per_mt_ = kLsbPerMt;
+  std::uint8_t addr_ = kAddr;
   TimeMs retry_at_ = kNever;
   int failures_ = 0;
   bool unarmed_reported_ = false;

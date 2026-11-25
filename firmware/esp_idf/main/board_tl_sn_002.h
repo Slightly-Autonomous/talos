@@ -11,13 +11,13 @@
 //
 // Built-in sensors are fixed "slots" (SlotWiring::fixed_module): no mux, no ID
 // EEPROMs, no presence lines, no per-slot rails except PIR_PWR.
-//   slot 0  MAG  TMAG5273A2  0x35  INT_N -> SN74AUP1G04 -> GPIO10 (MAG_WAKE)
+//   slot 0  MAG  TMAG5273B2  0x22  INT_N -> SN74AUP1G04 -> GPIO10 (MAG_WAKE)
 //   slot 1  VIB  LIS2DW12    0x19  INT1 push-pull active high -> GPIO11 (SA0 high, CS high)
 //   slot 2  PIR  PIR223D-S0  -     digital out, 1M pull-down -> GPIO12; rail = EXP P10 PIR_PWR
 //   slot 3  ENV  SHT40-AD1B  0x44  no interrupt
-// The TMAG5273A2's factory address: the letter is the address variant (A = 0x35)
-// and the digit the range (2 = +/-133/266 mT). Check against the datasheet's
-// device comparison table before the schematic is frozen.
+// TMAG5273B2: the letter is the address variant (B = 0x22, SLYS045C Table 6-2)
+// and the digit the range (2 = +/-133/266 mT). Was the A2 (0x35) until it went
+// out of stock at JLCPCB (2026-11-24, HD-045); same die, pinout and range.
 #pragma once
 
 #include "firmware/portable/hal.h"
@@ -37,7 +37,7 @@ inline constexpr std::uint8_t kStatusLed = 8;
 // BOOT button: strap at reset (download mode, ROM), service-mode toggle after boot.
 inline constexpr std::uint8_t kBootButton = 9;
 // Five LP wake lines, all active high (ext1 ANY_HIGH).
-inline constexpr std::uint8_t kMagWake = 10;  // TMAG5273A2 INT_N through SN74AUP1G04
+inline constexpr std::uint8_t kMagWake = 10;  // TMAG5273B2 INT_N through SN74AUP1G04
 inline constexpr std::uint8_t kAccInt = 11;   // LIS2DW12 INT1, push-pull active high
 inline constexpr std::uint8_t kPirOut = 12;   // PIR223D-S0 output, 1M pull-down
 // SW4 lid + SW5 battery door in series to GND, 1M pull-up + 10 nF.

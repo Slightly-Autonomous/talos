@@ -431,7 +431,7 @@ press RST (ROM download mode), or the UART0 Tag-Connect pads (GPIO23/24).
 |---|---|---|
 | S-M00 | node answers; the lamp expander (0x20) took its safe state | yes |
 | S-M16 | board identity `TL-SN-002` rev `A` with a serial (D-09) | yes |
-| N-05 | `selftest i2c`: the bus holds exactly 0x19 LIS2DW12, 0x20 TCA9535, 0x35 TMAG5273A2, 0x44 SHT40 | yes |
+| N-05 | `selftest i2c`: the bus holds exactly 0x19 LIS2DW12, 0x20 TCA9535, 0x22 TMAG5273B2, 0x44 SHT40 | yes |
 | N-01..N-04 | each built-in sensor (MAG, VIB, PIR, ENV) is discovered and running | yes |
 | N-06 | LIS2DW12 self-test, SHT40 heater | yes |
 | N-07 | PIR rail: PIR_PWR (EXP P10) on after discovery, follows `rail 2 aon off/on`. Scope the RC-filtered rail | yes + scope |
@@ -451,7 +451,7 @@ press RST (ROM download mode), or the UART0 Tag-Connect pads (GPIO23/24).
 | H-01 | housing test print: board fit, both spring fingers hold their switch closed and release with ~1 mm lift, door slide/detent, PIR lens, USB-C plug, magnet gap on the frame | manual |
 
 Still to verify on the bench (provisional numbers in firmware and manifest):
-- TMAG5273A2: address 0x35 and 250 LSB/mT are datasheet-checked (HD-045); the 10/20 mT
+- TMAG5273B2 (replaced the out-of-stock A2 on 2026-11-24): address 0x22 and 250 LSB/mT are datasheet-checked (HD-045); the 10/20 mT
   open/closed thresholds on the A2's coarser threshold step (1.04 mT) and the magnet-defeat
   limits (100 mT ceiling, 3x baseline, 35 degrees) need a real door.
 - PIR223D-S0: footprint corrected to the datasheet's 90 degree lead pattern; warm-up (firmware

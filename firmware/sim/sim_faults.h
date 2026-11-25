@@ -65,7 +65,8 @@ inline bool apply_fault(Node& n, const std::string& fault) {
     } else if (fault == "pir_stuck") {
       b.pir_stuck_high = true;
     } else if (fault == "tmag_missing") {
-      n.i2c.detach(I2cBus::kRoot, Tmag5273ContactDriver::kAddr);
+      n.i2c.detach(I2cBus::kRoot, Tmag5273ContactDriver::kAddr);    // A1 (archived card)
+      n.i2c.detach(I2cBus::kRoot, Tmag5273ContactDriver::kX2Addr);  // TL-SN-002's B2
     } else if (fault == "lis_missing") {
       n.i2c.detach(I2cBus::kRoot, Lis2dw12Driver::kAddr);
     } else if (fault == "sht_missing") {
