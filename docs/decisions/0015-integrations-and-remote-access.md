@@ -16,6 +16,9 @@
   - Command ids are random UUIDs, so no other principal can pre-claim them.
 - **Webhook notifier** (`connectors/webhook_notifier`): an out-of-process device adapter for `notify`. It polls its own commands through the HTTP device API, posts them to an ntfy or JSON webhook over HTTPS, and ACKs 2xx as accepted and anything else as rejected. Notify stays ack-only and is never "verified".
 - **Frigate connector** (`connectors/frigate`): polls Frigate's `/api/events` and posts `camera.object_detected` observations with each mapped camera's own device token. Event ids are deduplicated. Video stays in Frigate.
+  - **Amended 2026-11-24 (ADR 0020):** detections carry a `MediaRef`. The connector also sends a heartbeat while Frigate reports frames from the camera.
+  - It executes `camera.bookmark` commands as Frigate manual events. It ACKs on creation and reports the clip as `camera.clip_recorded` with the command id, which is the only thing that verifies a bookmark.
+  - `gen-config.ts` writes Frigate's config from the camera map.
 - **API reference:** `docs/api.md`.
 
 ## Deferred: relay role (`HUB_ROLE_RELAY` stays reserved)

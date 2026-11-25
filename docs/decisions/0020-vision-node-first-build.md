@@ -43,12 +43,15 @@ camera ready to order together with the TL-SN-002 boards and the bench kit, and 
    a principal with media access, and only for a media id that this device's journaled observations
    referenced. The hub is therefore not a general proxy into Frigate.
 6. **Clock and identity on a board with no RTC:**
-   - HTTP boot epochs are Unix seconds (ADR 0008/0014). The agent waits for NTP, then uses
-     `max(now, last + 1)`, persisted on a writable data partition.
-   - Identity (device id, token, hub URL, RTSP password) is written to the SD card at provisioning
-     and never committed.
+   - HTTP boot epochs are Unix seconds (ADR 0008/0014). The agent starts reporting only after NTP has
+     synchronised (`timedatectl`), with a sanity floor of 2026-01-01.
+   - A later boot then always has a larger epoch, so nothing needs to be persisted. That suits the
+     read-only root.
+   - A LAN without internet points the Pi at the router or the hub for NTP (`--ntp`).
+   - Identity (device id, token, hub URL, RTSP password) is written to the SD card at provisioning,
+     moved off the boot partition at first boot, and never committed.
 7. **Robustness:**
-   - Read-only overlay root plus a small data partition, to survive power cuts.
+   - Optional read-only overlay root (`--overlay`), to survive power cuts (VB-03).
    - The hardware watchdog is on.
    - Each boot reports its reset cause: power-on, watchdog, or undervoltage seen from `vcgencmd get_throttled`.
 
@@ -68,6 +71,25 @@ camera ready to order together with the TL-SN-002 boards and the bench kit, and 
 - **Pi Zero 2 W limits:** 512 MB, thermal throttling in a closed housing, and stream stalls
   reported by some users. These are measured on the bench (VB-01, VB-08) before more cameras are
   built.
+
+## Implemented (2026-11-24)
+| Area | Where |
+|---|---|
+| Contracts and hub | Payloads, bookmark verification, media proxy, stream health: `server/`, `core/` |
+| Frigate connector, config generator, compose profile | `connectors/frigate`, `deploy/frigate` |
+| Agent, MediaMTX config, first boot, SD-card provisioning, virtual node | `firmware/vision_node`, `tools/provision/vision_node.py` |
+| Twin and scenarios | `simulation/`, `vision_*` scenarios |
+| Website | Cameras panel, bookmark rule action, devsim camera, browser test |
+| Housing | `hardware/mechanical/vision_node` |
+
+## Deferred
+- **Signed updates of the camera agent.** The read-only root, which survives power cuts, loses
+  anything written at runtime on reboot, so updates need an A/B or data-partition design. VB-03's
+  power-cut results decide that. Until then, update by reprovisioning the card or over SSH.
+- **Reset-cause reporting.** The HTTP device API has no diagnostics channel yet. Undervoltage
+  history does reach the hub, in `camera.stream`'s `throttled` bits.
+- **Embedded live video in the website.** Use the link to Frigate's UI for now.
+- **The production recorder hardware.** Frigate runs on the development Mac for now.
 
 ## Bench gate (replaces the VB table in `hardware/architecture/vision-compute-study.md`)
 See that study for VB-01..08.

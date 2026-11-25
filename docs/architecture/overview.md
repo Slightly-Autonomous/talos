@@ -52,8 +52,26 @@ The hub owns events, state, rules, commands and audit. Everything else is either
 | `firmware/portable` | NodeRuntime, drivers, OTA, bounded queue (host + ESP32-H2) | common |
 | `firmware/sim` | virtual board + hub bridge (L2 twin) | portable, core (bridge/tests) |
 | `firmware/esp_idf` | ESP32-H2 project, HAL adapters (skeleton) | portable, ESP-IDF |
+| `firmware/vision_node` | TL-VN-001 camera agent (Python, Pi Zero 2 W), MediaMTX config, first boot (ADR 0020) | hub device API only |
 
 **Hard rule:** `core` never depends on protobuf, SQL, HTTP, simulation, drivers or UI. `simulation` (Phase 2) depends on `core`, never the reverse.
+
+## Cameras (ADR 0020)
+A camera is a Vision Node, an IP device that never goes through a Sensor Node or Thread. Video stays
+in Frigate:
+```mermaid
+flowchart LR
+  CAM[Pi Zero 2 W + Camera Module 3: MediaMTX RTSP] -->|H.264, LAN, password| F[Frigate: record + detect]
+  AG[Talos agent on the Pi] -->|health, camera.stream, tamper.enclosure| H[Hub]
+  FC[Frigate connector] -->|detections + media refs, heartbeats, clips| H
+  F <--> FC
+  H -->|camera.bookmark| FC
+  W[Website] -->|/v1/media: people only, journaled ids only| H
+  H -->|fetch| F
+```
+- **Two producers, two devices:** `<cam>` (the agent) and `<cam>_video` (the connector), linked by
+  `host_device_id`.
+- **Bookmarks:** a bookmark is VERIFIED only by the clip for that command.
 
 ## Data planes (spec §27)
 - **Control:** command transitions are journaled. Highest priority.

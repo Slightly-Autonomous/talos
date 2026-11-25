@@ -73,3 +73,4 @@ and Frigate (`deploy/frigate/README.md`).
 | Reset cause | The HTTP device API has no diagnostics channel, so the reset cause is not reported. Undervoltage history still reaches the hub in the `throttled` bits of `camera.stream`. |
 | Secrets at rest | The Zero has no secure boot, so the card holds the token and RTSP password in clear (open-decisions.md). |
 | Clock | NTP must sync before the agent reports. Without internet, use `--ntp <router or hub>`. |
+| Updates | Signed agent updates are deferred (ADR 0020): the read-only root loses runtime writes. Update by reprovisioning the card, or over SSH with the overlay off. |
