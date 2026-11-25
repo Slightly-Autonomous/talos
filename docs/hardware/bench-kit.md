@@ -34,6 +34,30 @@ repository, `tools/bench` and `tools/hil`. Prices are rough 2026 street prices, 
 | 2–3 HDPE Fresnel lenses, 15 mm flange, multi-zone (see the housing README) | PIR window. Pick the one that passes the bench. |
 | #8 wood screws, #4 screws, a door frame offcut or the real door | Mounting and the magnet gap. |
 
+## Vision Node, first build (ADR 0020): two cameras, one a spare
+
+All bought parts; nothing for JLCPCB. Quantities are for two cameras.
+
+| Item | Qty | Why | Rough price |
+|---|---|---|---|
+| **Raspberry Pi Zero 2 W** (no headers) | 2 | Compute with hardware H.264 encoding | $15 each |
+| **Raspberry Pi Camera Module 3 Wide NoIR** (IMX708, 120°) | 2 | Wide view with autofocus that sees 850 nm IR at night | $35 each |
+| **Raspberry Pi Zero camera cable** (22-pin to 15-pin, 50–100 mm) | 2 | The camera's own cable doesn't fit the Zero | $3 each |
+| **Waveshare PoE/ETH/USB HUB HAT for Zero** (SKU 19635) | 2 | 802.3af PoE into isolated 5 V 2.5 A, plus 100 Mbit Ethernet (RTL8152B) | $25 each |
+| **802.3af PoE switch**, 4+ ports (or one 802.3af injector per camera) | 1 | Powers the cameras and connects them to the LAN, the hub and the Mac | $40–60 |
+| **850 nm IR LED board pair with photoresistors** (the common 3 W pair sold for Pi cameras) | 2 pairs | Night light; they switch themselves on in the dark | $8 a pair |
+| **Aluminium heatsink for the Zero 2 W** (adhesive, low profile) | 2 | VB-01 thermals in a closed housing | $3 each |
+| **High-endurance microSD, 32 GB** (SanDisk High Endurance or Samsung PRO Endurance) | 3 | System card, plus a spare for re-flash tests (VB-06) | $10 each |
+| **Lever microswitch** with a normally-open contact (e.g. Omron SS-5GL or D2F-L class); the lid presses it closed | 4 | Lid tamper on GPIO17 | $2 each |
+| **Clear acrylic disc** about 30 mm × 2 mm (or a cast-acrylic offcut) | 4 | Camera window; IR boards sit behind a separate baffle | $5 for a few |
+| **Closed-cell foam strip**, 3 mm | 1 | Light baffle between the IR LEDs and the lens (stops IR glare in the window) | $5 |
+| **Short Cat6 patch cables**, 0.5–1 m | 3 | Bench | $10 |
+| **Jumper wires** (female) and a 5 V 2.5 A micro-USB supply | 1 set | Tamper switch and IR power from the header; bench power without PoE | $15 |
+
+Housing (Bambu P2S): ASA, M2.5 inserts and screws (already in the list above), and a cable gland for
+the RJ45 (PG9 with a split insert). Frigate runs on this Mac in Docker for now, so the hub side needs
+nothing new.
+
 ## What happens when they arrive
 
 1. Plug each board into the hub over USB-C. Claude runs `python3 -m talos_bench.flash`, which flashes
@@ -44,7 +68,10 @@ repository, `tools/bench` and `tools/hil`. Prices are rough 2026 street prices, 
    measure attach and the deep-sleep wake-to-hub latency on hardware. Compare with
    `tools/otns/thread_latency.py`.
 4. Fit the test print: finger preload, door slide, PIR lens, magnet gap.
-5. Every finding goes into `hardware/requirements/design-risks.md` and the Rev B list.
+5. Vision Node: flash an SD card with `tools/provision/vision_node.py`, plug the camera into the PoE
+   switch, and Frigate on the Mac picks it up. Then run VB-01..08
+   (`hardware/architecture/vision-compute-study.md`).
+6. Every finding goes into `hardware/requirements/design-risks.md` and the Rev B list.
 
 Production security (Secure Boot, flash encryption, NVS encryption, anti-rollback) burns eFuses. Do it
 on **one** board at most, and only after the others have passed. A provisioned board can only ever run

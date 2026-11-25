@@ -1,0 +1,28 @@
+# PROVISIONAL. TL-VN-001 Vision Node, first build (ADR 0020, owner 2026-11-24): bought parts only.
+# Raspberry Pi Zero 2 W + Camera Module 3 Wide NoIR (IMX708, 120 deg) + Waveshare PoE/ETH/USB HUB HAT
+# (802.3af, RTL8152B 100 Mbit Ethernet). Two 850 nm IR LED boards switch themselves with their own
+# photoresistors: Talos can neither control nor observe IR. Zero sensor slots: video never goes through
+# a Sensor Node slot (HW-0001). The agent's pin table is firmware/vision_node/talos_vision/board.py;
+# firmware/vision_node/tests/test_board.py holds the two together. Nothing here is bench-verified.
+id: vision_node_pi_zero2w
+revision: build-1
+provisional: true
+board_family: TL-VN-001
+transport: ip
+notes:
+  - "Compute: Raspberry Pi Zero 2 W (RP3A0, 512 MB). H.264 hardware encode, 1080p30 class (VideoCore IV)."
+  - "Camera: Camera Module 3 Wide NoIR on the 22-pin CSI connector (Zero cable). imx708_wide_noir tuning; daytime colour is shifted (no IR-cut filter)."
+  - "Network: Ethernet only, through the PoE HAT (RTL8152B on USB). Wi-Fi and Bluetooth are disabled, keeping 2.4 GHz clear for Thread."
+  - "Power: 802.3af PoE into the HAT's isolated 5 V 2.5 A supply, or micro-USB 5 V on the bench. Never both."
+  - "Lid tamper: a microswitch's normally-open contact from GPIO17 (header pin 11) to GND, pressed closed by the lid; internal pull-up; high = lid open or wire cut. PROVISIONAL pin."
+  - "IR LED boards: 5 V (header pins 2 and 4) and GND, always powered; they switch on in the dark by themselves."
+  - "Status: the Zero's green ACT LED (GPIO29 on the Zero 2 W, driven by the OS); no extra LEDs."
+  - "Power figures are estimates: Zero 2 W encoding about 1.5 W, camera about 0.3 W, two IR boards about 2 W in the dark, PoE HAT conversion losses."
+slots: []
+rails: []
+power_sources:
+  - {source: POWER_SOURCE_POE, sustained_mw: 4500, peak_mw: 6500}   # EST, IR on at night
+  - {source: POWER_SOURCE_USB, sustained_mw: 4500, peak_mw: 6500}   # bench only, 5 V 2.5 A supply
+indicators:
+  - {name: ACT, net: ACT_LED, driver: GPIO29, active_low: false, color: green}
+board_capabilities: [camera.stream, tamper.enclosure]

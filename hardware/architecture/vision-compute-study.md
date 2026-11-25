@@ -1,6 +1,6 @@
 # TL-VN-001 Vision Node: compute and video desk study (H5, part 1)
 
-**Status:** desk study only, 2026-11-16. Nothing here is benchmarked. It narrows the candidates and defines the benchmark that decides HD-010 ([HW-0004](decisions/0004-vision-compute-selection.md)).
+**Status:** desk study, 2026-11-16; first build chosen 2026-11-24 (owner): **Raspberry Pi Zero 2 W + Camera Module 3 Wide NoIR + Waveshare PoE HAT** ([ADR 0020](../../docs/decisions/0020-vision-node-first-build.md)). The Zero 2 W was not in the original table: it has the CM4's class of H.264 hardware encoder (VideoCore IV) with no carrier board to design, at a fraction of the price. Nothing here is benchmarked; the bench gate below decides whether it stays (HD-010).
 
 ## Candidates
 
@@ -20,15 +20,17 @@
 - **CM4 is the low-risk default:** mature camera stack, hardware H.264, easy owner recovery (rpiboot) and self-flashing, which matches the open-source ownership goal (HD-016).
 - **The RV1106 class is the power-optimised option** for battery/solar Vision Nodes. Its risks are the vendor SDK, image-sensor driver availability and long-term updates.
 
-## Benchmark that decides HD-010 (needs hardware and owner approval to buy dev kits)
+## Bench gate for the first build (VB-01..08; needs the bench kit)
 
 | ID | Measure | Pass |
 |---|---|---|
-| VB-01 | 1080p30 H.264 encode to RTSP for 24 h, CPU and SoC temperature | no dropped frames in a 45 °C enclosure |
-| VB-02 | Power: idle, streaming, event-clip only | measured W per mode, fed into `power_budget.py` |
-| VB-03 | Cold boot to first frame, after power collapse | < 20 s, no file-system corruption over 200 power cuts |
-| VB-04 | Night: NoIR + 850 nm IR, person at 8 m | identifiable in clip |
-| VB-05 | Pre-trigger ring buffer, 5 s before a Talos sensor event | clip includes the pre-roll, with a timestamp aligned to the hub journal |
-| VB-06 | Owner re-flash and recovery without vendor keys | documented and repeatable |
+| VB-01 | 1080p15 H.264 to RTSP through MediaMTX for 24 h, inside the closed printed housing at 35 °C ambient: frame drops, `vcgencmd measure_temp`, `get_throttled` | no stall longer than 5 s; SoC below 80 °C; never throttled |
+| VB-02 | PoE power at the switch port: idle, streaming by day, streaming with both IR boards lit | measured W per mode, within the 802.3af class the HAT negotiates; manifest figures replaced |
+| VB-03 | Cold boot to the first RTSP frame, and 200 power cuts while streaming | under 30 s; no file-system damage (read-only overlay root) |
+| VB-04 | Night: NoIR with the two 850 nm boards, a person at 5 m and at 8 m | identifiable in the Frigate clip; Frigate still detects a person |
+| VB-05 | Pre-roll: a Talos PIR event, then a `camera.bookmark`; the clip includes 5 s before the event, aligned to the hub journal within 1 s | clip VERIFIED in Talos, pre-roll present |
+| VB-06 | Owner re-flash and recovery from a fresh SD card with `tools/provision/vision_node.py` | documented and repeatable; no vendor keys |
+| VB-07 | Daytime colour with the `imx708_wide_noir` tuning file | owner acceptable; otherwise move to an IR-cut camera |
+| VB-08 | A second 640×360 stream for detection from MediaMTX on the Zero, alongside the main stream | both streams steady, or Frigate detects on the main stream |
 
-The schematic work (H6) starts only after VB-01..06 pick the platform.
+The original CM4/CM5 benchmark ideas (24 h encode, power, cold boot, night, pre-trigger, recovery) are folded into VB-01..06.

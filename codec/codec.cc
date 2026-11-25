@@ -262,6 +262,8 @@ Result<PowerSource> source_from(v1::PowerSource s) {
       return PowerSource::kUsb;
     case v1::POWER_SOURCE_SOLAR_BATTERY:
       return PowerSource::kSolarBattery;
+    case v1::POWER_SOURCE_POE:
+      return PowerSource::kPoe;
     default:
       break;
   }

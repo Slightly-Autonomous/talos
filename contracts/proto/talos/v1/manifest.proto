@@ -10,6 +10,8 @@ enum PowerSource {
   POWER_SOURCE_BATTERY_ONLY = 1;
   POWER_SOURCE_USB = 2;
   POWER_SOURCE_SOLAR_BATTERY = 3;
+  // 802.3af Power over Ethernet (TL-VN-001).
+  POWER_SOURCE_POE = 4;
 }
 
 message PowerSourceBudget {

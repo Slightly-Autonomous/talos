@@ -315,10 +315,11 @@ TEST(SensorNodeRevA, HW_MF_008_FiveVoltCardRejected) {
 
 // HW-MF-009: Vision Node with zero slots is valid on its own power sources.
 TEST(SensorNodeRevA, HW_MF_009_VisionNodeZeroSlotsValid) {
-  auto vn = load_board_manifest(kDir + "boards/vision_node_proto_a.yaml");
+  auto vn = load_board_manifest(kDir + "boards/vision_node_pi_zero2w.yaml");
   ASSERT_TRUE(vn.ok()) << vn.error().message;
   EXPECT_TRUE(vn.value().slots.empty());
   EXPECT_EQ(vn.value().transport, "ip");
+  EXPECT_TRUE(validate_configuration(vn.value(), {}, {}, PowerSource::kPoe).ok());
   EXPECT_TRUE(validate_configuration(vn.value(), {}, {}, PowerSource::kUsb).ok());
   EXPECT_TRUE(validate_configuration(vn.value(), {}, {}, PowerSource::kBatteryOnly)
                   .has(ManifestIssueCode::kPowerSourceUnsupported));

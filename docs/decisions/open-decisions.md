@@ -8,7 +8,8 @@ A living register (spec §55). Nothing here is decided until an ADR, a test, a b
 | P0 | GPIO/pin map | Exact ESP32-H2 module and pin mux, boot/flash/USB, deep-sleep wake on four slots | Datasheet + board validator + bench tests |
 | P0 | Mainboard power | USB/PV ORing, charger (BQ25186 is a candidate only), 1S pack/NTC, rails, per-slot protection | Schematic, lab stress and thermal tests |
 | P0 | Security trust | Owner-controlled signing, provisioning, eFuse flow, recovery, unique identities | Threat model + ESP-IDF reference + HIL |
-| P0 | Camera performance | Decided: separate Vision Node, no camera cartridge (HW-0001). Open: compute/codec, night/IR, pre-trigger buffering, real power | H5 camera benchmark |
+| P0 | Camera performance | Decided: separate Vision Node, no camera cartridge (HW-0001). First build (owner 2026-11-24, ADR 0020): Pi Zero 2 W, Camera Module 3 Wide NoIR, PoE HAT, Frigate on the development Mac. Open: Zero 2 W stream stability and thermals in the housing, night image, NoIR day colour, real PoE power, a second detection stream, the production recorder hardware | Bench VB-01..08 (`hardware/architecture/vision-compute-study.md`) |
+| P1 | Vision Node secrets at rest | The Pi Zero has no secure boot or flash encryption, so a stolen SD card exposes that camera's device token and RTSP password (ADR 0020). Mitigations: a per-device token scoped to that device, owner revocation, the lid tamper alarm, and RTSP on the LAN only | Accept for the first build; revisit with a CM4/CM5 carrier (secure boot) |
 | P0 | OTA resources | Is 4 MB flash enough? Partition sizes; update over Thread | Real images + HIL |
 | P0 | Actuation safety | Strong authorization, local fail-safe, no policy bypass paths | Security invariants + hardware interlocks |
 | P1 | Postgres driver | libpq via Bazel for `STORAGE_DRIVER_POSTGRES` (cloud-hosted hub on Supabase/Postgres) | Implement behind `IJournal` + conformance suite |

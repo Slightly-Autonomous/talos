@@ -22,5 +22,7 @@ Short records of why each choice was made. A decision is changed by adding a new
 | [0016](0016-hardware-bring-up-and-hil.md) | Hardware bring-up path and HIL testing | Accepted |
 | [0017](0017-custom-hardware-workstream.md) | Custom hardware workstream (H0–H3); hardware ADRs in `hardware/architecture/decisions/` | Accepted |
 | [0018](0018-twin-backend-seam.md) | Twin backend seam (L1 behavioural, L2 firmware, L4 hardware) and L1/L2 parity | Accepted |
+| [0019](0019-self-contained-sensor-node.md) | Self-contained sensor node TL-SN-002 (replaces the four-slot node) | Accepted |
+| [0020](0020-vision-node-first-build.md) | Vision Node first build: Pi Zero 2 W, Camera Module 3 Wide NoIR, PoE, Frigate | Accepted |
 
 Open questions live in [open-decisions.md](open-decisions.md).

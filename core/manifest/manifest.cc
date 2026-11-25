@@ -13,6 +13,8 @@ std::string_view to_string(PowerSource s) {
       return "usb";
     case PowerSource::kSolarBattery:
       return "solar_battery";
+    case PowerSource::kPoe:
+      return "poe";
   }
   return "invalid";
 }

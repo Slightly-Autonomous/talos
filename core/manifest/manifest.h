@@ -17,7 +17,7 @@
 
 namespace talos {
 
-enum class PowerSource : std::uint8_t { kBatteryOnly, kUsb, kSolarBattery };
+enum class PowerSource : std::uint8_t { kBatteryOnly, kUsb, kSolarBattery, kPoe };
 
 std::string_view to_string(PowerSource s);
 
