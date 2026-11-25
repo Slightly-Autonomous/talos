@@ -1,6 +1,7 @@
 # Local Talos stack. From the repository root:
 #   docker compose -f deploy/docker-compose.yml up --build
 #   docker compose -f deploy/docker-compose.yml --profile supabase-sync up --build
+#   docker compose -f deploy/docker-compose.yml --profile vision up frigate   (deploy/frigate/README.md)
 # Copy deploy/.env.example to deploy/.env for the Supabase profile.
 name: talos
 
@@ -61,5 +62,29 @@ services:
     depends_on:
       - prometheus
 
+  # Camera recorder and detection (ADR 0020). Its internal API (5000) has no
+  # authentication: bound to localhost here, and reached by the hub through
+  # its media proxy (media.frigate_url / TALOS_FRIGATE_URL).
+  frigate:
+    profiles: ["vision"]
+    image: ghcr.io/blakeblackshear/frigate:0.17.2
+    shm_size: "256mb"
+    environment:
+      FRIGATE_RTSP_PASSWORD: ${FRIGATE_RTSP_PASSWORD:-dev-rtsp-password}
+    volumes:
+      - ./frigate/config:/config
+      - frigate-media:/media/frigate
+      - type: tmpfs
+        target: /tmp/cache
+        tmpfs:
+          size: 1000000000
+    ports:
+      - "127.0.0.1:5000:5000"   # internal API, unauthenticated
+      - "127.0.0.1:8971:8971"   # web UI with login
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
 volumes:
   talos-data:
+  frigate-media:

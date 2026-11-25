@@ -17,6 +17,10 @@ freshness_max_age_ms: 900000
 utc_offset_minutes: -480
 tick_interval_ms: 250
 cors_origins: ["http://localhost:5173", "http://localhost:4173"]
+# Camera media through the hub (ADR 0020): Frigate's internal API on this machine
+# (docker compose --profile vision). Override with TALOS_FRIGATE_URL.
+media:
+  frigate_url: http://127.0.0.1:5000
 # CoAP/UDP device ingress for Thread nodes (ADR 0014). Dev keys only.
 coap:
   enabled: true
@@ -36,6 +40,9 @@ devices:
   - {device_id: node-12, token_sha256: 65060935b3f93197b2100a6d3137aefa655a8961fe06f9dbade7a5bc86cb988f}
   - {device_id: patio_speaker, token_sha256: d53ebf5b31fe00c0381b5ec2dcd95a1981018ddde6064236be8eed5720fb720d}
   - {device_id: lock-3, token_sha256: dd63e701464b4a0530f6b22693a920496c64086aab7ff8f045db279a1b28948f}
+  # TL-VN-001 Vision Node agent, and Frigate's view of the same camera (ADR 0020).
+  - {device_id: cam_patio, token_sha256: 30f448eda1759a0c265edfe03bea47e42d4b73753f693f3c737e67c11dfa3420}
+  - {device_id: cam_patio_video, token_sha256: bfae4ba55bbccd3d2b38105845c555673eadbd58933a70d0a954351779f9d407}
 rules:
   - id: backyard_motion_warning
     revision: 1
@@ -69,3 +76,19 @@ rules:
         ttl_ms: 5000
         verification_window_ms: 3000
         expect: {source: {device_id: patio_speaker, capability_id: audio.speak}, payload: {audio_playback: {playing: true}}}
+  # Mark the camera's footage when someone is in the backyard while armed (ADR 0020).
+  # Verified only when Frigate has the clip (bookmark 30 s, then Frigate closes it).
+  - id: backyard_motion_bookmark
+    revision: 1
+    property_id: house-01
+    principal_id: "rule:backyard_motion_bookmark"
+    enabled: true
+    trigger_event_type: motion.detected
+    trigger_zone_id: backyard
+    armed_modes: [ARM_MODE_ARMED_AWAY]
+    actions:
+      - operation: camera.bookmark
+        target: {device_id: cam_patio_video, capability_id: camera.recording}
+        args: {bookmark: {duration_s: 30, label: talos}}
+        ttl_ms: 10000
+        verification_window_ms: 180000

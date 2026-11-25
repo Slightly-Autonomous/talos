@@ -93,6 +93,9 @@ int main(int argc, char** argv) {
   }
   // Environment overrides for containers/PaaS (Railway sets PORT).
   if (const char* env = std::getenv("TALOS_SQLITE_PATH")) cfg.value().sqlite_path = env;
+  if (const char* env = std::getenv("TALOS_FRIGATE_URL")) {
+    cfg.value().hub.mutable_media()->set_frigate_url(env);
+  }
   auto journal = SqliteJournal::open(cfg.value().sqlite_path);
   if (!journal) {
     std::fprintf(stderr, "storage error [%s]: %s\n", journal.error().code.c_str(),

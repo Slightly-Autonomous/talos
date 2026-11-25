@@ -1,0 +1,7 @@
+{
+  "patio": {
+    "deviceId": "cam_patio_video",
+    "token": "dev-cam-patio-video-token",
+    "rtspUrl": "rtsp://talos:{FRIGATE_RTSP_PASSWORD}@host.docker.internal:8554/cam"
+  }
+}

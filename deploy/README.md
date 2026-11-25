@@ -24,7 +24,7 @@ bazel run //server:talos_hub -- --config $PWD/deploy/config/hub.dev.yaml
 curl localhost:8080/v1/health
 ```
 
-The dev config (`deploy/config/hub.dev.yaml`) uses **well-known development tokens**: `dev-owner-token` (owner), `dev-sync-token` (sync worker), `dev-node-07-token`, `dev-node-12-token`, `dev-patio-speaker-token`, `dev-lock-3-token`. It sets `dev_mode: true`, so the hub refuses to listen on anything but loopback.
+The dev config (`deploy/config/hub.dev.yaml`) uses **well-known development tokens**: `dev-owner-token` (owner), `dev-sync-token` (sync worker), `dev-node-07-token`, `dev-node-12-token`, `dev-patio-speaker-token`, `dev-lock-3-token`, `dev-cam-patio-token` (Vision Node agent) and `dev-cam-patio-video-token` (Frigate connector). It sets `dev_mode: true`, so the hub refuses to listen on anything but loopback.
 
 ## 2. Docker Compose
 

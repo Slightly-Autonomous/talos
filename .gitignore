@@ -56,3 +56,6 @@ fp-info-cache
 
 # Vendor drawings marked proprietary: kept locally, never committed (see hardware/README.md)
 hardware/vendor-docs/
+
+# Frigate config generated from deploy/frigate/cameras*.json
+deploy/frigate/config/
