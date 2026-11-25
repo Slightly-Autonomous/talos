@@ -336,3 +336,15 @@ requirements:
     test: //server:server_test (HttpE2E.VisionNodeWithItsStreamDownIsDegradedNeverHealthy)
     severity: high
     status: verified_sim
+  - id: REQ-055
+    statement: The Vision Node agent reports its lid (debounced 50 ms, sensed every 20 ms and never blocked by the network), its camera stream (a stalled or missing stream is down) and heartbeats inside the hub's freshness age, with Unix-second boot epochs taken only after NTP sync, and keeps reports in order while the hub is unreachable
+    subsystem: firmware.vision_node
+    test: firmware/vision_node/tests (test_agent.py, test_real_hub.py against the real hub binary, test_board.py against the manifest)
+    severity: high
+    status: verified_sim
+  - id: REQ-056
+    statement: A Vision Node SD card is provisioned by one tool with per-camera secrets that never enter the repository, a verified MediaMTX binary, Wi-Fi and Bluetooth off and the hardware watchdog on
+    subsystem: tools.provision
+    test: firmware/vision_node/tests/test_provision.py
+    severity: medium
+    status: implemented

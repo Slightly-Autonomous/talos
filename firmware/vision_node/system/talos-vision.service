@@ -1,0 +1,21 @@
+[Unit]
+Description=Talos Vision Node agent (TL-VN-001, ADR 0020)
+After=network-online.target time-sync.target mediamtx.service
+Wants=network-online.target time-sync.target
+
+[Service]
+ExecStart=/usr/bin/python3 -m talos_vision --config /etc/talos/vision.json
+WorkingDirectory=/opt/talos/vision
+Environment=PYTHONPATH=/opt/talos/vision
+Restart=always
+RestartSec=5
+User=talos
+Group=talos
+SupplementaryGroups=gpio video
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

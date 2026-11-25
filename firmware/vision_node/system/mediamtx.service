@@ -1,0 +1,18 @@
+[Unit]
+Description=MediaMTX camera stream (TL-VN-001)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+ExecStart=/usr/local/bin/mediamtx /etc/talos/mediamtx.yml
+Restart=always
+RestartSec=3
+User=talos
+Group=talos
+SupplementaryGroups=video
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target

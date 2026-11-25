@@ -1,0 +1,6 @@
+{
+  "deviceId": "cam_patio",
+  "propertyId": "house-01",
+  "hubUrl": "http://127.0.0.1:8080",
+  "tokenFile": "dev/dev-cam-patio.token"
+}

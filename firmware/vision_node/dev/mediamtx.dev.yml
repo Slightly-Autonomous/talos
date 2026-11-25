@@ -1,0 +1,38 @@
+# Virtual Vision Node on the development Mac (ADR 0020): MediaMTX serves an ffmpeg test pattern
+# as "cam", like the Pi's rpiCamera path. Dev password only (deploy/frigate: FRIGATE_RTSP_PASSWORD).
+logLevel: warn
+api: true
+apiAddress: 127.0.0.1:9997
+rtsp: true
+rtspAddress: :8554
+rtspTransports: [tcp]
+rtmp: false
+hls: false
+webrtc: false
+srt: false
+moq: false
+authMethod: internal
+authInternalUsers:
+  - user: talos
+    pass: dev-rtsp-password
+    ips: []
+    permissions:
+      - action: read
+        path: cam
+  - user: any
+    pass:
+    ips: ["127.0.0.1", "::1"]
+    permissions:
+      - action: api
+      - action: publish
+        path: cam
+      - action: read
+        path: cam
+paths:
+  cam:
+    runOnInit: >-
+      ffmpeg -hide_banner -loglevel error -re -f lavfi
+      -i testsrc2=size=1280x720:rate=15 -vf drawtext=text='%{localtime}':x=20:y=20:fontsize=36:fontcolor=white
+      -c:v libx264 -preset ultrafast -tune zerolatency -g 30 -b:v 2M
+      -f rtsp rtsp://127.0.0.1:$RTSP_PORT/$MTX_PATH
+    runOnInitRestart: yes

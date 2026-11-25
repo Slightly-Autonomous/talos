@@ -49,6 +49,8 @@ jobs:
           export TALOS_BENCH_NODE=$PWD/bazel-bin/firmware/sim/bench_node TALOS_HUB=$PWD/bazel-bin/server/talos_hub
           (cd tools/hil && python3 -m unittest discover -s tests -t . -v)
           if [ -d tools/bench ]; then (cd tools/bench && python3 -m unittest discover -s tests -t . -v); fi
+          # Vision Node agent and SD-card provisioning, including the agent against the real hub.
+          (cd firmware/vision_node && python3 -m unittest discover -s tests -t . -v)
       - name: Upload scenario traces
         if: failure()
         uses: actions/upload-artifact@v7
