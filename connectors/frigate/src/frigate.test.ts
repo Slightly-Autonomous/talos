@@ -149,7 +149,6 @@ test("heartbeats only while Frigate reports frames from the camera, at most once
 });
 
 test("a bookmark becomes a Frigate event, is ACKed, then reported as its clip", async () => {
-  let ended = false;
   let t = 1_800_000_000_000;
   const { calls, f } = harness({
     "http://hub/v1/devices/commands": () => ({
@@ -170,8 +169,9 @@ test("a bookmark becomes a Frigate event, is ACKed, then reported as its clip", 
       camera: "patio",
       label: "talos",
       start_time: 1800000000.1,
-      end_time: ended ? 1800000020.1 : null,
-      has_clip: ended,
+      // Like Frigate 0.17: a timed event has its end and has_clip from the moment it is created.
+      end_time: 1800000020.1,
+      has_clip: true,
       has_snapshot: false,
     }),
     "http://frigate:5000/api/events?": () => [
@@ -194,8 +194,9 @@ test("a bookmark becomes a Frigate event, is ACKed, then reported as its clip", 
   expect(ack.body).toMatchObject({ commandId: "cmd:rule1:e1", accepted: true });
   expect(await c.pollOnce()).toBe(0); // its own event is not a detection
   expect(await c.clipsOnce()).toBe(0); // still recording
-  ended = true;
-  t += 25_000;
+  t += 25_000; // past the end, but the last segment may not be written yet
+  expect(await c.clipsOnce()).toBe(0);
+  t += 8_000;
   expect(await c.clipsOnce()).toBe(1);
   const clip = calls.filter((x) => x.url === "http://hub/v1/devices/observations").at(-1)!;
   expect(clip.body).toMatchObject({

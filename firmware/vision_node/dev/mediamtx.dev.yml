@@ -19,6 +19,13 @@ authInternalUsers:
     permissions:
       - action: read
         path: cam
+  # The test-pattern publisher when ffmpeg runs in a container (dev/run_virtual.sh).
+  - user: publisher
+    pass: dev-publish
+    ips: []
+    permissions:
+      - action: publish
+        path: cam
   - user: any
     pass:
     ips: ["127.0.0.1", "::1"]
@@ -29,10 +36,6 @@ authInternalUsers:
       - action: read
         path: cam
 paths:
+  # Published by dev/run_virtual.sh: ffmpeg's test pattern, from this Mac or from a container.
   cam:
-    runOnInit: >-
-      ffmpeg -hide_banner -loglevel error -re -f lavfi
-      -i testsrc2=size=1280x720:rate=15 -vf drawtext=text='%{localtime}':x=20:y=20:fontsize=36:fontcolor=white
-      -c:v libx264 -preset ultrafast -tune zerolatency -g 30 -b:v 2M
-      -f rtsp rtsp://127.0.0.1:$RTSP_PORT/$MTX_PATH
-    runOnInitRestart: yes
+    source: publisher

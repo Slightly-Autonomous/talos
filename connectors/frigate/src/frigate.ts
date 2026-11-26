@@ -13,6 +13,9 @@
 // /api/events/<camera>/<label>/create). Use Frigate's internal,
 // unauthenticated port (5000) on a private network only.
 
+
+// Frigate records in 10 s segments; wait this long past an event's end before calling its clip done.
+export const CLIP_SETTLE_MS = 12_000;
 export interface CameraMapping {
   deviceId: string; // the "<cam>_video" device
   token: string; // that device's hub token
@@ -235,7 +238,7 @@ export class FrigateConnector {
     return handled;
   }
 
-  // Reports clips for bookmarks once Frigate has them.
+  // Reports clips for bookmarks once Frigate has finished them.
   async clipsOnce(): Promise<number> {
     let reported = 0;
     const keep: PendingClip[] = [];
@@ -249,7 +252,9 @@ export class FrigateConnector {
       } catch {
         // Frigate busy or restarting: try again next round.
       }
-      if (e && e.end_time && e.has_clip) {
+      // Frigate sets end_time and has_clip as soon as a timed event is created, so the clip
+      // only exists once end_time has passed and the last recording segment is written.
+      if (e && e.end_time && e.has_clip && e.end_time * 1000 + CLIP_SETTLE_MS <= this.now()) {
         const ok = await this.post(cam, {
           source: this.source(cam, "camera.recording"),
           eventType: "camera.clip_recorded",

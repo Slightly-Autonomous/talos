@@ -39,13 +39,11 @@ TALOS_HUB=$PWD/bazel-bin/server/talos_hub bash -c 'cd firmware/vision_node && py
 
 ## Virtual Vision Node (no camera)
 
-Install the two tools once:
+It needs MediaMTX (on `PATH`, at `~/.cache/talos-tools/mediamtx/mediamtx`, or `MEDIAMTX=`) and
+ffmpeg. If the local ffmpeg doesn't run, the script publishes the pattern from the Frigate image's
+ffmpeg in Docker instead.
 
-```bash
-brew install mediamtx ffmpeg
-```
-
-Then start the virtual node. MediaMTX serves an ffmpeg test pattern at `rtsp://talos:dev-rtsp-password@127.0.0.1:8554/cam`,
+Start the virtual node. MediaMTX serves an ffmpeg test pattern at `rtsp://talos:dev-rtsp-password@127.0.0.1:8554/cam`,
 and the agent runs with a fake lid (`/tmp/talos-vision/lid`; `echo 1 >` it to open the lid):
 
 ```bash

@@ -58,7 +58,9 @@ class MediaMtxStream:
             return None
         except (OSError, ValueError):
             return None  # MediaMTX not running: unknown, reported as down by the agent
-        return StreamSample(bool(d.get("ready")), int(d.get("bytesReceived") or 0))
+        # MediaMTX 1.21 names it inboundBytes; earlier versions bytesReceived.
+        produced = d.get("inboundBytes", d.get("bytesReceived")) or 0
+        return StreamSample(bool(d.get("ready")), int(produced))
 
 
 _TEMP = re.compile(r"temp=([0-9.]+)'C")
